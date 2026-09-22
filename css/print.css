@@ -1,0 +1,172 @@
+/* Print Layout - Form Cán bộ Công chức */
+@media print {
+  /* Hide all app shell elements */
+  body > *:not(#print-container) {
+    display: none !important;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background: white;
+    font-family: "Times New Roman", Times, serif;
+    font-size: 13pt;
+    line-height: 1.5;
+    color: black;
+  }
+
+  #print-container {
+    display: block !important;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* A4 Page Styling */
+  @page {
+    size: A4 portrait;
+    margin: 2cm 1.5cm;
+  }
+
+  .print-page {
+    page-break-after: always;
+    page-break-inside: avoid;
+    width: 100%;
+    position: relative;
+  }
+  
+  .print-page:last-child {
+    page-break-after: auto;
+  }
+
+  /* Header Section */
+  .print-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    font-size: 13pt;
+  }
+
+  .print-header-left {
+    text-align: center;
+    font-weight: normal;
+  }
+  
+  .print-header-left strong {
+    font-size: 12pt;
+    text-transform: uppercase;
+  }
+
+  .print-header-right {
+    text-align: center;
+    font-weight: bold;
+  }
+
+  .print-title {
+    text-align: center;
+    font-weight: bold;
+    font-size: 16pt;
+    text-transform: uppercase;
+    margin: 20px 0;
+    letter-spacing: 1px;
+    color: #000080; /* Navy blue typically used in these forms */
+  }
+
+  /* Sections */
+  .print-section-title {
+    font-weight: bold;
+    font-size: 13pt;
+    text-transform: uppercase;
+    margin-top: 15px;
+    margin-bottom: 10px;
+    color: #000080;
+  }
+
+  /* Grid Layout for Form Fields */
+  .print-grid {
+    display: flex;
+    margin-bottom: 8px;
+  }
+  
+  .print-col-avatar {
+    width: 120px;
+    height: 160px;
+    border: 1px solid #000;
+    margin-right: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: 10pt;
+  }
+  
+  .print-col-info {
+    flex: 1;
+  }
+
+  .print-row {
+    display: flex;
+    margin-bottom: 6px;
+    align-items: baseline;
+  }
+
+  .print-label {
+    margin-right: 10px;
+    white-space: nowrap;
+  }
+  
+  .print-value {
+    font-weight: normal;
+    text-transform: uppercase;
+  }
+
+  /* Checkboxes */
+  .print-checkbox {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1px solid #000;
+    margin-right: 5px;
+    position: relative;
+    top: 2px;
+  }
+  
+  .print-checkbox.checked::after {
+    content: 'x';
+    position: absolute;
+    top: -5px;
+    left: 2px;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  /* Tables in Print */
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    margin-bottom: 20px;
+  }
+  
+  .print-table th, .print-table td {
+    border: 1px solid #000;
+    padding: 6px;
+    text-align: left;
+    font-size: 12pt;
+  }
+  
+  .print-table th {
+    text-align: center;
+    font-weight: bold;
+    background-color: transparent;
+  }
+
+  /* Utilities */
+  .dotted-line {
+    border-bottom: 1px dotted #000;
+    flex: 1;
+    margin: 0 5px;
+    position: relative;
+    top: -4px;
+  }
+}
