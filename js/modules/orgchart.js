@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - Org Chart Module
 // Interactive organization tree
 // ============================================
@@ -14,8 +14,8 @@ const OrgChartModule = {
           <p class="page-subtitle">Cơ cấu tổ chức Công ty CP Sữa Việt Nam — ${Helpers.formatNumber(10156)} nhân viên</p>
         </div>
         <div class="page-header-actions">
-          <button class="btn btn-secondary" onclick="OrgChartModule.expandAll()">📂 Mở rộng tất cả</button>
-          <button class="btn btn-secondary" onclick="OrgChartModule.collapseAll()">📁 Thu gọn</button>
+          <button class="btn btn-secondary" onclick="OrgChartModule.expandAll()"> Mở rộng tất cả</button>
+          <button class="btn btn-secondary" onclick="OrgChartModule.collapseAll()"> Thu gọn</button>
         </div>
       </div>
 
@@ -51,10 +51,10 @@ const OrgChartModule = {
     return `
       <div class="org-branch" style="display:flex;flex-direction:column;align-items:center;">
         <div class="org-node ${rootClass} ${cssClass}" onclick="OrgChartModule.onNodeClick('${node.id}')" title="${node.name}">
-          <div class="org-node-icon">${node.icon || '📁'}</div>
+          <div class="org-node-icon">${node.icon || ''}</div>
           <div class="org-node-title">${node.shortName || node.name}</div>
           <div class="org-node-type">${node.type}</div>
-          <div class="org-node-count">👤 ${Helpers.formatNumber(node.headcount)} người</div>
+          <div class="org-node-count"> ${Helpers.formatNumber(node.headcount)} người</div>
           ${hasChildren ? `
             <button class="org-expand-btn" onclick="event.stopPropagation(); OrgChartModule.toggleNode('${node.id}')" title="${isExpanded ? 'Thu gọn' : 'Mở rộng'}">
               ${isExpanded ? '−' : '+'}
@@ -163,3 +163,4 @@ const OrgChartModule = {
     if (container) this.render(container);
   }
 };
+

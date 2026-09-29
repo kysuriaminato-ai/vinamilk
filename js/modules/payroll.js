@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - Payroll Module
 // 3P Salary calculation & Payslip
 // ============================================
@@ -24,7 +24,7 @@ const PayrollModule = {
           <p class="page-subtitle">Tính lương tháng 09/2026 — Mô hình P1 + P2 + P3</p>
         </div>
         <div class="page-header-actions">
-          <button class="btn btn-secondary">📥 Xuất Excel</button>
+          <button class="btn btn-secondary"> Xuất Excel</button>
           <button class="btn btn-success" onclick="PayrollModule.runPayroll()">⚡ Chạy bảng lương</button>
         </div>
       </div>
@@ -73,7 +73,7 @@ const PayrollModule = {
       <div class="data-table-wrapper animate-fade-in-up">
         <div class="table-toolbar">
           <div class="table-toolbar-left">
-            <div class="card-header-title">📊 Chi tiết bảng lương</div>
+            <div class="card-header-title"> Chi tiết bảng lương</div>
           </div>
           <div class="table-toolbar-right">
             <span style="font-size:var(--font-size-sm);color:var(--text-secondary)">${summary.totalEmployees} nhân viên</span>
@@ -115,7 +115,7 @@ const PayrollModule = {
                   <td style="text-align:right;font-size:var(--font-size-sm);color:var(--accent-red)">-${Helpers.formatCurrency(p.totalInsurance)}</td>
                   <td style="text-align:right;font-size:var(--font-size-sm);color:var(--accent-red)">-${Helpers.formatCurrency(p.tax)}</td>
                   <td style="text-align:right;font-weight:800;color:var(--primary)">${Helpers.formatCurrency(p.netSalary)}</td>
-                  <td><button class="btn btn-ghost btn-sm" onclick="PayrollModule.viewPayslip('${p.employeeId}')" title="Xem phiếu lương">📄</button></td>
+                  <td><button class="btn btn-ghost btn-sm" onclick="PayrollModule.viewPayslip('${p.employeeId}')" title="Xem phiếu lương"></button></td>
                 </tr>
               `).join('')}
             </tbody>
@@ -152,14 +152,14 @@ const PayrollModule = {
     overlay.innerHTML = `
       <div class="modal modal-lg">
         <div class="modal-header">
-          <div class="modal-title">📄 Phiếu lương tháng 09/2026</div>
+          <div class="modal-title"> Phiếu lương tháng 09/2026</div>
           <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
         </div>
         <div class="modal-body">
           <div class="payslip">
             <div class="payslip-header">
               <div>
-                <div class="payslip-company">🥛 VINAMILK</div>
+                <div class="payslip-company"> VINAMILK</div>
                 <div style="font-size:var(--font-size-sm);color:var(--text-secondary)">Công ty CP Sữa Việt Nam</div>
               </div>
               <div style="text-align:right">
@@ -208,7 +208,7 @@ const PayrollModule = {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Đóng</button>
-          <button class="btn btn-primary">🖨️ In phiếu lương</button>
+          <button class="btn btn-primary">️ In phiếu lương</button>
         </div>
       </div>
     `;
@@ -221,7 +221,7 @@ const PayrollModule = {
     overlay.innerHTML = `
       <div class="modal" style="max-width:480px">
         <div class="modal-body" style="text-align:center;padding:var(--space-8)">
-          <div style="font-size:3rem;margin-bottom:var(--space-4)" class="animate-spin">⚙️</div>
+          <div style="font-size:3rem;margin-bottom:var(--space-4)" class="animate-spin"></div>
           <div style="font-size:var(--font-size-lg);font-weight:700;margin-bottom:var(--space-2)">Đang chạy bảng lương...</div>
           <div style="color:var(--text-secondary);margin-bottom:var(--space-4)">Tính toán lương 3P cho ${EmployeesHelper.getActive().length} nhân viên</div>
           <div class="progress-bar" style="margin-bottom:var(--space-2)">
@@ -240,7 +240,7 @@ const PayrollModule = {
         progress = 100;
         clearInterval(interval);
         document.getElementById('payroll-progress').style.width = '100%';
-        document.getElementById('payroll-status').textContent = '✅ Hoàn thành!';
+        document.getElementById('payroll-status').textContent = ' Hoàn thành!';
         setTimeout(() => {
           overlay.remove();
           const container = document.getElementById('main-content');
@@ -254,3 +254,5 @@ const PayrollModule = {
     }, 300);
   }
 };
+
+

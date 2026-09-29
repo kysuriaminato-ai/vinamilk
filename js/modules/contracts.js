@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - Contracts Module
 // Contract lifecycle management
 // ============================================
@@ -44,7 +44,7 @@ const ContractsModule = {
       ${expiring.length > 0 ? `
       <!-- Expiring Soon Alert -->
       <div class="alert-banner alert-banner-warning animate-fade-in-up" style="margin-bottom:var(--space-5)">
-        <span class="alert-banner-icon">⚠️</span>
+        <span class="alert-banner-icon"></span>
         <div class="alert-banner-content">
           <div class="alert-banner-title">${expiring.length} hợp đồng sắp hết hạn trong 90 ngày tới</div>
           <div class="alert-banner-text">Cần đánh giá KPI và lịch sử công tác trước khi đề xuất tái ký hoặc chấm dứt.</div>
@@ -67,7 +67,7 @@ const ContractsModule = {
       <!-- Contracts Table -->
       <div class="data-table-wrapper animate-fade-in-up" style="margin-bottom:var(--space-5)">
         <div class="table-toolbar">
-          <div class="card-header-title">📋 Danh sách Hợp đồng có thời hạn</div>
+          <div class="card-header-title"> Danh sách Hợp đồng có thời hạn</div>
         </div>
         <table class="data-table">
           <thead>
@@ -102,13 +102,13 @@ const ContractsModule = {
                 <td style="font-weight:${urgent ? '700' : '400'};color:${critical ? 'var(--accent-red)' : ''}">${Helpers.formatDate(emp.contractEnd)}</td>
                 <td>
                   <span style="font-weight:700;color:${critical ? 'var(--accent-red)' : urgent ? 'var(--accent-orange)' : 'var(--text-primary)'}">${daysLeft} ngày</span>
-                  ${critical ? '<br><span style="font-size:var(--font-size-xs);color:var(--accent-red);font-weight:600">🔴 Khẩn cấp</span>' : ''}
+                  ${critical ? '<br><span style="font-size:var(--font-size-xs);color:var(--accent-red);font-weight:600"> Khẩn cấp</span>' : ''}
                 </td>
                 <td>${Helpers.statusBadge(emp.status)}</td>
                 <td>
                   <div style="display:flex;gap:var(--space-1)">
-                    <button class="btn btn-success btn-sm" onclick="ContractsModule.showRenewModal('${emp.id}')" title="Tái ký">🔄 Tái ký</button>
-                    <button class="btn btn-ghost btn-sm" onclick="window.location.hash='/employees?id=${emp.id}'" title="Xem hồ sơ">👁️</button>
+                    <button class="btn btn-success btn-sm" onclick="ContractsModule.showRenewModal('${emp.id}')" title="Tái ký"> Tái ký</button>
+                    <button class="btn btn-ghost btn-sm" onclick="window.location.hash='/employees?id=${emp.id}'" title="Xem hồ sơ">️</button>
                   </div>
                 </td>
               </tr>`;
@@ -120,7 +120,7 @@ const ContractsModule = {
       <!-- Offboarding Checklist -->
       <div class="card animate-fade-in-up">
         <div class="card-header">
-          <div class="card-header-title">📦 Quy trình Offboarding (Clearance)</div>
+          <div class="card-header-title"> Quy trình Offboarding (Clearance)</div>
           <div class="card-header-subtitle">Checklist bàn giao khi nhân viên nghỉ việc</div>
         </div>
         <div class="card-body" style="padding:0">
@@ -152,7 +152,7 @@ const ContractsModule = {
     overlay.innerHTML = `
       <div class="modal">
         <div class="modal-header">
-          <div class="modal-title">🔄 Đề xuất Tái ký Hợp đồng</div>
+          <div class="modal-title"> Đề xuất Tái ký Hợp đồng</div>
           <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
         </div>
         <div class="modal-body">
@@ -194,10 +194,12 @@ const ContractsModule = {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Hủy</button>
-          <button class="btn btn-primary" onclick="alert('Demo: Đề xuất tái ký đã gửi CHRO phê duyệt!'); this.closest('.modal-overlay').remove()">📤 Gửi đề xuất</button>
+          <button class="btn btn-primary" onclick="alert('Demo: Đề xuất tái ký đã gửi CHRO phê duyệt!'); this.closest('.modal-overlay').remove()"> Gửi đề xuất</button>
         </div>
       </div>
     `;
     document.body.appendChild(overlay);
   }
 };
+
+

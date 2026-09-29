@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - Roles Management Module
 // ============================================
 
@@ -23,7 +23,7 @@ const RolesModule = {
         </div>
         <div class="header-actions">
           <button class="btn btn-primary" onclick="RolesModule.saveRoles()">
-            <span class="btn-icon">💾</span> Lưu thay đổi
+            <span class="btn-icon"></span> Lưu thay đổi
           </button>
         </div>
       </div>
@@ -94,3 +94,4 @@ const RolesModule = {
     Helpers.showToast('Đã lưu thiết lập phân quyền thành công!', 'success');
   }
 };
+

@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - Main Application
 // Router registration & initialization
 // ============================================
@@ -16,6 +16,7 @@
   Router.register('/contracts', (container) => ContractsModule.render(container));
   Router.register('/training', (container) => TrainingModule.render(container));
   Router.register('/reports', (container) => ReportsModule.render(container));
+  Router.register('/categories', (container, params) => CategoriesModule.render(container, params));
   Router.register('/roles', (container) => RolesModule.render(container));
 
   // Initialize Auth
@@ -94,6 +95,30 @@
     }, 5000);
   }
 
-  console.log('🥛 VINAMILK HRIS v1.0 — Initialized');
-  console.log('📊 Loaded', EmployeesData.length, 'employees');
+  // Theme Switcher Engine (Sáng / Tối / Hệ thống)
+  const themeButtons = document.querySelectorAll('[data-theme-mode]');
+  function applyTheme(mode) {
+    localStorage.setItem('vnm_theme', mode);
+    document.documentElement.setAttribute('data-theme', mode);
+    themeButtons.forEach(btn => {
+      if (btn.getAttribute('data-theme-mode') === mode) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+
+  const currentTheme = localStorage.getItem('vnm_theme') || 'light';
+  applyTheme(currentTheme);
+
+  themeButtons.forEach(btn => {
+    btn.addEventListener('click', function() {
+      applyTheme(this.getAttribute('data-theme-mode'));
+    });
+  });
+
+  console.log(' VINAMILK HRIS v1.0 — Initialized');
+  console.log(' Loaded', EmployeesData.length, 'employees');
 })();
+

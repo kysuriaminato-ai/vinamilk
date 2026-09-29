@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - Categories Data
 // All business categories for HR management
 // ============================================
@@ -81,7 +81,7 @@ const CategoriesData = {
       code: 'DM01',
       name: 'Đơn vị quản lý',
       group: 'system',
-      icon: '🏢',
+      icon: '',
       description: 'Danh mục các đơn vị, phòng ban trong tổ chức',
       items: [
         { id: 'dv01', code: 'DV01', name: 'Hội đồng Quản trị', description: 'Cơ quan quản trị cao nhất', active: true },
@@ -109,7 +109,7 @@ const CategoriesData = {
       code: 'DM02',
       name: 'Tình trạng hôn nhân',
       group: 'system',
-      icon: '💍',
+      icon: '',
       description: 'Phân loại tình trạng hôn nhân của cán bộ',
       items: [
         { id: 'hn01', code: 'HN01', name: 'Độc thân', description: 'Chưa kết hôn', active: true },
@@ -124,7 +124,7 @@ const CategoriesData = {
       code: 'DM03',
       name: 'Dân tộc',
       group: 'system',
-      icon: '🏛️',
+      icon: '️',
       description: 'Danh mục 54 dân tộc Việt Nam',
       items: [
         { id: 'dt01', code: 'DT01', name: 'Kinh', description: 'Dân tộc Kinh (Việt)', active: true },
@@ -154,7 +154,7 @@ const CategoriesData = {
       code: 'DM04',
       name: 'Tôn giáo',
       group: 'system',
-      icon: '🛕',
+      icon: '',
       description: 'Danh mục các tôn giáo',
       items: [
         { id: 'tg01', code: 'TG01', name: 'Không', description: 'Không theo tôn giáo', active: true },
@@ -172,7 +172,7 @@ const CategoriesData = {
       code: 'DM05',
       name: 'Thành phần xuất thân',
       group: 'system',
-      icon: '👤',
+      icon: '',
       description: 'Thành phần gia đình, xuất thân',
       items: [
         { id: 'xt01', code: 'XT01', name: 'Công nhân', description: 'Gia đình công nhân', active: true },
@@ -189,7 +189,7 @@ const CategoriesData = {
       code: 'DM06',
       name: 'Đối tượng hưởng chính sách NN',
       group: 'system',
-      icon: '🎖️',
+      icon: '️',
       description: 'Đối tượng hưởng chính sách nhà nước, người có công',
       items: [
         { id: 'cs01', code: 'CS01', name: 'Thương binh', description: 'Người bị thương trong chiến đấu', active: true },
@@ -207,7 +207,7 @@ const CategoriesData = {
       code: 'DM07',
       name: 'Chức danh, chức vụ',
       group: 'system',
-      icon: '👔',
+      icon: '',
       description: 'Danh mục chức danh và chức vụ trong tổ chức',
       items: [
         { id: 'cd01', code: 'CD01', name: 'Tổng Giám đốc', description: 'Người đứng đầu công ty', active: true },
@@ -248,7 +248,7 @@ const CategoriesData = {
       code: 'DM09',
       name: 'Chức vụ Đoàn',
       group: 'system',
-      icon: '🌟',
+      icon: '',
       description: 'Chức vụ trong tổ chức Đoàn Thanh niên',
       items: [
         { id: 'cvdn01', code: 'CVDN01', name: 'Bí thư Đoàn', description: 'Bí thư Đoàn cơ sở', active: true },
@@ -263,7 +263,7 @@ const CategoriesData = {
       code: 'DM10',
       name: 'Công việc chuyên môn đảm nhiệm',
       group: 'system',
-      icon: '💼',
+      icon: '',
       description: 'Loại công việc chuyên môn đang đảm nhiệm',
       items: [
         { id: 'cv01', code: 'CV01', name: 'Quản lý', description: 'Công tác quản lý, điều hành', active: true },
@@ -283,7 +283,7 @@ const CategoriesData = {
       code: 'DM11',
       name: 'Ngành nghề trước tuyển dụng',
       group: 'system',
-      icon: '🔧',
+      icon: '',
       description: 'Nghề nghiệp trước khi được tuyển dụng',
       items: [
         { id: 'nn01', code: 'NN01', name: 'Sinh viên mới tốt nghiệp', description: 'Mới ra trường, chưa có kinh nghiệm', active: true },
@@ -302,7 +302,7 @@ const CategoriesData = {
       code: 'DM12',
       name: 'Trình độ học vấn phổ thông',
       group: 'system',
-      icon: '📚',
+      icon: '',
       description: 'Trình độ học vấn phổ thông',
       items: [
         { id: 'hv01', code: 'HV01', name: '12/12', description: 'Tốt nghiệp THPT (lớp 12)', active: true },
@@ -320,7 +320,7 @@ const CategoriesData = {
       code: 'DM13',
       name: 'Trình độ chuyên môn',
       group: 'professional',
-      icon: '🎓',
+      icon: '',
       description: 'Trình độ chuyên môn được đào tạo',
       items: [
         { id: 'cm01', code: 'CM01', name: 'Tiến sĩ', description: 'Tiến sĩ khoa học', active: true },
@@ -338,7 +338,7 @@ const CategoriesData = {
       code: 'DM14',
       name: 'Ngành đào tạo',
       group: 'professional',
-      icon: '📖',
+      icon: '',
       description: 'Các ngành nghề đào tạo chuyên môn',
       items: [
         { id: 'ndt01', code: 'NDT01', name: 'Công nghệ Thực phẩm', description: 'Ngành Công nghệ Thực phẩm', active: true },
@@ -364,7 +364,7 @@ const CategoriesData = {
       code: 'DM15',
       name: 'Trường đào tạo',
       group: 'professional',
-      icon: '🏫',
+      icon: '',
       description: 'Danh mục các trường đào tạo',
       items: [
         { id: 'tr01', code: 'TR01', name: 'ĐH Bách Khoa Hà Nội', description: 'Đại học Bách khoa Hà Nội', active: true },
@@ -389,7 +389,7 @@ const CategoriesData = {
       code: 'DM16',
       name: 'Hình thức đào tạo',
       group: 'professional',
-      icon: '📝',
+      icon: '',
       description: 'Hình thức đào tạo chuyên môn',
       items: [
         { id: 'ht01', code: 'HT01', name: 'Chính quy', description: 'Đào tạo chính quy tập trung', active: true },
@@ -405,7 +405,7 @@ const CategoriesData = {
       code: 'DM17',
       name: 'Trình độ lý luận chính trị',
       group: 'professional',
-      icon: '🏛️',
+      icon: '️',
       description: 'Trình độ lý luận chính trị',
       items: [
         { id: 'll01', code: 'LL01', name: 'Chưa qua đào tạo', description: 'Chưa học lý luận chính trị', active: true },
@@ -420,7 +420,7 @@ const CategoriesData = {
       code: 'DM18',
       name: 'Trình độ quản lý nhà nước',
       group: 'professional',
-      icon: '🏦',
+      icon: '',
       description: 'Trình độ quản lý hành chính nhà nước',
       items: [
         { id: 'ql01', code: 'QL01', name: 'Chưa qua đào tạo', description: 'Chưa qua lớp QLNN', active: true },
@@ -435,7 +435,7 @@ const CategoriesData = {
       code: 'DM19',
       name: 'Trình độ quản lý kinh tế',
       group: 'professional',
-      icon: '📊',
+      icon: '',
       description: 'Trình độ quản lý kinh tế',
       items: [
         { id: 'kt01', code: 'KT01', name: 'Chưa qua đào tạo', description: 'Chưa qua lớp QLKT', active: true },
@@ -449,7 +449,7 @@ const CategoriesData = {
       code: 'DM20',
       name: 'Trình độ tin học',
       group: 'professional',
-      icon: '💻',
+      icon: '',
       description: 'Trình độ tin học, vi tính',
       items: [
         { id: 'th01', code: 'TH01', name: 'Chưa biết sử dụng', description: 'Chưa sử dụng máy tính', active: true },
@@ -465,7 +465,7 @@ const CategoriesData = {
       code: 'DM21',
       name: 'Ngoại ngữ',
       group: 'professional',
-      icon: '🌐',
+      icon: '',
       description: 'Danh mục các ngoại ngữ',
       items: [
         { id: 'nn01a', code: 'NN01', name: 'Tiếng Anh', description: 'English', active: true },
@@ -484,7 +484,7 @@ const CategoriesData = {
       code: 'DM22',
       name: 'Trình độ ngoại ngữ',
       group: 'professional',
-      icon: '🗣️',
+      icon: '️',
       description: 'Trình độ ngoại ngữ theo khung tham chiếu châu Âu',
       items: [
         { id: 'tdnn01', code: 'TDNN01', name: 'A1 - Sơ cấp', description: 'Beginner - Người bắt đầu', active: true },
@@ -501,7 +501,7 @@ const CategoriesData = {
       code: 'DM23',
       name: 'Quân hàm',
       group: 'professional',
-      icon: '🎖️',
+      icon: '️',
       description: 'Danh mục quân hàm trong quân đội',
       items: [
         { id: 'qh01', code: 'QH01', name: 'Binh nhì', description: 'Binh nhì', active: true },
@@ -524,7 +524,7 @@ const CategoriesData = {
       code: 'DM24',
       name: 'Chức vụ trong lực lượng vũ trang',
       group: 'professional',
-      icon: '🪖',
+      icon: '',
       description: 'Chức vụ trong quân đội, công an',
       items: [
         { id: 'vt01', code: 'VT01', name: 'Tiểu đội trưởng', description: 'Chỉ huy tiểu đội', active: true },
@@ -540,7 +540,7 @@ const CategoriesData = {
       code: 'DM25',
       name: 'Danh hiệu được phong',
       group: 'professional',
-      icon: '🏆',
+      icon: '',
       description: 'Các danh hiệu, học hàm, học vị được phong tặng',
       items: [
         { id: 'dh01', code: 'DH01', name: 'Giáo sư', description: 'Giáo sư (GS)', active: true },
@@ -560,7 +560,7 @@ const CategoriesData = {
       code: 'DM26',
       name: 'Ngạch công chức',
       group: 'professional',
-      icon: '📋',
+      icon: '',
       description: 'Ngạch bậc công chức, viên chức',
       items: [
         { id: 'nc01', code: 'NC01', name: 'Chuyên viên cao cấp', description: 'Ngạch chuyên viên cao cấp', active: true },
@@ -578,7 +578,7 @@ const CategoriesData = {
       code: 'DM27',
       name: 'Hình thức khen thưởng, kỷ luật',
       group: 'professional',
-      icon: '🏅',
+      icon: '',
       description: 'Các hình thức khen thưởng và kỷ luật',
       items: [
         { id: 'ktkl01', code: 'KT01', name: 'Giấy khen', description: 'Giấy khen cấp đơn vị', active: true },
@@ -599,7 +599,7 @@ const CategoriesData = {
       code: 'DM28',
       name: 'Tình trạng sức khỏe',
       group: 'professional',
-      icon: '🏥',
+      icon: '',
       description: 'Phân loại tình trạng sức khỏe theo khám định kỳ',
       items: [
         { id: 'sk01', code: 'SK01', name: 'Loại I - Rất khỏe', description: 'Sức khỏe rất tốt, không bệnh', active: true },
@@ -614,7 +614,7 @@ const CategoriesData = {
       code: 'DM29',
       name: 'Hạng thương binh',
       group: 'professional',
-      icon: '🎗️',
+      icon: '️',
       description: 'Phân loại hạng thương binh',
       items: [
         { id: 'tb01', code: 'TB01', name: 'Hạng 1/4 (81-100%)', description: 'Thương tật từ 81% đến 100%', active: true },
@@ -629,7 +629,7 @@ const CategoriesData = {
       code: 'DM30',
       name: 'Các nước trên thế giới',
       group: 'professional',
-      icon: '🌍',
+      icon: '',
       description: 'Danh mục quốc gia, vùng lãnh thổ',
       items: [
         { id: 'qg01', code: 'VN', name: 'Việt Nam', description: 'Cộng hòa Xã hội Chủ nghĩa Việt Nam', active: true },
@@ -654,7 +654,7 @@ const CategoriesData = {
       code: 'DM31',
       name: 'Lĩnh vực công tác',
       group: 'professional',
-      icon: '🗂️',
+      icon: '️',
       description: 'Phân loại lĩnh vực công tác',
       items: [
         { id: 'lv01', code: 'LV01', name: 'Hành chính - Quản lý', description: 'Công tác hành chính, quản lý', active: true },
@@ -674,3 +674,4 @@ const CategoriesData = {
     }
   ]
 };
+

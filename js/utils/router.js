@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - SPA Router
 // Hash-based client-side routing
 // ============================================
@@ -84,8 +84,9 @@ const Router = {
     const name = routeNames[path] || path;
     breadcrumb.innerHTML = `
       <span class="header-breadcrumb-item">VINAMILK HRIS</span>
-      <span class="header-breadcrumb-sep">›</span>
+      <span class="header-breadcrumb-sep"></span>
       <span class="header-breadcrumb-item current">${name}</span>
     `;
   }
 };
+

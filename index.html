@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 
 <head>
@@ -10,20 +10,108 @@
 
   <!-- Favicon -->
   <link rel="icon"
-    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥛</text></svg>">
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'></text></svg>">
 
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem('vnm_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    })();
+  </script>
   <!-- Stylesheets -->
   <link rel="stylesheet" href="css/design-system.css">
   <link rel="stylesheet" href="css/layout.css">
   <link rel="stylesheet" href="css/components.css">
   <link rel="stylesheet" href="css/pages.css">
+  <link rel="stylesheet" href="css/login.css">
   <link rel="stylesheet" href="css/print.css" media="print">
 </head>
 
 <body>
   <!-- Print Container -->
   <div id="print-container"></div>
-  <div class="app-shell">
+
+  <!-- ===== LOGIN SCREEN ===== -->
+  <div class="login-screen" id="login-screen">
+    <div class="login-bg-pattern"></div>
+    <div class="login-container">
+      <div class="login-left">
+        <div class="login-brand">
+          <div class="login-logo-icon">V</div>
+          <div class="login-brand-text">
+            <div class="login-brand-name">VINAMILK</div>
+            <div class="login-brand-sub">Human Resource Information System</div>
+          </div>
+        </div>
+        <h1 class="login-title">Hệ thống Quản lý<br>Nhân sự Doanh nghiệp</h1>
+        <p class="login-desc">Nền tảng số hóa quản trị nguồn nhân lực toàn diện cho hơn 10.000 CBNV — Chấm công, Lương 3P, Tuyển dụng, Đào tạo & AI Dự báo.</p>
+        <div class="login-features">
+          <div class="login-feature"><span></span> Quản lý hồ sơ nhân sự HUHA HRM</div>
+          <div class="login-feature"><span></span> Chấm công ca kíp & Lương 3P tự động</div>
+          <div class="login-feature"><span></span> Phân quyền RBAC đa vai trò</div>
+          <div class="login-feature"><span></span> AI dự báo & phân tích nguồn nhân lực</div>
+        </div>
+      </div>
+      <div class="login-right">
+        <div class="login-card">
+          <div class="login-card-header">
+            <h2 class="login-card-title">Đăng nhập Hệ thống</h2>
+            <p class="login-card-subtitle">Vui lòng nhập tài khoản được cấp</p>
+          </div>
+          <form id="login-form" autocomplete="off">
+            <div class="login-form-group">
+              <label class="login-label" for="login-username">Tên đăng nhập</label>
+              <div class="login-input-wrap">
+                <span class="login-input-icon"></span>
+                <input type="text" id="login-username" class="login-input" placeholder="Nhập mã nhân viên hoặc username" required autocomplete="username">
+              </div>
+            </div>
+            <div class="login-form-group">
+              <label class="login-label" for="login-password">Mật khẩu</label>
+              <div class="login-input-wrap">
+                <span class="login-input-icon"></span>
+                <input type="password" id="login-password" class="login-input" placeholder="Nhập mật khẩu" required autocomplete="current-password">
+                <button type="button" class="login-toggle-pass" id="toggle-password" title="Hiện/Ẩn mật khẩu">️</button>
+              </div>
+            </div>
+            <div class="login-form-options">
+              <label class="login-remember">
+                <input type="checkbox" id="login-remember" checked> Ghi nhớ đăng nhập
+              </label>
+              <a href="#" class="login-forgot" onclick="event.preventDefault(); alert('Liên hệ Phòng CNTT: it@vinamilk.com.vn hoặc nhánh nội bộ 8899')">Quên mật khẩu?</a>
+            </div>
+            <div class="login-error" id="login-error"></div>
+            <button type="submit" class="login-submit" id="login-btn">
+              <span class="login-submit-text">Đăng nhập</span>
+              <span class="login-submit-loading" style="display:none">⏳ Đang xác thực...</span>
+            </button>
+          </form>
+          <div class="login-demo-accounts">
+            <div class="login-demo-title"> Tài khoản Demo</div>
+            <div class="login-demo-list">
+              <button class="login-demo-btn" onclick="Auth.fillDemo('admin','admin123')">
+                <span class="login-demo-role">Admin</span>
+                <span class="login-demo-user">admin / admin123</span>
+              </button>
+              <button class="login-demo-btn" onclick="Auth.fillDemo('hr_manager','hr123')">
+                <span class="login-demo-role">HR Manager</span>
+                <span class="login-demo-user">hr_manager / hr123</span>
+              </button>
+              <button class="login-demo-btn" onclick="Auth.fillDemo('nv001','nv123')">
+                <span class="login-demo-role">Nhân viên</span>
+                <span class="login-demo-user">nv001 / nv123</span>
+              </button>
+            </div>
+          </div>
+          <div class="login-footer-text">
+            © 2026 Vinamilk HRM Enterprise · Phòng CNTT Vinamilk
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-shell" id="app-shell" style="display:none">
     <!-- ===== SIDEBAR ===== -->
     <aside class="sidebar no-print" id="sidebar">
       <div class="sidebar-header">
@@ -39,13 +127,13 @@
         <ul class="sidebar-menu">
           <li class="sidebar-menu-item" data-roles="All">
             <a class="sidebar-menu-link active" href="#/dashboard">
-              <span class="sidebar-menu-icon">📊</span>
+              <span class="sidebar-menu-icon"></span>
               <span class="sidebar-menu-label">Dashboard</span>
             </a>
           </li>
           <li class="sidebar-menu-item" data-roles="All">
             <a class="sidebar-menu-link" href="#/orgchart">
-              <span class="sidebar-menu-icon">🏢</span>
+              <span class="sidebar-menu-icon"></span>
               <span class="sidebar-menu-label">Sơ đồ Tổ chức</span>
             </a>
           </li>
@@ -55,33 +143,33 @@
         <ul class="sidebar-menu">
           <li class="sidebar-menu-item" data-roles="All">
             <a class="sidebar-menu-link" href="#/employees">
-              <span class="sidebar-menu-icon">👥</span>
+              <span class="sidebar-menu-icon"></span>
               <span class="sidebar-menu-label">Hồ sơ Nhân viên</span>
             </a>
           </li>
           <li class="sidebar-menu-item" data-roles="Admin,HR_Manager">
             <a class="sidebar-menu-link" href="#/recruitment">
-              <span class="sidebar-menu-icon">🎯</span>
+              <span class="sidebar-menu-icon"></span>
               <span class="sidebar-menu-label">Tuyển dụng</span>
               <span class="sidebar-menu-badge">5</span>
             </a>
           </li>
           <li class="sidebar-menu-item" data-roles="Admin,HR_Manager">
             <a class="sidebar-menu-link" href="#/contracts">
-              <span class="sidebar-menu-icon">📋</span>
+              <span class="sidebar-menu-icon"></span>
               <span class="sidebar-menu-label">Hợp đồng</span>
               <span class="sidebar-menu-badge">3</span>
             </a>
           </li>
           <li class="sidebar-menu-item" data-roles="Admin,HR_Manager">
             <a class="sidebar-menu-link" href="#/training">
-              <span class="sidebar-menu-icon">🎓</span>
+              <span class="sidebar-menu-icon"></span>
               <span class="sidebar-menu-label">Đào tạo</span>
             </a>
           </li>
           <li class="sidebar-menu-item" data-roles="Admin,HR_Manager">
             <a class="sidebar-menu-link" href="#/categories">
-              <span class="sidebar-menu-icon">📂</span>
+              <span class="sidebar-menu-icon"></span>
               <span class="sidebar-menu-label">Danh mục</span>
             </a>
           </li>
@@ -97,7 +185,7 @@
           </li>
           <li class="sidebar-menu-item" data-roles="Admin,HR_Manager,Employee">
             <a class="sidebar-menu-link" href="#/payroll">
-              <span class="sidebar-menu-icon">💰</span>
+              <span class="sidebar-menu-icon"></span>
               <span class="sidebar-menu-label">Bảng lương 3P</span>
             </a>
           </li>
@@ -107,7 +195,7 @@
         <ul class="sidebar-menu">
           <li class="sidebar-menu-item" data-roles="Admin,HR_Manager">
             <a class="sidebar-menu-link" href="#/reports">
-              <span class="sidebar-menu-icon">📈</span>
+              <span class="sidebar-menu-icon"></span>
               <span class="sidebar-menu-label">Báo cáo & AI</span>
             </a>
           </li>
@@ -117,7 +205,7 @@
         <ul class="sidebar-menu">
           <li class="sidebar-menu-item" data-roles="Admin">
             <a class="sidebar-menu-link" href="#/roles">
-              <span class="sidebar-menu-icon">🔐</span>
+              <span class="sidebar-menu-icon"></span>
               <span class="sidebar-menu-label">Phân quyền</span>
             </a>
           </li>
@@ -126,34 +214,71 @@
 
       <div class="sidebar-footer">
         <div class="sidebar-user">
-          <div class="sidebar-user-avatar">TH</div>
+          <div class="sidebar-user-avatar" id="sidebar-avatar">TH</div>
           <div class="sidebar-user-info">
-            <div class="sidebar-user-name">Nguyễn T. Thanh Huyền</div>
-            <div class="sidebar-user-role">CHRO · Admin</div>
+            <div class="sidebar-user-name" id="sidebar-username">Nguyễn T. Thanh Huyền</div>
+            <div class="sidebar-user-role" id="sidebar-role">CHRO · Admin</div>
           </div>
+          <button class="sidebar-logout-btn" onclick="Auth.logout()" title="Đăng xuất">
+            
+          </button>
         </div>
       </div>
     </aside>
 
     <!-- ===== HEADER ===== -->
     <header class="header no-print" id="header">
-      <div class="header-left">
+      <div class="header-left" style="display:flex;align-items:center;gap:20px;">
         <div class="header-breadcrumb" id="header-breadcrumb">
           <span class="header-breadcrumb-item">VINAMILK HRIS</span>
-          <span class="header-breadcrumb-sep">›</span>
+          <span class="header-breadcrumb-sep"></span>
           <span class="header-breadcrumb-item current">Tổng quan</span>
         </div>
+        
+        <!-- Top Navigation (Danh mục) -->
+        <nav class="top-nav" style="position:relative;z-index:100;">
+          <div class="dropdown">
+            <a href="#/categories" class="btn btn-text dropdown-toggle" style="font-weight:600;display:flex;align-items:center;gap:6px;text-decoration:none;color:var(--text-primary);">
+              Danh mục <span>▼</span>
+            </a>
+            <div class="dropdown-menu shadow-lg" style="width:280px;max-height:400px;overflow-y:auto;">
+              <a href="#/categories?id=dm_don_vi" class="dropdown-item">Danh mục Tổ/Bộ phận (Đơn vị)</a>
+              <a href="#/categories?id=dm_trinh_do_cm" class="dropdown-item">Danh mục Trình độ chuyên môn</a>
+              <a href="#/categories?id=dm_nganh_dao_tao" class="dropdown-item">Danh mục Ngành đào tạo</a>
+              <a href="#/categories?id=dm_truong_dao_tao" class="dropdown-item">Danh mục Trường đào tạo</a>
+              <a href="#/categories?id=dm_hinh_thuc_dt" class="dropdown-item">Danh mục Hình thức đào tạo</a>
+              <a href="#/categories?id=dm_ly_luan_ct" class="dropdown-item">Danh mục Trình độ lý luận chính trị</a>
+              <a href="#/categories?id=dm_ql_nha_nuoc" class="dropdown-item">Danh mục Trình độ quản lý nhà nước</a>
+              <a href="#/categories?id=dm_trinh_do_th" class="dropdown-item">Danh mục Trình độ tin học</a>
+              <a href="#/categories?id=dm_ngoai_ngu" class="dropdown-item">Danh mục Ngoại ngữ</a>
+              <a href="#/categories?id=dm_trinh_do_nn" class="dropdown-item">Danh mục Trình độ ngoại ngữ</a>
+              <a href="#/categories?id=dm_chuc_danh" class="dropdown-item">Danh mục Chức danh, chức vụ</a>
+              <a href="#/categories?id=dm_ngach_cc" class="dropdown-item">Danh mục Ngạch công chức</a>
+              <a href="#/categories?id=dm_khen_thuong_ky_luat" class="dropdown-item">Danh mục Hình thức khen thưởng, kỷ luật</a>
+              <a href="#/categories?id=dm_suc_khoe" class="dropdown-item">Danh mục Tình trạng sức khỏe</a>
+              <a href="#/categories?id=dm_hon_nhan" class="dropdown-item">Danh mục Tình trạng hôn nhân</a>
+              <a href="#/categories?id=dm_dan_toc" class="dropdown-item">Danh mục Dân tộc</a>
+              <a href="#/categories?id=dm_ton_giao" class="dropdown-item">Danh mục Tôn giáo</a>
+            </div>
+          </div>
+        </nav>
       </div>
       <div class="header-right">
+        <!-- Theme Switcher Group (Sáng / Tối / Hệ thống) -->
+        <div class="theme-switcher-group" role="group" aria-label="Giao diện hiển thị" style="display:inline-flex;align-items:center;background:var(--bg-app);border:1px solid var(--border-light);padding:2px;border-radius:50px;gap:2px">
+          <button type="button" class="theme-btn" data-theme-mode="light" title="Chuyển sang giao diện Sáng">☀️ <span>Sáng</span></button>
+          <button type="button" class="theme-btn" data-theme-mode="dark" title="Chuyển sang giao diện Tối"> <span>Tối</span></button>
+          <button type="button" class="theme-btn" data-theme-mode="system" title="Giao diện theo hệ thống OS"> <span>Hệ thống</span></button>
+        </div>
         <div class="header-search">
-          <span class="header-search-icon">🔍</span>
+          <span class="header-search-icon"></span>
           <input type="text" placeholder="Tìm nhân viên, mã NV..." id="global-search" autocomplete="off">
         </div>
         <button class="header-icon-btn" title="Thông báo">
-          🔔
+          
           <span class="notification-dot"></span>
         </button>
-        <button class="header-icon-btn" title="Cài đặt">⚙️</button>
+        <button class="header-icon-btn" title="Cài đặt"></button>
       </div>
     </header>
 
@@ -161,7 +286,7 @@
     <main class="main-content" id="main-content">
       <!-- Content loaded by router -->
       <div style="display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:16px">
-        <div class="animate-spin" style="font-size:2rem">⚙️</div>
+        <div class="animate-spin" style="font-size:2rem"></div>
         <div style="color:var(--text-secondary)">Đang tải...</div>
       </div>
     </main>
@@ -189,7 +314,7 @@
   <!-- Modules -->
   <script src="js/modules/dashboard.js"></script>
   <script src="js/modules/orgchart.js"></script>
-  <script src="js/modules/employees.js"></script>
+  <script src="js/modules/employees.js?v=2"></script>
   <script src="js/modules/recruitment.js"></script>
   <script src="js/modules/attendance.js"></script>
   <script src="js/modules/payroll.js"></script>
@@ -204,3 +329,4 @@
 </body>
 
 </html>
+

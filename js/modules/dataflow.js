@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - Data Flow Diagram Module
 // DFD visualization (Context & Level 1)
 // ============================================
@@ -14,8 +14,8 @@ const DataFlowModule = {
           <p class="page-subtitle">Data Flow Diagram — Hệ thống HRIS Vinamilk</p>
         </div>
         <div class="page-header-actions">
-          <button class="btn ${this.currentLevel === 0 ? 'btn-primary' : 'btn-secondary'}" onclick="DataFlowModule.setLevel(0)">📊 Context (Level 0)</button>
-          <button class="btn ${this.currentLevel === 1 ? 'btn-primary' : 'btn-secondary'}" onclick="DataFlowModule.setLevel(1)">📈 Level 1</button>
+          <button class="btn ${this.currentLevel === 0 ? 'btn-primary' : 'btn-secondary'}" onclick="DataFlowModule.setLevel(0)"> Context (Level 0)</button>
+          <button class="btn ${this.currentLevel === 1 ? 'btn-primary' : 'btn-secondary'}" onclick="DataFlowModule.setLevel(1)"> Level 1</button>
         </div>
       </div>
 
@@ -53,7 +53,7 @@ const DataFlowModule = {
 
       <!-- Flow Description -->
       <div class="card animate-fade-in-up" style="margin-top:var(--space-5)">
-        <div class="card-header"><div class="card-header-title">📋 Mô tả Luồng Dữ liệu</div></div>
+        <div class="card-header"><div class="card-header-title"> Mô tả Luồng Dữ liệu</div></div>
         <div class="card-body" id="dfd-description"></div>
       </div>
     `;
@@ -100,12 +100,12 @@ const DataFlowModule = {
 
     // External entities
     const entities = [
-      { x: cx - 320, y: 80, label: 'Nhân viên', icon: '👤' },
-      { x: cx + 320, y: 80, label: 'Ban Lãnh đạo', icon: '👔' },
-      { x: cx - 320, y: h - 80, label: 'Cơ quan BHXH', icon: '🏛️' },
-      { x: cx + 320, y: h - 80, label: 'Cơ quan Thuế', icon: '📋' },
-      { x: cx, y: 60, label: 'Ứng viên', icon: '🎯' },
-      { x: cx, y: h - 60, label: 'Ngân hàng', icon: '🏦' }
+      { x: cx - 320, y: 80, label: 'Nhân viên', icon: '' },
+      { x: cx + 320, y: 80, label: 'Ban Lãnh đạo', icon: '' },
+      { x: cx - 320, y: h - 80, label: 'Cơ quan BHXH', icon: '️' },
+      { x: cx + 320, y: h - 80, label: 'Cơ quan Thuế', icon: '' },
+      { x: cx, y: 60, label: 'Ứng viên', icon: '' },
+      { x: cx, y: h - 60, label: 'Ngân hàng', icon: '' }
     ];
 
     entities.forEach(e => this.drawExternalEntity(ctx, e.x, e.y, e.label, e.icon));
@@ -172,9 +172,9 @@ const DataFlowModule = {
     });
 
     // External entities
-    this.drawExternalEntity(ctx, w * 0.05, 50, 'Ứng viên', '🎯');
-    this.drawExternalEntity(ctx, w * 0.95, 50, 'Lãnh đạo', '👔');
-    this.drawExternalEntity(ctx, w * 0.95, 620, 'Ban GĐ', '📊');
+    this.drawExternalEntity(ctx, w * 0.05, 50, 'Ứng viên', '');
+    this.drawExternalEntity(ctx, w * 0.95, 50, 'Lãnh đạo', '');
+    this.drawExternalEntity(ctx, w * 0.95, 620, 'Ban GĐ', '');
 
     // EE flows
     this.drawFlow(ctx, w * 0.05, 80, w * 0.2, 80, 'Đơn ứng tuyển');
@@ -300,7 +300,7 @@ const DataFlowModule = {
       descEl.innerHTML = `
         <div class="content-grid grid-cols-2">
           <div>
-            <h3 style="font-size:var(--font-size-md);margin-bottom:var(--space-3)">📥 Luồng dữ liệu vào</h3>
+            <h3 style="font-size:var(--font-size-md);margin-bottom:var(--space-3)"> Luồng dữ liệu vào</h3>
             <div style="display:flex;flex-direction:column;gap:var(--space-2)">
               <div style="padding:var(--space-2) var(--space-3);background:var(--bg-hover);border-radius:var(--radius-md);font-size:var(--font-size-sm)">
                 <strong>Nhân viên →</strong> Hồ sơ cá nhân, Chấm công hàng ngày, Đơn nghỉ phép
@@ -314,7 +314,7 @@ const DataFlowModule = {
             </div>
           </div>
           <div>
-            <h3 style="font-size:var(--font-size-md);margin-bottom:var(--space-3)">📤 Luồng dữ liệu ra</h3>
+            <h3 style="font-size:var(--font-size-md);margin-bottom:var(--space-3)"> Luồng dữ liệu ra</h3>
             <div style="display:flex;flex-direction:column;gap:var(--space-2)">
               <div style="padding:var(--space-2) var(--space-3);background:var(--bg-hover);border-radius:var(--radius-md);font-size:var(--font-size-sm)">
                 <strong>→ Nhân viên:</strong> Phiếu lương, Thông báo, Kết quả KPI
@@ -352,7 +352,7 @@ const DataFlowModule = {
             <div style="padding:var(--space-3);background:var(--bg-hover);border-radius:var(--radius-lg);border-left:3px solid var(--primary)">
               <div style="font-weight:700;color:var(--primary);margin-bottom:var(--space-1)">${p.id} ${p.name}</div>
               <div style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-2)">${p.desc}</div>
-              <div style="font-size:var(--font-size-xs);color:var(--accent-green)">📁 ${p.store}</div>
+              <div style="font-size:var(--font-size-xs);color:var(--accent-green)"> ${p.store}</div>
             </div>
           `).join('')}
         </div>
@@ -360,3 +360,4 @@ const DataFlowModule = {
     }
   }
 };
+

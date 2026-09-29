@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - Transfer Module
 // Department transfer management
 // ============================================
@@ -26,7 +26,7 @@ const TransferModule = {
         </div>
         <div class="page-header-actions">
           <button class="btn btn-primary" onclick="TransferModule.showCreateModal()">
-            <span>🔄</span> Tạo quyết định
+            <span></span> Tạo quyết định
           </button>
         </div>
       </div>
@@ -105,7 +105,7 @@ const TransferModule = {
                 <td>${Helpers.formatDate(t.effectiveDate)}</td>
                 <td><span class="badge ${statusMap[t.status] || 'badge-info'}"><span class="badge-dot"></span>${t.status}</span></td>
                 <td>
-                  <button class="btn btn-ghost btn-sm" onclick="TransferModule.showDetail('${t.id}')" title="Chi tiết">👁️</button>
+                  <button class="btn btn-ghost btn-sm" onclick="TransferModule.showDetail('${t.id}')" title="Chi tiết">️</button>
                 </td>
               </tr>`;
             }).join('')}
@@ -146,7 +146,7 @@ const TransferModule = {
       <div class="modal modal-lg">
         <div class="modal-header">
           <div>
-            <div class="modal-title">🔄 Quyết định Thuyên chuyển ${t.id}</div>
+            <div class="modal-title"> Quyết định Thuyên chuyển ${t.id}</div>
             <div style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-top:4px">Ngày tạo: ${Helpers.formatDate(t.createdDate)}</div>
           </div>
           <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
@@ -163,14 +163,14 @@ const TransferModule = {
           <div class="content-grid grid-cols-2" style="margin-bottom:var(--space-4)">
             <div class="card" style="border-left:4px solid var(--accent-red)">
               <div class="card-body">
-                <div style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-2)">📍 Đơn vị cũ</div>
+                <div style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-2)"> Đơn vị cũ</div>
                 <div style="font-weight:700;margin-bottom:var(--space-1)">${fromDept ? fromDept.name : t.fromDept}</div>
                 <div style="font-size:var(--font-size-sm);color:var(--text-secondary)">Chức danh: ${t.fromPosition}</div>
               </div>
             </div>
             <div class="card" style="border-left:4px solid var(--accent-green)">
               <div class="card-body">
-                <div style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-2)">📍 Đơn vị mới</div>
+                <div style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-2)"> Đơn vị mới</div>
                 <div style="font-weight:700;color:var(--primary);margin-bottom:var(--space-1)">${toDept ? toDept.name : t.toDept}</div>
                 <div style="font-size:var(--font-size-sm);color:var(--text-secondary)">Chức danh: ${t.toPosition}</div>
               </div>
@@ -184,7 +184,7 @@ const TransferModule = {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Đóng</button>
-          ${t.status === 'Chờ duyệt' ? '<button class="btn btn-primary" onclick="alert(\'Demo: Đã phê duyệt!\'); this.closest(\'.modal-overlay\').remove()">✅ Phê duyệt</button>' : ''}
+          ${t.status === 'Chờ duyệt' ? '<button class="btn btn-primary" onclick="alert(\'Demo: Đã phê duyệt!\'); this.closest(\'.modal-overlay\').remove()"> Phê duyệt</button>' : ''}
         </div>
       </div>
     `;
@@ -200,12 +200,12 @@ const TransferModule = {
     overlay.innerHTML = `
       <div class="modal modal-lg">
         <div class="modal-header">
-          <div class="modal-title">🔄 Tạo Quyết định Thuyên chuyển</div>
+          <div class="modal-title"> Tạo Quyết định Thuyên chuyển</div>
           <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
         </div>
         <div class="modal-body">
           <div class="alert-banner alert-banner-info" style="margin-bottom:var(--space-5)">
-            <span class="alert-banner-icon">ℹ️</span>
+            <span class="alert-banner-icon"></span>
             <div class="alert-banner-content">
               <div class="alert-banner-title">Chế độ Demo</div>
               <div class="alert-banner-text">Quyết định sẽ không được lưu vĩnh viễn trong bản demo.</div>
@@ -244,10 +244,12 @@ const TransferModule = {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Hủy</button>
-          <button class="btn btn-primary" onclick="alert('Demo: Quyết định đã được tạo!'); this.closest('.modal-overlay').remove()">💾 Tạo quyết định</button>
+          <button class="btn btn-primary" onclick="alert('Demo: Quyết định đã được tạo!'); this.closest('.modal-overlay').remove()"> Tạo quyết định</button>
         </div>
       </div>
     `;
     document.body.appendChild(overlay);
   }
 };
+
+

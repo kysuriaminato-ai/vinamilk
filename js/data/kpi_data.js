@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - KPI Data
 // KPI/Performance evaluation records
 // ============================================
@@ -13,11 +13,11 @@ const KPIData = {
 
   criteria: [
     { id: 'productivity', name: 'Năng suất làm việc', weight: 25, icon: '⚡' },
-    { id: 'quality', name: 'Chất lượng công việc', weight: 25, icon: '✅' },
-    { id: 'teamwork', name: 'Làm việc nhóm', weight: 15, icon: '🤝' },
-    { id: 'initiative', name: 'Sáng kiến & Đổi mới', weight: 15, icon: '💡' },
-    { id: 'discipline', name: 'Kỷ luật & Tác phong', weight: 10, icon: '📋' },
-    { id: 'learning', name: 'Học hỏi & Phát triển', weight: 10, icon: '📚' }
+    { id: 'quality', name: 'Chất lượng công việc', weight: 25, icon: '' },
+    { id: 'teamwork', name: 'Làm việc nhóm', weight: 15, icon: '' },
+    { id: 'initiative', name: 'Sáng kiến & Đổi mới', weight: 15, icon: '' },
+    { id: 'discipline', name: 'Kỷ luật & Tác phong', weight: 10, icon: '' },
+    { id: 'learning', name: 'Học hỏi & Phát triển', weight: 10, icon: '' }
   ],
 
   evaluations: [
@@ -85,3 +85,5 @@ const KPIData = {
     };
   }
 };
+
+

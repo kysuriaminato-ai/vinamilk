@@ -1,18 +1,18 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - Assets Data
 // Employee asset assignment records
 // ============================================
 
 const AssetsData = {
   categories: [
-    { id: 'laptop', name: 'Laptop/Máy tính', icon: '💻' },
-    { id: 'phone', name: 'Điện thoại', icon: '📱' },
-    { id: 'card', name: 'Thẻ nhân viên', icon: '🪪' },
-    { id: 'uniform', name: 'Đồng phục', icon: '👔' },
-    { id: 'key', name: 'Chìa khóa/Thẻ từ', icon: '🔑' },
-    { id: 'vehicle', name: 'Phương tiện', icon: '🚗' },
-    { id: 'tools', name: 'Dụng cụ/Thiết bị', icon: '🔧' },
-    { id: 'other', name: 'Khác', icon: '📦' }
+    { id: 'laptop', name: 'Laptop/Máy tính', icon: '' },
+    { id: 'phone', name: 'Điện thoại', icon: '' },
+    { id: 'card', name: 'Thẻ nhân viên', icon: '' },
+    { id: 'uniform', name: 'Đồng phục', icon: '' },
+    { id: 'key', name: 'Chìa khóa/Thẻ từ', icon: '' },
+    { id: 'vehicle', name: 'Phương tiện', icon: '' },
+    { id: 'tools', name: 'Dụng cụ/Thiết bị', icon: '' },
+    { id: 'other', name: 'Khác', icon: '' }
   ],
 
   items: [
@@ -60,3 +60,4 @@ const AssetsData = {
     };
   }
 };
+

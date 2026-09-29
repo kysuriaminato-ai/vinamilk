@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - Helpers
 // Format, date, currency utilities
 // ============================================
@@ -215,7 +215,7 @@ const Helpers = {
       }
     });
 
-    btns += `<button class="table-pagination-btn" data-page="${page+1}" ${page >= totalPages ? 'disabled' : ''}>›</button>`;
+    btns += `<button class="table-pagination-btn" data-page="${page+1}" ${page >= totalPages ? 'disabled' : ''}></button>`;
 
     return `
       <div class="table-pagination">
@@ -225,3 +225,4 @@ const Helpers = {
     `;
   }
 };
+

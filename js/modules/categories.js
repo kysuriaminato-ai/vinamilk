@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - Categories Module
 // Business categories management (Danh mục nghiệp vụ)
 // ============================================
@@ -35,7 +35,7 @@ const CategoriesModule = {
         </div>
         <div class="page-header-actions">
           <button class="btn btn-secondary" onclick="CategoriesModule.resetData()">
-            <span>🔄</span> Khôi phục mặc định
+            <span></span> Khôi phục mặc định
           </button>
         </div>
       </div>
@@ -64,7 +64,7 @@ const CategoriesModule = {
       <div class="card animate-fade-in-up" style="margin-bottom:var(--space-5)">
         <div class="card-header">
           <div class="card-header-title">
-            <span style="margin-right:var(--space-2)">🏛️</span>
+            <span style="margin-right:var(--space-2)">️</span>
             Hệ thống các Danh mục
           </div>
           <span style="font-size:var(--font-size-sm);color:var(--text-secondary)">${systemCats.length} danh mục</span>
@@ -80,7 +80,7 @@ const CategoriesModule = {
       <div class="card animate-fade-in-up" style="margin-bottom:var(--space-5)">
         <div class="card-header">
           <div class="card-header-title">
-            <span style="margin-right:var(--space-2)">🎓</span>
+            <span style="margin-right:var(--space-2)"></span>
             Danh mục Chuyên môn
           </div>
           <span style="font-size:var(--font-size-sm);color:var(--text-secondary)">${profCats.length} danh mục</span>
@@ -109,7 +109,7 @@ const CategoriesModule = {
             ${totalCount !== activeCount ? `<span class="cat-card-count-inactive">(${totalCount - activeCount} ẩn)</span>` : ''}
           </div>
         </div>
-        <div class="cat-card-arrow">›</div>
+        <div class="cat-card-arrow"></div>
       </div>
     `;
   },
@@ -120,7 +120,7 @@ const CategoriesModule = {
   renderCategoryDetail(container, catId) {
     const cat = CategoriesData.getCategory(catId);
     if (!cat) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔍</div><div class="empty-state-title">Không tìm thấy danh mục</div></div>';
+      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"></div><div class="empty-state-title">Không tìm thấy danh mục</div></div>';
       return;
     }
 
@@ -150,7 +150,7 @@ const CategoriesModule = {
         </div>
         <div class="page-header-actions">
           <button class="btn btn-primary" onclick="CategoriesModule.showAddItemModal('${cat.id}')">
-            <span>➕</span> Thêm mục mới
+            <span></span> Thêm mục mới
           </button>
         </div>
       </div>
@@ -176,7 +176,7 @@ const CategoriesModule = {
         <div class="table-toolbar">
           <div class="table-toolbar-left">
             <div class="table-search">
-              <span>🔍</span>
+              <span></span>
               <input type="text" placeholder="Tìm theo tên, mã..." 
                      value="${this.searchQuery}" 
                      oninput="CategoriesModule.onSearch(this.value)" id="cat-search">
@@ -212,18 +212,18 @@ const CategoriesModule = {
                 </td>
                 <td>
                   <div style="display:flex;gap:var(--space-1)">
-                    <button class="btn btn-ghost btn-sm" onclick="CategoriesModule.showEditItemModal('${cat.id}', '${item.id}')" title="Sửa">✏️</button>
+                    <button class="btn btn-ghost btn-sm" onclick="CategoriesModule.showEditItemModal('${cat.id}', '${item.id}')" title="Sửa"></button>
                     <button class="btn btn-ghost btn-sm" onclick="CategoriesModule.toggleItem('${cat.id}', '${item.id}')" title="${item.active ? 'Ẩn' : 'Hiện'}">
-                      ${item.active ? '🔒' : '🔓'}
+                      ${item.active ? '' : ''}
                     </button>
-                    <button class="btn btn-ghost btn-sm" onclick="CategoriesModule.confirmDelete('${cat.id}', '${item.id}', '${item.name.replace(/'/g, "\\'")}')" title="Xóa" style="color:var(--accent-red)">🗑️</button>
+                    <button class="btn btn-ghost btn-sm" onclick="CategoriesModule.confirmDelete('${cat.id}', '${item.id}', '${item.name.replace(/'/g, "\\'")}')" title="Xóa" style="color:var(--accent-red)">️</button>
                   </div>
                 </td>
               </tr>
             `).join('') : `
               <tr>
                 <td colspan="6" style="text-align:center;padding:var(--space-8);color:var(--text-tertiary)">
-                  <div style="font-size:2rem;margin-bottom:var(--space-2)">📭</div>
+                  <div style="font-size:2rem;margin-bottom:var(--space-2)"></div>
                   Không tìm thấy mục nào ${this.searchQuery ? 'phù hợp' : 'trong danh mục'}
                 </td>
               </tr>
@@ -281,7 +281,7 @@ const CategoriesModule = {
     overlay.innerHTML = `
       <div class="modal">
         <div class="modal-header">
-          <div class="modal-title">➕ Thêm mục mới — ${cat.name}</div>
+          <div class="modal-title"> Thêm mục mới — ${cat.name}</div>
           <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
         </div>
         <div class="modal-body">
@@ -300,7 +300,7 @@ const CategoriesModule = {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Hủy</button>
-          <button class="btn btn-primary" onclick="CategoriesModule.addItem('${catId}')">💾 Lưu</button>
+          <button class="btn btn-primary" onclick="CategoriesModule.addItem('${catId}')"> Lưu</button>
         </div>
       </div>
     `;
@@ -322,7 +322,7 @@ const CategoriesModule = {
 
     CategoriesData.addItem(catId, { code, name, description: desc || '' });
     document.querySelector('.modal-overlay')?.remove();
-    this._showToast('✅ Đã thêm mục mới thành công!');
+    this._showToast(' Đã thêm mục mới thành công!');
     this.renderCategoryDetail(document.getElementById('main-content'), catId);
   },
 
@@ -338,7 +338,7 @@ const CategoriesModule = {
     overlay.innerHTML = `
       <div class="modal">
         <div class="modal-header">
-          <div class="modal-title">✏️ Chỉnh sửa — ${item.name}</div>
+          <div class="modal-title"> Chỉnh sửa — ${item.name}</div>
           <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
         </div>
         <div class="modal-body">
@@ -357,7 +357,7 @@ const CategoriesModule = {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Hủy</button>
-          <button class="btn btn-primary" onclick="CategoriesModule.updateItem('${catId}', '${itemId}')">💾 Cập nhật</button>
+          <button class="btn btn-primary" onclick="CategoriesModule.updateItem('${catId}', '${itemId}')"> Cập nhật</button>
         </div>
       </div>
     `;
@@ -376,7 +376,7 @@ const CategoriesModule = {
 
     CategoriesData.updateItem(catId, itemId, { code, name, description: desc || '' });
     document.querySelector('.modal-overlay')?.remove();
-    this._showToast('✅ Đã cập nhật thành công!');
+    this._showToast(' Đã cập nhật thành công!');
     this.renderCategoryDetail(document.getElementById('main-content'), catId);
   },
 
@@ -392,11 +392,11 @@ const CategoriesModule = {
     overlay.innerHTML = `
       <div class="modal" style="max-width:440px">
         <div class="modal-header">
-          <div class="modal-title">⚠️ Xác nhận xóa</div>
+          <div class="modal-title"> Xác nhận xóa</div>
           <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
         </div>
         <div class="modal-body" style="text-align:center;padding:var(--space-6)">
-          <div style="font-size:3rem;margin-bottom:var(--space-3)">🗑️</div>
+          <div style="font-size:3rem;margin-bottom:var(--space-3)">️</div>
           <div style="font-size:var(--font-size-md);font-weight:var(--font-weight-semibold);margin-bottom:var(--space-2)">
             Bạn có chắc chắn muốn xóa?
           </div>
@@ -406,7 +406,7 @@ const CategoriesModule = {
         </div>
         <div class="modal-footer" style="justify-content:center">
           <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Hủy</button>
-          <button class="btn btn-primary" style="background:var(--accent-red)" onclick="CategoriesModule.deleteItem('${catId}', '${itemId}')">🗑️ Xóa</button>
+          <button class="btn btn-primary" style="background:var(--accent-red)" onclick="CategoriesModule.deleteItem('${catId}', '${itemId}')">️ Xóa</button>
         </div>
       </div>
     `;
@@ -416,14 +416,14 @@ const CategoriesModule = {
   deleteItem(catId, itemId) {
     CategoriesData.deleteItem(catId, itemId);
     document.querySelector('.modal-overlay')?.remove();
-    this._showToast('🗑️ Đã xóa mục thành công!');
+    this._showToast('️ Đã xóa mục thành công!');
     this.renderCategoryDetail(document.getElementById('main-content'), catId);
   },
 
   resetData() {
     if (confirm('Bạn có chắc muốn khôi phục tất cả danh mục về mặc định? Mọi thay đổi sẽ bị mất.')) {
       CategoriesData.resetToDefaults();
-      this._showToast('🔄 Đã khôi phục dữ liệu mặc định!');
+      this._showToast(' Đã khôi phục dữ liệu mặc định!');
       this.renderCategoryGrid(document.getElementById('main-content'));
     }
   },
@@ -447,3 +447,5 @@ const CategoriesModule = {
     }, 3000);
   }
 };
+
+

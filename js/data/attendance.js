@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - Attendance Data
 // Multi-channel attendance tracking
 // ============================================
@@ -9,10 +9,10 @@ const AttendanceData = {
   
   // Attendance channels by department type
   channels: {
-    'factory': { name: 'Vân tay / Face ID', icon: '🔒' },
-    'farm': { name: 'Bảng công điện tử', icon: '📋' },
-    'sales': { name: 'GPS Check-in', icon: '📍' },
-    'office': { name: 'Vân tay / Face ID', icon: '🔒' }
+    'factory': { name: 'Vân tay / Face ID', icon: '' },
+    'farm': { name: 'Bảng công điện tử', icon: '' },
+    'sales': { name: 'GPS Check-in', icon: '' },
+    'office': { name: 'Vân tay / Face ID', icon: '' }
   },
 
   // Attendance symbols
@@ -111,3 +111,4 @@ const AttendanceData = {
     };
   }
 };
+

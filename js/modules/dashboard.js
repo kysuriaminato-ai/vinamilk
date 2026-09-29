@@ -19,7 +19,7 @@ const DashboardModule = {
         </div>
         <div class="page-header-actions">
           <button class="btn btn-secondary" onclick="window.location.hash='/reports'">
-            <span>📊</span> Xem báo cáo
+            <span></span> Xem báo cáo
           </button>
         </div>
       </div>
@@ -28,7 +28,7 @@ const DashboardModule = {
       <div class="content-grid grid-cols-4" style="margin-bottom: var(--space-5)">
         <div class="stat-card stat-blue animate-fade-in-up stagger-1">
           <div class="stat-card-top">
-            <div class="stat-card-icon">👥</div>
+            <div class="stat-card-icon"></div>
             <div class="stat-card-trend up">↑ 2.3%</div>
           </div>
           <div class="stat-card-value">${Helpers.formatNumber(10156)}</div>
@@ -37,7 +37,7 @@ const DashboardModule = {
         </div>
         <div class="stat-card stat-green animate-fade-in-up stagger-2">
           <div class="stat-card-top">
-            <div class="stat-card-icon">💰</div>
+            <div class="stat-card-icon"></div>
             <div class="stat-card-trend up">↑ 5.1%</div>
           </div>
           <div class="stat-card-value">${(payrollSummary.totalGross / 1000000000).toFixed(1)}B</div>
@@ -46,7 +46,7 @@ const DashboardModule = {
         </div>
         <div class="stat-card stat-orange animate-fade-in-up stagger-3">
           <div class="stat-card-top">
-            <div class="stat-card-icon">📋</div>
+            <div class="stat-card-icon"></div>
             <div class="stat-card-trend down">↓ 0.5%</div>
           </div>
           <div class="stat-card-value">${recruitStats.totalJobs}</div>
@@ -55,7 +55,7 @@ const DashboardModule = {
         </div>
         <div class="stat-card stat-red animate-fade-in-up stagger-4">
           <div class="stat-card-top">
-            <div class="stat-card-icon">📉</div>
+            <div class="stat-card-icon"></div>
             <div class="stat-card-trend down">↓ 1.2%</div>
           </div>
           <div class="stat-card-value">4.8%</div>
@@ -69,7 +69,14 @@ const DashboardModule = {
         <div class="chart-card animate-fade-in-up stagger-3">
           <div class="chart-card-header">
             <div>
-              <div class="chart-card-title">Biến động nhân sự 2026</div>
+              <div class="chart-card-title">
+                Biến động nhân sự 
+                <select id="headcount-year" style="border:none; font-family:inherit; font-weight:inherit; font-size:inherit; color:var(--primary); outline:none; background:transparent; cursor:pointer;" onchange="DashboardModule.updateHeadcount(this.value)">
+                  <option value="2026" selected>2026</option>
+                  <option value="2025">2025</option>
+                  <option value="2024">2024</option>
+                </select>
+              </div>
               <div style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-top:2px">Tuyển mới vs. Nghỉ việc theo tháng</div>
             </div>
             <div class="filter-bar">
@@ -136,45 +143,99 @@ const DashboardModule = {
         <div class="card animate-fade-in-up stagger-6">
           <div class="card-header">
             <div>
-              <div class="card-header-title">⚠️ Cảnh báo & Nhắc nhở</div>
-              <div class="card-header-subtitle">${expiring.length + 3} mục cần xử lý</div>
+              <div class="card-header-title">Nhắc việc & Cảnh báo</div>
+              <div class="card-header-subtitle">Nhiều mục cần xử lý</div>
             </div>
           </div>
           <div class="card-body" style="padding:0">
             <div class="dashboard-alerts">
               <div class="dashboard-alert-item" onclick="window.location.hash='/contracts'">
-                <div class="dashboard-alert-icon warning">📋</div>
+                <div class="dashboard-alert-icon warning"></div>
                 <div class="dashboard-alert-content">
-                  <div class="dashboard-alert-title">Hợp đồng sắp hết hạn</div>
-                  <div class="dashboard-alert-desc">Cần tái ký trong 60 ngày tới</div>
+                  <div class="dashboard-alert-title">Nhân viên đến tuổi nghỉ hưu</div>
+                  <div class="dashboard-alert-desc">Sắp nghỉ hưu trong 6 tháng tới</div>
                 </div>
-                <div class="dashboard-alert-count">${expiring.length}</div>
+                <div class="dashboard-alert-count">2</div>
               </div>
               <div class="dashboard-alert-item">
-                <div class="dashboard-alert-icon danger">🔴</div>
+                <div class="dashboard-alert-icon danger"></div>
                 <div class="dashboard-alert-content">
-                  <div class="dashboard-alert-title">Chứng chỉ hết hạn</div>
-                  <div class="dashboard-alert-desc">ISO, An toàn LĐ, Thú y</div>
+                  <div class="dashboard-alert-title">Giấy tờ hết hạn</div>
+                  <div class="dashboard-alert-desc">CMND/CCCD, Visa, Thẻ xanh</div>
                 </div>
                 <div class="dashboard-alert-count">8</div>
               </div>
               <div class="dashboard-alert-item">
-                <div class="dashboard-alert-icon info">🎂</div>
+                <div class="dashboard-alert-icon info"></div>
                 <div class="dashboard-alert-content">
-                  <div class="dashboard-alert-title">Sắp đến tuổi nghỉ hưu</div>
-                  <div class="dashboard-alert-desc">Trong 12 tháng tới</div>
+                  <div class="dashboard-alert-title">Sinh nhật nhân viên</div>
+                  <div class="dashboard-alert-desc">Trong tuần này</div>
                 </div>
-                <div class="dashboard-alert-count">3</div>
+                <div class="dashboard-alert-count">15</div>
               </div>
-              <div class="dashboard-alert-item" onclick="window.location.hash='/attendance'">
-                <div class="dashboard-alert-icon warning">⏰</div>
+              <div class="dashboard-alert-item">
+                <div class="dashboard-alert-icon success"></div>
                 <div class="dashboard-alert-content">
-                  <div class="dashboard-alert-title">Đi muộn hôm nay</div>
-                  <div class="dashboard-alert-desc">Trên 15 phút</div>
+                  <div class="dashboard-alert-title">Kỷ niệm ngày vào làm</div>
+                  <div class="dashboard-alert-desc">Tháng này</div>
                 </div>
-                <div class="dashboard-alert-count">12</div>
+                <div class="dashboard-alert-count">1</div>
+              </div>
+              <div class="dashboard-alert-item">
+                <div class="dashboard-alert-icon warning"></div>
+                <div class="dashboard-alert-content">
+                  <div class="dashboard-alert-title">Chưa ký hợp đồng</div>
+                  <div class="dashboard-alert-desc">Nhân viên mới qua thử việc</div>
+                </div>
+                <div class="dashboard-alert-count">5</div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Row 3 -->
+      <div class="content-grid grid-cols-2" style="margin-bottom: var(--space-5)">
+        <div class="chart-card animate-fade-in-up stagger-7">
+          <div class="chart-card-header">
+            <div>
+              <div class="chart-card-title">Thống kê hợp đồng theo thời hạn</div>
+              <div style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-top:2px">Tất cả đơn vị - Đến ngày hôm nay</div>
+            </div>
+          </div>
+          <div class="chart-card-body" style="display:flex;align-items:center;gap:var(--space-6)">
+            <div style="flex:0 0 200px">
+              <canvas id="chart-contracts" width="200" height="200"></canvas>
+            </div>
+            <div class="chart-legend" style="flex:1">
+              <div class="chart-legend-item">
+                <div class="chart-legend-color" style="background:#4CAF50"></div>
+                <span class="chart-legend-label">Không xác định thời hạn</span>
+                <span class="chart-legend-value">17 (53.13%)</span>
+              </div>
+              <div class="chart-legend-item">
+                <div class="chart-legend-color" style="background:#F44336"></div>
+                <span class="chart-legend-label">1 Năm</span>
+                <span class="chart-legend-value">14 (43.75%)</span>
+              </div>
+              <div class="chart-legend-item">
+                <div class="chart-legend-color" style="background:#2196F3"></div>
+                <span class="chart-legend-label">6 Tháng</span>
+                <span class="chart-legend-value">1 (3.13%)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="chart-card animate-fade-in-up stagger-8">
+          <div class="chart-card-header">
+            <div>
+              <div class="chart-card-title">Tình hình nghỉ theo phòng ban</div>
+              <div style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-top:2px">Số ngày nghỉ / Tháng này</div>
+            </div>
+          </div>
+          <div class="chart-card-body" style="height:250px">
+            <canvas id="chart-leaves"></canvas>
           </div>
         </div>
       </div>
@@ -206,7 +267,7 @@ const DashboardModule = {
       <!-- Recent activities -->
       <div class="card animate-fade-in-up">
         <div class="card-header">
-          <div class="card-header-title">📝 Hoạt động gần đây</div>
+          <div class="card-header-title"> Hoạt động gần đây</div>
         </div>
         <div class="card-body">
           <div class="timeline">
@@ -259,13 +320,7 @@ const DashboardModule = {
     Charts.sparkline('spark-turnover', [5.8, 5.5, 5.2, 5.0, 4.9, 5.1, 4.7, 4.5, 4.8], '#FF5630');
 
     // Headcount bar chart
-    Charts.bar('chart-headcount',
-      ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9'],
-      [
-        { data: [45, 38, 52, 60, 48, 55, 42, 50, 35], color: '#0052CC', label: 'Tuyển mới' },
-        { data: [20, 25, 18, 22, 30, 15, 28, 20, 12], color: '#FF5630', label: 'Nghỉ việc' }
-      ]
-    );
+    this.updateHeadcount('2026');
 
     // Distribution donut
     Charts.donut('chart-distribution', [
@@ -275,6 +330,25 @@ const DashboardModule = {
       { value: 906, color: '#6554C0', label: 'Văn phòng' }
     ], { size: 200, centerText: '10.156', centerSubtext: 'Nhân viên' });
 
+    // Contracts donut
+    if (document.getElementById('chart-contracts')) {
+      Charts.donut('chart-contracts', [
+        { value: 17, color: '#4CAF50', label: 'Không thời hạn' },
+        { value: 14, color: '#F44336', label: '1 Năm' },
+        { value: 1, color: '#2196F3', label: '6 Tháng' }
+      ], { size: 200, centerText: '32', centerSubtext: 'Hợp đồng' });
+    }
+
+    // Leaves bar chart
+    if (document.getElementById('chart-leaves')) {
+      Charts.bar('chart-leaves', 
+        ['C.Ty CP', 'Văn phòng', 'P.Kinh doanh', 'Chi nhánh', 'P.Kế toán', 'IT'],
+        [
+          { data: [160, 42, 19, 11, 8, 7], color: '#6554C0', label: 'Số ngày nghỉ' }
+        ]
+      );
+    }
+
     // Payroll trend line chart
     Charts.line('chart-payroll-trend',
       ['Q1/25', 'Q2/25', 'Q3/25', 'Q4/25', 'Q1/26', 'Q2/26', 'Q3/26'],
@@ -283,5 +357,36 @@ const DashboardModule = {
       ],
       { formatY: (v) => (v / 1).toFixed(0) }
     );
+  },
+
+  updateHeadcount(year) {
+    const dataByYear = {
+      '2026': {
+        labels: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'],
+        hired: [45, 38, 52, 60, 48, 55, 42, 50, 35, 40, 30, 20],
+        resigned: [20, 25, 18, 22, 30, 15, 28, 20, 12, 10, 8, 15]
+      },
+      '2025': {
+        labels: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'],
+        hired: [30, 40, 35, 45, 50, 42, 38, 44, 40, 32, 28, 25],
+        resigned: [15, 18, 12, 20, 25, 18, 22, 15, 10, 12, 9, 14]
+      },
+      '2024': {
+        labels: ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'],
+        hired: [25, 28, 30, 35, 40, 38, 32, 36, 42, 45, 38, 30],
+        resigned: [10, 12, 8, 15, 20, 14, 18, 12, 16, 20, 15, 12]
+      }
+    };
+
+    const d = dataByYear[year] || dataByYear['2026'];
+    Charts.bar('chart-headcount',
+      d.labels,
+      [
+        { data: d.hired, color: '#0052CC', label: 'Tuyển mới' },
+        { data: d.resigned, color: '#FF5630', label: 'Nghỉ việc' }
+      ]
+    );
   }
 };
+
+

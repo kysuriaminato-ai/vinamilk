@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - Reports & Analytics Module
 // BI dashboards, charts, AI predictions
 // ============================================
@@ -16,7 +16,7 @@ const ReportsModule = {
             <option>Năm 2026</option>
             <option>Năm 2025</option>
           </select>
-          <button class="btn btn-primary">📥 Xuất báo cáo</button>
+          <button class="btn btn-primary"> Xuất báo cáo</button>
         </div>
       </div>
 
@@ -25,7 +25,7 @@ const ReportsModule = {
         <!-- Turnover Analysis -->
         <div class="chart-card animate-fade-in-up stagger-1">
           <div class="chart-card-header">
-            <div class="chart-card-title">📈 Biến động Nhân sự theo Tháng</div>
+            <div class="chart-card-title"> Biến động Nhân sự theo Tháng</div>
           </div>
           <div class="chart-card-body" style="height:280px">
             <canvas id="report-turnover"></canvas>
@@ -35,7 +35,7 @@ const ReportsModule = {
         <!-- Cost Analysis -->
         <div class="chart-card animate-fade-in-up stagger-2">
           <div class="chart-card-header">
-            <div class="chart-card-title">💰 Chi phí Lương theo P1/P2/P3</div>
+            <div class="chart-card-title"> Chi phí Lương theo P1/P2/P3</div>
           </div>
           <div class="chart-card-body" style="height:280px">
             <canvas id="report-salary-breakdown"></canvas>
@@ -47,7 +47,7 @@ const ReportsModule = {
         <!-- Department Distribution -->
         <div class="chart-card animate-fade-in-up stagger-3">
           <div class="chart-card-header">
-            <div class="chart-card-title">👥 Phân bổ Nhân sự theo Đơn vị</div>
+            <div class="chart-card-title"> Phân bổ Nhân sự theo Đơn vị</div>
           </div>
           <div class="chart-card-body" style="height:280px">
             <canvas id="report-dept-dist"></canvas>
@@ -57,7 +57,7 @@ const ReportsModule = {
         <!-- Recruitment Funnel -->
         <div class="chart-card animate-fade-in-up stagger-4">
           <div class="chart-card-header">
-            <div class="chart-card-title">🎯 Funnel Tuyển dụng 2026</div>
+            <div class="chart-card-title"> Funnel Tuyển dụng 2026</div>
           </div>
           <div class="chart-card-body" style="height:280px">
             <canvas id="report-funnel"></canvas>
@@ -69,14 +69,14 @@ const ReportsModule = {
       <div class="card animate-fade-in-up" style="margin-bottom:var(--space-5)">
         <div class="card-header" style="background:linear-gradient(135deg, #403294 0%, #6554C0 100%);border-radius:var(--radius-xl) var(--radius-xl) 0 0">
           <div>
-            <div class="card-header-title" style="color:white">🤖 Dự báo AI (Mô phỏng)</div>
+            <div class="card-header-title" style="color:white"> Dự báo AI (Mô phỏng)</div>
             <div style="font-size:var(--font-size-sm);color:rgba(255,255,255,0.7);margin-top:2px">Machine Learning predictions - DSS Level 3</div>
           </div>
         </div>
         <div class="card-body">
           <div class="content-grid grid-cols-3">
             <div style="padding:var(--space-4);background:var(--bg-hover);border-radius:var(--radius-xl)">
-              <div style="font-size:1.5rem;margin-bottom:var(--space-2)">📉</div>
+              <div style="font-size:1.5rem;margin-bottom:var(--space-2)"></div>
               <div style="font-weight:700;margin-bottom:var(--space-1)">Dự báo nghỉ việc Q4/2026</div>
               <div style="font-size:var(--font-size-3xl);font-weight:800;color:var(--accent-red);margin-bottom:var(--space-2)">4.2%</div>
               <div style="font-size:var(--font-size-sm);color:var(--text-secondary)">
@@ -87,7 +87,7 @@ const ReportsModule = {
               </div>
             </div>
             <div style="padding:var(--space-4);background:var(--bg-hover);border-radius:var(--radius-xl)">
-              <div style="font-size:1.5rem;margin-bottom:var(--space-2)">📊</div>
+              <div style="font-size:1.5rem;margin-bottom:var(--space-2)"></div>
               <div style="font-weight:700;margin-bottom:var(--space-1)">Dự báo nhu cầu tuyển dụng</div>
               <div style="font-size:var(--font-size-3xl);font-weight:800;color:var(--primary);margin-bottom:var(--space-2)">85</div>
               <div style="font-size:var(--font-size-sm);color:var(--text-secondary)">
@@ -95,7 +95,7 @@ const ReportsModule = {
               </div>
             </div>
             <div style="padding:var(--space-4);background:var(--bg-hover);border-radius:var(--radius-xl)">
-              <div style="font-size:1.5rem;margin-bottom:var(--space-2)">💰</div>
+              <div style="font-size:1.5rem;margin-bottom:var(--space-2)"></div>
               <div style="font-weight:700;margin-bottom:var(--space-1)">Dự báo chi phí lương Q4</div>
               <div style="font-size:var(--font-size-3xl);font-weight:800;color:var(--accent-green);margin-bottom:var(--space-2)">680B</div>
               <div style="font-size:var(--font-size-sm);color:var(--text-secondary)">
@@ -109,7 +109,7 @@ const ReportsModule = {
       <!-- Risk Scores -->
       <div class="data-table-wrapper animate-fade-in-up">
         <div class="table-toolbar">
-          <div class="card-header-title">🎯 Risk Score — Nhân viên có nguy cơ nghỉ việc cao (AI)</div>
+          <div class="card-header-title"> Risk Score — Nhân viên có nguy cơ nghỉ việc cao (AI)</div>
         </div>
         <table class="data-table">
           <thead>
@@ -194,3 +194,4 @@ const ReportsModule = {
     ]);
   }
 };
+

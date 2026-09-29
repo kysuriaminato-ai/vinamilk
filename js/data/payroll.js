@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // VINAMILK HRIS - Payroll & Contracts Data
 // 3P salary structure and contract management
 // ============================================
@@ -151,13 +151,14 @@ const ContractsData = {
 
   // Offboarding checklist
   offboardingChecklist: [
-    { id: 'OB-01', task: 'Thu hồi thẻ nhân viên & thẻ ra vào', department: 'Hành chính', icon: '🪪' },
-    { id: 'OB-02', task: 'Thu hồi laptop/thiết bị IT', department: 'CNTT', icon: '💻' },
-    { id: 'OB-03', task: 'Vô hiệu hóa tài khoản email & hệ thống', department: 'CNTT', icon: '🔐' },
-    { id: 'OB-04', task: 'Thanh toán công nợ/tạm ứng', department: 'Tài chính', icon: '💰' },
-    { id: 'OB-05', task: 'Bàn giao công việc', department: 'Quản lý trực tiếp', icon: '📋' },
-    { id: 'OB-06', task: 'Chốt sổ BHXH', department: 'Nhân sự', icon: '📑' },
-    { id: 'OB-07', task: 'Hoàn thành Exit Interview', department: 'Nhân sự', icon: '🎤' },
-    { id: 'OB-08', task: 'Chuyển hồ sơ sang Archive', department: 'Nhân sự', icon: '📦' }
+    { id: 'OB-01', task: 'Thu hồi thẻ nhân viên & thẻ ra vào', department: 'Hành chính', icon: '' },
+    { id: 'OB-02', task: 'Thu hồi laptop/thiết bị IT', department: 'CNTT', icon: '' },
+    { id: 'OB-03', task: 'Vô hiệu hóa tài khoản email & hệ thống', department: 'CNTT', icon: '' },
+    { id: 'OB-04', task: 'Thanh toán công nợ/tạm ứng', department: 'Tài chính', icon: '' },
+    { id: 'OB-05', task: 'Bàn giao công việc', department: 'Quản lý trực tiếp', icon: '' },
+    { id: 'OB-06', task: 'Chốt sổ BHXH', department: 'Nhân sự', icon: '' },
+    { id: 'OB-07', task: 'Hoàn thành Exit Interview', department: 'Nhân sự', icon: '' },
+    { id: 'OB-08', task: 'Chuyển hồ sơ sang Archive', department: 'Nhân sự', icon: '' }
   ]
 };
+

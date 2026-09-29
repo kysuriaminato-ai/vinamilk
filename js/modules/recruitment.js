@@ -14,7 +14,7 @@ const RecruitmentModule = {
           <p class="page-subtitle">Applicant Tracking System — Quy trình tuyển dụng Kanban</p>
         </div>
         <div class="page-header-actions">
-          <button class="btn btn-primary" onclick="RecruitmentModule.showNewJobModal()">➕ Đề xuất tuyển dụng</button>
+          <button class="btn btn-primary" onclick="RecruitmentModule.showNewJobModal()"> Đề xuất tuyển dụng</button>
         </div>
       </div>
 
@@ -41,7 +41,7 @@ const RecruitmentModule = {
       <!-- Job Openings -->
       <div class="card animate-fade-in-up" style="margin-bottom:var(--space-5)">
         <div class="card-header">
-          <div class="card-header-title">📋 Vị trí tuyển dụng</div>
+          <div class="card-header-title"> Vị trí tuyển dụng</div>
         </div>
         <div class="card-body" style="padding:0">
           <table class="data-table">
@@ -70,7 +70,7 @@ const RecruitmentModule = {
                   <td style="font-weight:700">${job.quantity}</td>
                   <td style="font-size:var(--font-size-sm)">${job.salaryRange}</td>
                   <td><span class="badge badge-info">${job.source}</span></td>
-                  <td>${job.inBudget ? '<span class="badge badge-active"><span class="badge-dot"></span>Trong ĐB</span>' : '<span class="badge badge-danger">⚠️ Vượt ĐB</span>'}</td>
+                  <td>${job.inBudget ? '<span class="badge badge-active"><span class="badge-dot"></span>Trong ĐB</span>' : '<span class="badge badge-danger"> Vượt ĐB</span>'}</td>
                   <td>${Helpers.statusBadge(job.status)}</td>
                   <td>${Helpers.formatDate(job.deadline)}</td>
                 </tr>`;
@@ -83,7 +83,7 @@ const RecruitmentModule = {
       <!-- Kanban Board -->
       <div class="card animate-fade-in-up">
         <div class="card-header">
-          <div class="card-header-title">📊 Kanban Pipeline</div>
+          <div class="card-header-title"> Kanban Pipeline</div>
           <div class="card-header-subtitle">Kéo thả ứng viên qua các giai đoạn</div>
         </div>
         <div class="card-body">
@@ -112,7 +112,7 @@ const RecruitmentModule = {
                         <div class="kanban-card-title">${c.name}</div>
                       </div>
                       <div class="kanban-card-position">${job ? job.title : c.jobId}</div>
-                      ${healthBlock ? '<div style="font-size:var(--font-size-xs);color:#BF2600;font-weight:600">🔒 Hard Block: Chờ kết quả y tế (TT14)</div>' : ''}
+                      ${healthBlock ? '<div style="font-size:var(--font-size-xs);color:#BF2600;font-weight:600"> Hard Block: Chờ kết quả y tế (TT14)</div>' : ''}
                       <div class="kanban-card-footer">
                         <span class="kanban-card-score ${scoreClass}">${c.matchScore}% match</span>
                         <span style="font-size:var(--font-size-xs);color:var(--text-tertiary)">${Helpers.timeAgo(c.appliedDate)}</span>
@@ -152,13 +152,43 @@ const RecruitmentModule = {
             <div>
               <div style="font-size:var(--font-size-lg);font-weight:700;margin-bottom:4px">${c.name}</div>
               <div style="font-size:var(--font-size-sm);color:var(--text-secondary)">${c.education}</div>
-              <div style="font-size:var(--font-size-sm);color:var(--text-secondary)">📧 ${c.email} · 📞 ${c.phone}</div>
+              <div style="font-size:var(--font-size-sm);color:var(--text-secondary)"> ${c.email} ·  ${c.phone}</div>
             </div>
           </div>
           
           <div class="form-row" style="margin-bottom:var(--space-4)">
-            <div class="form-group" style="margin:0"><div class="form-label">Match Score</div><div><span class="kanban-card-score ${c.matchScore >= 85 ? 'high' : 'medium'}" style="font-size:var(--font-size-md)">${c.matchScore}%</span></div></div>
+            <div class="form-group" style="margin:0">
+              <div class="form-label">Match Score (AI Assessed)</div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="kanban-card-score ${c.matchScore >= 85 ? 'high' : 'medium'}" style="font-size:var(--font-size-md)">${c.matchScore}%</span>
+                <button class="btn btn-outline btn-sm" onclick="document.getElementById('ai-analysis-${c.id}').style.display='block'">Xem phân tích AI</button>
+              </div>
+            </div>
             <div class="form-group" style="margin:0"><div class="form-label">Giai đoạn</div><div><span class="badge badge-primary">${c.stage}</span></div></div>
+          </div>
+          
+          <div id="ai-analysis-${c.id}" style="display:none; background: #F8FAFC; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #E2E8F0;">
+            <div style="font-weight: 600; margin-bottom: 10px; color: #0052CC;"> Phân tích CV bởi AI</div>
+            <div style="font-size: 13px; color: #64748B; margin-bottom: 10px;">Dựa trên yêu cầu công việc (JD) và CV ứng viên nộp.</div>
+            
+            <div style="margin-bottom: 8px;">
+              <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px;">
+                <span>Kinh nghiệm ngành FMCG</span><span>${c.matchScore + 5}%</span>
+              </div>
+              <div class="progress-bar" style="height: 6px;"><div class="progress-bar-fill" style="width:${c.matchScore + 5}%; background: #36B37E"></div></div>
+            </div>
+            <div style="margin-bottom: 8px;">
+              <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px;">
+                <span>Kỹ năng chuyên môn</span><span>${c.matchScore}%</span>
+              </div>
+              <div class="progress-bar" style="height: 6px;"><div class="progress-bar-fill" style="width:${c.matchScore}%; background: #0052CC"></div></div>
+            </div>
+            <div style="margin-bottom: 8px;">
+              <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 2px;">
+                <span>Kỹ năng mềm (Giao tiếp, Quản lý)</span><span>${c.matchScore - 10}%</span>
+              </div>
+              <div class="progress-bar" style="height: 6px;"><div class="progress-bar-fill" style="width:${c.matchScore - 10}%; background: #FFAB00"></div></div>
+            </div>
           </div>
           <div class="form-row" style="margin-bottom:var(--space-4)">
             <div class="form-group" style="margin:0"><div class="form-label">Nguồn</div><div>${c.source}</div></div>
@@ -184,8 +214,17 @@ const RecruitmentModule = {
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Đóng</button>
-          <button class="btn btn-danger btn-sm">❌ Từ chối</button>
-          <button class="btn btn-success">✅ Chuyển giai đoạn tiếp</button>
+          <button class="btn btn-danger btn-sm">Từ chối</button>
+          ${c.stage !== 'Đã trúng tuyển' ? 
+            `<button class="btn btn-success" onclick="
+              if(confirm('Chuyển ứng viên này sang trạng thái Đã trúng tuyển và tự động tạo Hồ sơ Nhân viên mới? (Onboarding Automation)')) {
+                alert('Đã chuyển trạng thái và gửi Email Checklist Nhận Việc cho ứng viên!');
+                this.closest('.modal-overlay').remove();
+              }
+            ">Chuyển sang Đã Trúng Tuyển</button>` 
+            : 
+            `<button class="btn btn-primary" onclick="alert('Đang chuyển hướng đến Hồ sơ nhân viên...')">Xem Hồ sơ Nhân sự</button>`
+          }
         </div>
       </div>
     `;
@@ -199,12 +238,12 @@ const RecruitmentModule = {
     overlay.innerHTML = `
       <div class="modal">
         <div class="modal-header">
-          <div class="modal-title">📝 Đề xuất Tuyển dụng mới</div>
+          <div class="modal-title"> Đề xuất Tuyển dụng mới</div>
           <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
         </div>
         <div class="modal-body">
           <div class="alert-banner alert-banner-warning" style="margin-bottom:var(--space-4)">
-            <span class="alert-banner-icon">⚠️</span>
+            <span class="alert-banner-icon"></span>
             <div class="alert-banner-content">
               <div class="alert-banner-title">Kiểm tra định biên</div>
               <div class="alert-banner-text">Hệ thống sẽ tự động kiểm tra định biên. Nếu vượt định biên, yêu cầu cần CHRO phê duyệt.</div>
@@ -227,3 +266,5 @@ const RecruitmentModule = {
     document.body.appendChild(overlay);
   }
 };
+
+
