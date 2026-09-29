@@ -150,19 +150,19 @@ const EmployeesModule = {
         <div style="grid-column: span 9; background: #fff; border: 1px solid var(--border-light); border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
           <!-- Tabs Header -->
           <div style="display: flex; border-bottom: 1px solid var(--border-light); overflow-x: auto; font-size: 14px;">
-            <div style="padding: 15px 20px; border-bottom: 2px solid #1976D2; color: #1976D2; font-weight: 600; cursor: pointer; white-space: nowrap;">Chi tiết</div>
-            <div style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Phúc lợi</div>
-            <div style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Hồ sơ</div>
-            <div style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Năng lực</div>
-            <div style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Đào tạo</div>
-            <div style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Tài sản</div>
-            <div style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Phân quyền</div>
-            <div style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Công việc</div>
+            <div onclick="EmployeesModule.switchTab(this, 'tab-chitiet')" style="padding: 15px 20px; border-bottom: 2px solid #1976D2; color: #1976D2; font-weight: 600; cursor: pointer; white-space: nowrap;">Chi tiết</div>
+            <div onclick="EmployeesModule.switchTab(this, 'tab-phucloi')" style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Phúc lợi</div>
+            <div onclick="EmployeesModule.switchTab(this, 'tab-hoso')" style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Hồ sơ</div>
+            <div onclick="EmployeesModule.switchTab(this, 'tab-nangluc')" style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Năng lực</div>
+            <div onclick="EmployeesModule.switchTab(this, 'tab-daotao')" style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Đào tạo</div>
+            <div onclick="EmployeesModule.switchTab(this, 'tab-taisan')" style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Tài sản</div>
+            <div onclick="EmployeesModule.switchTab(this, 'tab-phanquyen')" style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Phân quyền</div>
+            <div onclick="EmployeesModule.switchTab(this, 'tab-congviec')" style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;">Công việc</div>
             <div style="padding: 15px 20px; color: var(--text-secondary); cursor: pointer; white-space: nowrap;" onclick="EmployeesModule.showTransferModal('${emp.id}')">Thuyên chuyển</div>
           </div>
           
           <!-- Tab Body (Chi tiết) -->
-          <div style="padding: 20px; height: 600px; overflow-y: auto;">
+          <div id="tab-chitiet" class="tab-body" style="padding: 20px; height: 600px; overflow-y: auto; display: block;">
             
             <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px;">
               <div>
@@ -394,6 +394,63 @@ const EmployeesModule = {
             </div>
             
           </div>
+          
+          <!-- Tab Body (Phúc lợi) -->
+          <div id="tab-phucloi" class="tab-body" style="padding: 20px; height: 600px; overflow-y: auto; display: none;">
+            <h4 style="color: var(--text-primary); margin-bottom: 15px;">Thông tin Phúc lợi & BHXH</h4>
+            <div style="background: #F8FAFC; padding: 20px; border-radius: 8px; border: 1px dashed var(--border-medium); text-align: center; color: var(--text-secondary);">
+              Chưa có dữ liệu phúc lợi cho cán bộ này.
+            </div>
+          </div>
+
+          <!-- Tab Body (Hồ sơ) -->
+          <div id="tab-hoso" class="tab-body" style="padding: 20px; height: 600px; overflow-y: auto; display: none;">
+            <h4 style="color: var(--text-primary); margin-bottom: 15px;">Quản lý Hồ sơ đính kèm</h4>
+            <div style="background: #F8FAFC; padding: 20px; border-radius: 8px; border: 1px dashed var(--border-medium); text-align: center; color: var(--text-secondary);">
+              Chưa có tệp tin đính kèm.
+            </div>
+          </div>
+
+          <!-- Tab Body (Năng lực) -->
+          <div id="tab-nangluc" class="tab-body" style="padding: 20px; height: 600px; overflow-y: auto; display: none;">
+            <h4 style="color: var(--text-primary); margin-bottom: 15px;">Đánh giá Năng lực (KPI)</h4>
+            <div style="background: #F8FAFC; padding: 20px; border-radius: 8px; border: 1px dashed var(--border-medium); text-align: center; color: var(--text-secondary);">
+              Module đánh giá KPI đang được cập nhật.
+            </div>
+          </div>
+
+          <!-- Tab Body (Đào tạo) -->
+          <div id="tab-daotao" class="tab-body" style="padding: 20px; height: 600px; overflow-y: auto; display: none;">
+            <h4 style="color: var(--text-primary); margin-bottom: 15px;">Lịch sử Đào tạo & Khóa học</h4>
+            <div style="background: #F8FAFC; padding: 20px; border-radius: 8px; border: 1px dashed var(--border-medium); text-align: center; color: var(--text-secondary);">
+              Không có khóa học nào gần đây.
+            </div>
+          </div>
+
+          <!-- Tab Body (Tài sản) -->
+          <div id="tab-taisan" class="tab-body" style="padding: 20px; height: 600px; overflow-y: auto; display: none;">
+            <h4 style="color: var(--text-primary); margin-bottom: 15px;">Tài sản cấp phát</h4>
+            <div style="background: #F8FAFC; padding: 20px; border-radius: 8px; border: 1px dashed var(--border-medium); text-align: center; color: var(--text-secondary);">
+              Chưa có tài sản nào được ghi nhận giao cho nhân viên.
+            </div>
+          </div>
+
+          <!-- Tab Body (Phân quyền) -->
+          <div id="tab-phanquyen" class="tab-body" style="padding: 20px; height: 600px; overflow-y: auto; display: none;">
+            <h4 style="color: var(--text-primary); margin-bottom: 15px;">Phân quyền & Tài khoản hệ thống</h4>
+            <div style="background: #F8FAFC; padding: 20px; border-radius: 8px; border: 1px dashed var(--border-medium); text-align: center; color: var(--text-secondary);">
+              Tài khoản hệ thống hiện tại đang hoạt động bình thường.
+            </div>
+          </div>
+
+          <!-- Tab Body (Công việc) -->
+          <div id="tab-congviec" class="tab-body" style="padding: 20px; height: 600px; overflow-y: auto; display: none;">
+            <h4 style="color: var(--text-primary); margin-bottom: 15px;">Kế hoạch Công việc (Giao việc)</h4>
+            <div style="background: #F8FAFC; padding: 20px; border-radius: 8px; border: 1px dashed var(--border-medium); text-align: center; color: var(--text-secondary);">
+              Không có công việc nào đang được giao trên hệ thống quản lý công việc.
+            </div>
+          </div>
+
         </div>
       </div>
     `;
@@ -520,6 +577,26 @@ const EmployeesModule = {
       </div>
     `;
     document.body.appendChild(overlay);
+  },
+
+  switchTab(el, tabId) {
+    const tabs = el.parentElement.children;
+    for (let t of tabs) {
+      if (t.innerText !== 'Thuyên chuyển') {
+        t.style.borderBottom = 'none';
+        t.style.color = 'var(--text-secondary)';
+        t.style.fontWeight = 'normal';
+      }
+    }
+    el.style.borderBottom = '2px solid #1976D2';
+    el.style.color = '#1976D2';
+    el.style.fontWeight = '600';
+
+    const bodies = el.parentElement.parentElement.querySelectorAll('.tab-body');
+    for (let b of bodies) {
+      b.style.display = 'none';
+    }
+    document.getElementById(tabId).style.display = 'block';
   }
 };
 

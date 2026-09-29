@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 
 <head>
@@ -137,6 +137,12 @@
               <span class="sidebar-menu-label">Sơ đồ Tổ chức</span>
             </a>
           </li>
+          <li class="sidebar-menu-item" data-roles="All">
+            <a class="sidebar-menu-link" href="#/goals" onclick="alert('Tính năng đang phát triển!')">
+              <span class="sidebar-menu-icon"></span>
+              <span class="sidebar-menu-label">Mục tiêu & KPI</span>
+            </a>
+          </li>
         </ul>
 
         <div class="sidebar-section-title" data-roles="Admin,HR_Manager">Quản lý Nhân sự</div>
@@ -164,13 +170,47 @@
           <li class="sidebar-menu-item" data-roles="Admin,HR_Manager">
             <a class="sidebar-menu-link" href="#/training">
               <span class="sidebar-menu-icon"></span>
-              <span class="sidebar-menu-label">Đào tạo</span>
+              <span class="sidebar-menu-label">Đào tạo & E-Learning</span>
+            </a>
+          </li>
+          <li class="sidebar-menu-item" data-roles="Admin,HR_Manager">
+            <a class="sidebar-menu-link" href="#/career" onclick="alert('Tính năng đang phát triển!')">
+              <span class="sidebar-menu-icon"></span>
+              <span class="sidebar-menu-label">Phát triển sự nghiệp</span>
+            </a>
+          </li>
+          <li class="sidebar-menu-item" data-roles="Admin,HR_Manager">
+            <a class="sidebar-menu-link" href="#/positions" onclick="alert('Tính năng đang phát triển!')">
+              <span class="sidebar-menu-icon"></span>
+              <span class="sidebar-menu-label">Vị trí & Chức danh</span>
             </a>
           </li>
           <li class="sidebar-menu-item" data-roles="Admin,HR_Manager">
             <a class="sidebar-menu-link" href="#/categories">
               <span class="sidebar-menu-icon"></span>
-              <span class="sidebar-menu-label">Danh mục</span>
+              <span class="sidebar-menu-label">Danh mục dùng chung</span>
+            </a>
+          </li>
+        </ul>
+
+        <div class="sidebar-section-title" data-roles="Admin,HR_Manager">Quy chế & Văn bản</div>
+        <ul class="sidebar-menu">
+          <li class="sidebar-menu-item" data-roles="All">
+            <a class="sidebar-menu-link" href="#/documents" onclick="alert('Tính năng đang phát triển!')">
+              <span class="sidebar-menu-icon"></span>
+              <span class="sidebar-menu-label">Văn bản Nhân sự</span>
+            </a>
+          </li>
+          <li class="sidebar-menu-item" data-roles="All">
+            <a class="sidebar-menu-link" href="#/regulations" onclick="alert('Tính năng đang phát triển!')">
+              <span class="sidebar-menu-icon"></span>
+              <span class="sidebar-menu-label">Quy định làm việc</span>
+            </a>
+          </li>
+          <li class="sidebar-menu-item" data-roles="All">
+            <a class="sidebar-menu-link" href="#/policies" onclick="alert('Tính năng đang phát triển!')">
+              <span class="sidebar-menu-icon"></span>
+              <span class="sidebar-menu-label">Chính sách & Phúc lợi</span>
             </a>
           </li>
         </ul>
@@ -180,33 +220,57 @@
           <li class="sidebar-menu-item" data-roles="Admin,HR_Manager,Employee">
             <a class="sidebar-menu-link" href="#/attendance">
               <span class="sidebar-menu-icon">⏰</span>
-              <span class="sidebar-menu-label">Chấm công</span>
+              <span class="sidebar-menu-label">Chấm công Đa kênh</span>
             </a>
           </li>
           <li class="sidebar-menu-item" data-roles="Admin,HR_Manager,Employee">
             <a class="sidebar-menu-link" href="#/payroll">
               <span class="sidebar-menu-icon"></span>
-              <span class="sidebar-menu-label">Bảng lương 3P</span>
+              <span class="sidebar-menu-label">Bảng lương định kỳ</span>
+            </a>
+          </li>
+          <li class="sidebar-menu-item" data-roles="All">
+            <a class="sidebar-menu-link" href="#/tasks" onclick="alert('Tính năng đang phát triển!')">
+              <span class="sidebar-menu-icon"></span>
+              <span class="sidebar-menu-label">Danh sách Nhiệm vụ</span>
             </a>
           </li>
         </ul>
 
-        <div class="sidebar-section-title" data-roles="Admin,HR_Manager">Phân tích</div>
+        <div class="sidebar-section-title" data-roles="Admin,HR_Manager">Phân tích & Báo cáo</div>
         <ul class="sidebar-menu">
           <li class="sidebar-menu-item" data-roles="Admin,HR_Manager">
             <a class="sidebar-menu-link" href="#/reports">
               <span class="sidebar-menu-icon"></span>
-              <span class="sidebar-menu-label">Báo cáo & AI</span>
+              <span class="sidebar-menu-label">Báo cáo Sơ kết</span>
+            </a>
+          </li>
+          <li class="sidebar-menu-item" data-roles="Admin,HR_Manager">
+            <a class="sidebar-menu-link" href="#/reports" onclick="alert('AI đang tổng hợp dữ liệu...')">
+              <span class="sidebar-menu-icon"></span>
+              <span class="sidebar-menu-label">Phân tích AI</span>
             </a>
           </li>
         </ul>
 
-        <div class="sidebar-section-title" data-roles="Admin">Hệ thống</div>
+        <div class="sidebar-section-title" data-roles="Admin">Thiết lập & Admin</div>
         <ul class="sidebar-menu">
           <li class="sidebar-menu-item" data-roles="Admin">
             <a class="sidebar-menu-link" href="#/roles">
               <span class="sidebar-menu-icon"></span>
-              <span class="sidebar-menu-label">Phân quyền</span>
+              <span class="sidebar-menu-label">Phân quyền Hệ thống</span>
+            </a>
+          </li>
+          <li class="sidebar-menu-item" data-roles="Admin">
+            <a class="sidebar-menu-link" href="#/settings-goals" onclick="alert('Tính năng đang phát triển!')">
+              <span class="sidebar-menu-icon"></span>
+              <span class="sidebar-menu-label">Hệ thống Mục tiêu</span>
+            </a>
+          </li>
+          <li class="sidebar-menu-item" data-roles="Admin">
+            <a class="sidebar-menu-link" href="#/settings" onclick="alert('Tính năng đang phát triển!')">
+              <span class="sidebar-menu-icon"></span>
+              <span class="sidebar-menu-label">Cấu hình chung</span>
             </a>
           </li>
         </ul>
