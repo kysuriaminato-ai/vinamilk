@@ -4,6 +4,13 @@
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    
+    # Block direct access to the app/ and vendor/ directories for security
+    RewriteRule ^app/ - [F,L]
+    RewriteRule ^vendor/ - [F,L]
+    RewriteRule ^\.env - [F,L]
+
+    # Route all requests to the public/ directory
     RewriteRule ^$ public/ [L]
     RewriteRule (.*) public/$1 [L]
 </IfModule>
