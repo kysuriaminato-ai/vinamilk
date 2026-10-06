@@ -12,50 +12,73 @@ const EmployeesModule = {
     }
   },
 
-  // ==========================================
-  // LIST VIEW: Danh sách cán bộ
-  // ==========================================
-  renderList(container) {
-    const employees = typeof EmployeesData !== 'undefined' ? EmployeesData : [];
-    const activeCount = employees.filter(e => e.status !== 'Đã nghỉ việc' && e.status !== 'Nghỉ hưu').length;
+  currentPage: 1,
+  currentFilters: { search: '', dept: '', status: '' },
 
+  // ==========================================
+  // LIST VIEW: Danh sách cán bộ (Dùng Fetch API + Phân trang)
+  // ==========================================
+  async renderList(container) {
     container.innerHTML = `
       <div class="page-header" style="margin-bottom: 20px;">
         <h1 class="page-title" style="border-left: 4px solid #F6B800; padding-left: 10px;">Danh sách cán bộ</h1>
       </div>
+      <div style="padding: 50px; text-align: center; color: var(--text-secondary);" id="emp-loading">
+        <span style="font-size: 24px;">🔄</span> Đang tải dữ liệu từ Server...
+      </div>
+      <div id="emp-content"></div>
+    `;
 
+    await this.loadDataAndRender(container.querySelector('#emp-content'));
+  },
+
+  async loadDataAndRender(contentDiv) {
+    // Xây dựng Query String
+    const params = new URLSearchParams({
+      page: this.currentPage,
+      search: this.currentFilters.search,
+      department: this.currentFilters.dept,
+      status: this.currentFilters.status
+    });
+
+    const response = await Api.get(`api-employee/index?${params.toString()}`);
+    
+    if (!response || response.status !== 'success') {
+        contentDiv.innerHTML = `<div style="color: red; text-align: center;">Lỗi không thể tải dữ liệu!</div>`;
+        document.getElementById('emp-loading').style.display = 'none';
+        return;
+    }
+
+    const employees = response.data;
+    const meta = response.meta;
+
+    document.getElementById('emp-loading').style.display = 'none';
+
+    contentDiv.innerHTML = `
       <!-- Filters -->
       <div class="card" style="margin-bottom: 20px; padding: 15px; display: flex; gap: 15px; align-items: center; background: #fff;">
-        <input type="text" class="input" placeholder="Tìm theo họ tên hoặc mã cán bộ..." style="flex:1" id="emp-search">
+        <input type="text" class="input" placeholder="Tìm theo họ tên hoặc mã..." style="flex:1" id="emp-search" value="${this.currentFilters.search}">
         <select class="input" style="width: 250px" id="emp-dept">
           <option value="">-- Tất cả Tổ/Bộ phận --</option>
-          <option value="nm_ts">Nhà máy Tiên Sơn</option>
-          <option value="pb_nhansu">Phòng Nhân sự</option>
-          <option value="pb_taichinh">Phòng Tài chính</option>
-          <option value="pb_it">Phòng CNTT</option>
+          <option value="NM_TS" ${this.currentFilters.dept === 'NM_TS' ? 'selected' : ''}>Nhà máy Tiên Sơn</option>
+          <option value="PB_NS" ${this.currentFilters.dept === 'PB_NS' ? 'selected' : ''}>Phòng Nhân sự</option>
         </select>
         <select class="input" style="width: 200px" id="emp-status">
-          <option value="Đang làm việc">Đang công tác</option>
-          <option value="Thử việc">Thử việc</option>
-          <option value="Đã nghỉ việc">Đã nghỉ việc</option>
+          <option value="">-- Trạng thái --</option>
+          <option value="Đang làm việc" ${this.currentFilters.status === 'Đang làm việc' ? 'selected' : ''}>Đang công tác</option>
+          <option value="Đã nghỉ việc" ${this.currentFilters.status === 'Đã nghỉ việc' ? 'selected' : ''}>Đã nghỉ việc</option>
         </select>
-        <button class="btn btn-primary" style="background: #1B5E20; border: none; padding: 10px 20px;">
-          <span style="margin-right: 5px;"></span> Lọc
-        </button>
-        <button class="btn btn-outline" style="border: 1px solid #1976D2; color: #1976D2; padding: 10px 15px;" onclick="EmployeesModule.showAdvancedSearch()">
-           Tra cứu nâng cao
+        <button class="btn btn-primary" style="background: #1B5E20; border: none; padding: 10px 20px;" onclick="EmployeesModule.applyFilters()">
+           Lọc
         </button>
       </div>
 
       <!-- Table Header & Results Count -->
       <div class="card" style="background: #fff; border: 1px solid var(--border-light);">
         <div style="padding: 15px; background: #E8F5E9; border-bottom: 1px solid #C8E6C9; display: flex; justify-content: space-between; align-items: center;">
-          <div style="color: #2E7D32; font-weight: 600;"> Kết quả: ${activeCount} cán bộ</div>
+          <div style="color: #2E7D32; font-weight: 600;"> Tổng kết quả: ${meta.total_records} cán bộ</div>
           <div style="display: flex; gap: 10px;">
-            <button class="btn btn-outline" style="border: 1px solid #1976D2; color: #1976D2;" onclick="window.print()">
-              ️ In danh sách
-            </button>
-            <button class="btn btn-success" style="background: #2E7D32; border: none;" data-roles="Admin,HR_Manager">
+            <button class="btn btn-success" style="background: #2E7D32; border: none;">
               + Thêm cán bộ
             </button>
           </div>
@@ -76,37 +99,70 @@ const EmployeesModule = {
               </tr>
             </thead>
             <tbody>
-              ${employees.filter(e => e.status !== 'Đã nghỉ việc' && e.status !== 'Nghỉ hưu').slice(0, 15).map(emp => `
+              ${employees.map(emp => `
                 <tr>
                   <td>${emp.id}</td>
+                  <td><a href="#/employees?id=${emp.id}" style="color:#1976D2;font-weight:500;">${emp.name}</a></td>
+                  <td>${emp.gender || '-'}</td>
+                  <td>${emp.birth_date ? emp.birth_date : '-'}</td>
+                  <td>${emp.department_name || emp.department_id || '-'}</td>
+                  <td>${emp.position || '-'}</td>
                   <td>
-                    <a href="#/employees?id=${emp.id}" style="color: #1976D2; font-weight: 500; text-decoration: underline;">
-                      ${emp.name}
-                    </a>
-                  </td>
-                  <td>${emp.gender}</td>
-                  <td>${Helpers.formatDate(emp.birthDate)}</td>
-                  <td>${this._getDeptName(emp.department)}</td>
-                  <td>${emp.position}</td>
-                  <td>
-                    <span class="badge ${emp.status === 'Đang làm việc' ? 'badge-success' : 'badge-warning'}" style="background: #1B5E20; color: white;">
-                      ${emp.status === 'Đang làm việc' ? 'Đang công tác' : emp.status}
+                    <span class="badge ${emp.status === 'Đang làm việc' ? 'badge-success' : 'badge-danger'}" style="background: ${emp.status === 'Đang làm việc' ? '#1B5E20' : '#D32F2F'}; color: white;">
+                      ${emp.status}
                     </span>
                   </td>
                   <td style="text-align:center">
-                    <div style="display:flex;gap:4px;justify-content:center">
-                      <a href="#/employees?id=${emp.id}" class="btn btn-icon btn-text" style="color: #757575; border: 1px solid #E0E0E0;" title="Xem"><span style="font-size:14px">️</span></a>
-                      <button class="btn btn-icon btn-text" style="color: #1976D2; border: 1px solid #E0E0E0;" title="Sửa"><span style="font-size:14px"></span></button>
-                      <button class="btn btn-icon btn-text" style="color: #D32F2F; border: 1px solid #E0E0E0;" title="Xóa"><span style="font-size:14px">️</span></button>
-                    </div>
+                    <button class="btn btn-icon btn-text" style="color:#1976D2;">Sửa</button>
                   </td>
                 </tr>
               `).join('')}
+              ${employees.length === 0 ? '<tr><td colspan="8" style="text-align:center;padding:20px;">Không tìm thấy dữ liệu</td></tr>' : ''}
             </tbody>
           </table>
         </div>
+
+        <!-- Pagination Controls -->
+        ${meta.total_pages > 1 ? `
+        <div style="padding: 15px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; align-items: center; gap: 10px;">
+           <span style="color: #757575; font-size: 14px;">Trang ${meta.current_page} / ${meta.total_pages}</span>
+           <button class="btn btn-outline" ${meta.current_page === 1 ? 'disabled' : ''} onclick="EmployeesModule.changePage(${meta.current_page - 1})">Trước</button>
+           <button class="btn btn-outline" ${meta.current_page === meta.total_pages ? 'disabled' : ''} onclick="EmployeesModule.changePage(${meta.current_page + 1})">Sau</button>
+        </div>
+        ` : ''}
       </div>
     `;
+
+    // Gắn sự kiện "Enter" cho ô tìm kiếm
+    const searchInput = document.getElementById('emp-search');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                EmployeesModule.applyFilters();
+            }
+        });
+    }
+  },
+
+  applyFilters() {
+    this.currentFilters = {
+        search: document.getElementById('emp-search').value,
+        dept: document.getElementById('emp-dept').value,
+        status: document.getElementById('emp-status').value
+    };
+    this.currentPage = 1; // Reset về trang 1 khi lọc
+    
+    // Tạo hiệu ứng loading mờ form
+    const contentDiv = document.getElementById('emp-content');
+    contentDiv.style.opacity = '0.5';
+    this.loadDataAndRender(contentDiv);
+  },
+
+  changePage(page) {
+    this.currentPage = page;
+    const contentDiv = document.getElementById('emp-content');
+    contentDiv.style.opacity = '0.5';
+    this.loadDataAndRender(contentDiv);
   },
 
   // ==========================================

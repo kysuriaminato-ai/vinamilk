@@ -1,19 +1,42 @@
 <?php
-/**
- * =====================================================================
- * VINAMILK HRM - Core App & Front-Controller Dispatcher
- * =====================================================================
- * 
- * Lớp Router định tuyến URL thông minh của bộ khung MVC.
- * Hỗ trợ Route Aliases tiếng Việt / tiếng Anh linh hoạt.
- */
 
-class App {
-    protected string $controller = 'DashboardController';
-    protected string $method = 'index';
+namespace App\Core;
+
+class App
+{
+    protected $controller = 'DashboardController';
+    protected string $action = 'index';
     protected array $params = [];
 
-    // Bảng Ánh xạ Routes (Route Aliases)
+    // Cấu hình Middleware cho từng Controller
+    protected array $routeMiddlewares = [
+        // Bảo vệ toàn bộ PayrollController
+        'PayrollController' => [
+            ['middleware' => \App\Middlewares\AuthMiddleware::class],
+            ['middleware' => \App\Middlewares\RoleMiddleware::class, 'params' => ['allowed_roles' => ['Admin', 'HR_Manager']]]
+        ],
+        // Bảo vệ Bảng điều khiển Nhân viên (Employee Self-Service)
+        'EmployeeDashboardController' => [
+            ['middleware' => \App\Middlewares\AuthMiddleware::class],
+            ['middleware' => \App\Middlewares\RoleMiddleware::class, 'params' => ['allowed_roles' => ['Employee']]]
+        ],
+        // Bảo vệ API Self-Service
+        'ApiEssController' => [
+            ['middleware' => \App\Middlewares\AuthMiddleware::class],
+            ['middleware' => \App\Middlewares\RoleMiddleware::class, 'params' => ['allowed_roles' => ['Employee']]]
+        ],
+        // Bảo vệ luồng Tiếp nhận nhân sự (Onboarding)
+        'ApiOnboardingController' => [
+            ['middleware' => \App\Middlewares\AuthMiddleware::class],
+            ['middleware' => \App\Middlewares\RoleMiddleware::class, 'params' => ['allowed_roles' => ['Admin', 'HR_Manager']]]
+        ],
+        // Bảo vệ Báo cáo Analytics Toàn cảnh
+        'ApiAnalyticsController' => [
+            ['middleware' => \App\Middlewares\AuthMiddleware::class],
+            ['middleware' => \App\Middlewares\RoleMiddleware::class, 'params' => ['allowed_roles' => ['Admin', 'HR_Manager']]]
+        ]
+    ];
+
     protected array $routeAliases = [
         'nhansu' => 'EmployeeController',
         'employees' => 'EmployeeController',
@@ -37,97 +60,112 @@ class App {
         'reports' => 'ReportController'
     ];
 
-    public function __construct() {
+    public function __construct()
+    {
         $url = $this->parseUrl();
 
-        // 1. Kiểm tra Controller / Alias
+        // 1. Resolve Controller
+        $isNamespaced = true;
         if (!empty($url[0])) {
             $rawRoute = strtolower($url[0]);
             
+            // Check Route Aliases first
             if (isset($this->routeAliases[$rawRoute])) {
-                $this->controller = $this->routeAliases[$rawRoute];
+                $controllerName = $this->routeAliases[$rawRoute];
+                $potentialController = '\\App\\Controllers\\' . $controllerName;
+                if (class_exists($potentialController)) {
+                    $this->controller = $controllerName;
+                    $isNamespaced = true;
+                } else {
+                    $this->controller = $controllerName;
+                    $isNamespaced = false;
+                }
                 unset($url[0]);
             } else {
-                $controllerName = ucfirst($url[0]) . 'Controller';
-                $controllerFile = APP_DIR . '/controllers/' . $controllerName . '.php';
-
-                if (file_exists($controllerFile)) {
-                    $this->controller = $controllerName;
+                $controllerName = str_replace(' ', '', ucwords(str_replace('-', ' ', $url[0])));
+                $potentialController = '\\App\\Controllers\\' . $controllerName . 'Controller';
+                $legacyController = $controllerName . 'Controller';
+                
+                if (class_exists($potentialController)) {
+                    $this->controller = $controllerName . 'Controller';
+                    $isNamespaced = true;
                     unset($url[0]);
-                } else {
-                    $this->show404("Controller '{$controllerName}' không tồn tại!");
-                    return;
+                } elseif (class_exists($legacyController)) {
+                    $this->controller = $controllerName . 'Controller';
+                    $isNamespaced = false;
+                    unset($url[0]);
                 }
             }
         }
 
-        // Require file Controller
-        $controllerPath = APP_DIR . '/controllers/' . $this->controller . '.php';
-        if (!file_exists($controllerPath)) {
-            $this->show404("Không tìm thấy Controller '{$this->controller}'");
-            return;
+        if ($isNamespaced) {
+            $namespacedClass = '\\App\\Controllers\\' . $this->controller;
+            if (class_exists($namespacedClass)) {
+                $controllerClass = $namespacedClass;
+            } else {
+                $controllerClass = $this->controller;
+            }
+        } else {
+            $controllerClass = $this->controller;
         }
 
-        require_once $controllerPath;
-        $this->controller = new $this->controller();
+        // 2. Execute Middlewares for this Controller
+        if (!$this->runMiddlewares($this->controller)) {
+            // Dừng ngay lập tức nếu Middleware chặn lại (đã gửi HTTP Error)
+            return; 
+        }
 
-        // 2. Kiểm tra Action (Method)
+        // 3. Resolve Action & Parameters
+        $this->controller = new $controllerClass();
+
         if (isset($url[1])) {
-            if (method_exists($this->controller, $url[1])) {
-                $this->method = $url[1];
+            $actionName = lcfirst(str_replace(' ', '', ucwords(str_replace('-', ' ', $url[1]))));
+            if (method_exists($this->controller, $actionName)) {
+                $this->action = $actionName;
                 unset($url[1]);
             } else {
-                $this->show404("Phương thức '{$url[1]}' không tồn tại trong " . get_class($this->controller));
+                $this->sendNotFound("Action {$actionName} không tồn tại.");
                 return;
             }
         }
 
-        // 3. Lấy mảng tham số Parameters
         $this->params = $url ? array_values($url) : [];
 
-        // 4. Thực thi Controller Action với Parameters
-        call_user_func_array([$this->controller, $this->method], $this->params);
+        // 4. Dispatch
+        call_user_func_array([$this->controller, $this->action], $this->params);
     }
 
-    /**
-     * Phân tích Request URI
-     */
-    private function parseUrl(): array {
+    private function parseUrl(): array
+    {
         if (isset($_GET['url'])) {
             return explode('/', filter_var(rtrim($_GET['url'], '/'), FILTER_SANITIZE_URL));
         }
-
-        $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
-        $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
-        $baseDir = dirname($scriptName);
-
-        if (str_starts_with($requestUri, $baseDir)) {
-            $requestUri = substr($requestUri, strlen($baseDir));
-        }
-
-        $path = parse_url($requestUri, PHP_URL_PATH);
-        $path = trim($path, '/');
-
-        if (empty($path)) {
-            return [];
-        }
-
-        return explode('/', filter_var($path, FILTER_SANITIZE_URL));
+        return [];
     }
 
-    /**
-     * Hiển thị trang 404 Not Found
-     */
-    private function show404(string $message = ''): void {
-        http_response_code(404);
-        $errorFile = APP_DIR . '/views/errors/404.php';
-        if (file_exists($errorFile)) {
-            require_once APP_DIR . '/core/Controller.php';
-            $title = '404 - Trang không tồn tại';
-            require_once $errorFile;
-        } else {
-            echo "<h1 style='color:#cc0000;'>404 Not Found</h1><p>{$message}</p>";
+    private function runMiddlewares(string $controllerName): bool
+    {
+        if (isset($this->routeMiddlewares[$controllerName])) {
+            foreach ($this->routeMiddlewares[$controllerName] as $routeConfig) {
+                $middlewareClass = $routeConfig['middleware'];
+                $params = $routeConfig['params'] ?? [];
+
+                /** @var Middleware $middleware */
+                $middleware = new $middlewareClass();
+                
+                // Chạy handle, nếu trả về false thì break và dừng request
+                if (!$middleware->handle($params)) {
+                    return false;
+                }
+            }
         }
-        exit;
+        return true;
+    }
+
+    private function sendNotFound(string $msg): void
+    {
+        http_response_code(404);
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'error', 'message' => "404 Not Found: " . $msg]);
     }
 }

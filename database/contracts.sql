@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS contracts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    employee_id VARCHAR(20) NOT NULL,
+    contract_type VARCHAR(100) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NULL,
+    basic_salary DECIMAL(15, 2) NOT NULL,
+    status VARCHAR(50) DEFAULT 'Active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+);

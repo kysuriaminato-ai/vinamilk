@@ -2,64 +2,67 @@
 
 /**
  * VINAMILK HRIS - Front Controller (Core Router)
- * Tất cả request đều đi qua file này nhờ cấu hình .htaccess
  */
 
-// 1. Nạp Autoloader của Composer (Chuẩn PSR-4)
-$autoloadPath = __DIR__ . '/../vendor/autoload.php';
-if (file_exists($autoloadPath)) {
-    require_once $autoloadPath;
-} else {
-    die('Lỗi: Chưa chạy lệnh "composer install". Vui lòng chạy composer install ở thư mục gốc.');
-}
-
-// 2. Load biến môi trường từ file .env
-use Dotenv\Dotenv;
-$dotenv = Dotenv::createImmutable(dirname(__DIR__));
-if (file_exists(dirname(__DIR__) . '/.env')) {
-    $dotenv->load();
-}
-
-// 3. Simple Router Logic
-// Lấy URL truyền vào từ .htaccess (Ví dụ: public/department/index)
-$url = isset($_GET['url']) ? rtrim($_GET['url'], '/') : '';
-$url = filter_var($url, FILTER_SANITIZE_URL);
-$urlParams = explode('/', $url);
-
-// Mặc định gọi DashboardController nếu URL trống
-$controllerName = 'Dashboard';
-$actionName = 'index';
-
-// Phân tích Controller
-if (!empty($urlParams[0])) {
-    // Chuyển đổi tên Controller theo chuẩn StudlyCaps (VD: department -> Department)
-    $controllerName = str_replace(' ', '', ucwords(str_replace('-', ' ', $urlParams[0])));
-}
-
-// Phân tích Action (Method)
-if (isset($urlParams[1])) {
-    // Chuyển đổi tên Action theo chuẩn camelCase
-    $actionName = lcfirst(str_replace(' ', '', ucwords(str_replace('-', ' ', $urlParams[1]))));
-}
-
-// Lấy các tham số còn lại truyền vào hàm
-$params = array_slice($urlParams, 2);
-
-// Đường dẫn class đầy đủ
-$controllerClass = '\\App\\Controllers\\' . $controllerName . 'Controller';
-
-// 4. Dispatcher (Khởi tạo Controller và gọi Method)
-if (class_exists($controllerClass)) {
-    $controllerInstance = new $controllerClass();
+// 1. Tự động nạp Class (Native Autoloader thay thế Composer)
+spl_autoload_register(function ($class) {
+    $base_dir = __DIR__ . '/../app/';
     
-    if (method_exists($controllerInstance, $actionName)) {
-        // Gọi hàm với các tham số tương ứng
-        call_user_func_array([$controllerInstance, $actionName], $params);
-    } else {
-        http_response_code(404);
-        echo json_encode(['status' => 'error', 'message' => "Method {$actionName} không tồn tại trong {$controllerName}Controller."]);
+    // Xử lý Class có Namespace chuẩn (App\...)
+    $prefix = 'App\\';
+    $len = strlen($prefix);
+    if (strncmp($prefix, $class, $len) === 0) {
+        $relative_class = substr($class, $len);
+        $file = $base_dir . str_replace('\\', '/', $relative_class) . '.php';
+        if (file_exists($file)) require_once $file;
+        return;
     }
-} else {
-    http_response_code(404);
-    echo json_encode(['status' => 'error', 'message' => "Controller {$controllerClass} không tồn tại."]);
+    
+    // Xử lý Legacy Class không có Namespace (Ví dụ: DashboardController)
+    $legacy_paths = [
+        $base_dir . 'controllers/' . $class . '.php',
+        $base_dir . 'models/' . $class . '.php',
+        $base_dir . 'core/' . $class . '.php'
+    ];
+    foreach ($legacy_paths as $file) {
+        if (file_exists($file)) {
+            require_once $file;
+            return;
+        }
+    }
+});
+
+// 2. Load cấu hình hệ thống (config.php chứa APP_DIR)
+$configFile = dirname(__DIR__) . '/app/config/config.php';
+if (file_exists($configFile)) {
+    require_once $configFile;
 }
+
+// Load các hàm tiện ích toàn cục (functions.php)
+$functionsFile = dirname(__DIR__) . '/app/helpers/functions.php';
+if (file_exists($functionsFile)) {
+    require_once $functionsFile;
+}
+
+// 3. Load biến môi trường từ file .env (Không cần thư viện Dotenv)
+$envPath = dirname(__DIR__) . '/.env';
+if (file_exists($envPath)) {
+    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos(trim($line), '#') === 0) continue;
+        list($name, $value) = explode('=', $line, 2);
+        $name = trim($name);
+        $value = trim($value);
+        if (!array_key_exists($name, $_SERVER) && !array_key_exists($name, $_ENV)) {
+            putenv(sprintf('%s=%s', $name, $value));
+            $_ENV[$name] = $value;
+            $_SERVER[$name] = $value;
+        }
+    }
+}
+
+// 3. Khởi chạy Ứng dụng thông qua Core App (Router + Middleware)
+use App\Core\App;
+
+// Mọi request sẽ được phân tích, đưa qua Middleware, và điều hướng bởi class App
+$app = new App();

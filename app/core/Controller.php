@@ -15,11 +15,16 @@ abstract class Controller {
     /**
      * Nạp và khởi tạo đối tượng Model
      */
-    public function model(string $modelName): Model {
+    public function model(string $modelName) {
         $file = APP_DIR . '/models/' . $modelName . '.php';
         if (file_exists($file)) {
             require_once $file;
-            return new $modelName();
+            $namespacedClass = '\\App\\Models\\' . $modelName;
+            if (class_exists($namespacedClass)) {
+                return new $namespacedClass();
+            } elseif (class_exists($modelName)) {
+                return new $modelName();
+            }
         }
         throw new Exception("Model {$modelName} không tồn tại tại path: {$file}");
     }

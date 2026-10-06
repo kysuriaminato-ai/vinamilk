@@ -4,6 +4,7 @@ namespace App\Core;
 
 use PDO;
 use PDOException;
+use PDOStatement;
 
 class Database
 {
@@ -53,4 +54,116 @@ class Database
     {
         return $this->connection;
     }
+    // =====================================================================
+    // CÁC PHƯƠNG THỨC TIỆN ÍCH (HELPER METHODS)
+    // =====================================================================
+
+    /**
+     * Thực thi câu truy vấn SELECT với Prepared Statement.
+     * 
+     * @param string $sql Câu SQL có placeholder
+     * @param array<string, mixed> $params Mảng tham số [':key' => value]
+     * @return PDOStatement Đối tượng PDOStatement
+     */
+    public function query(string $sql, array $params = []): PDOStatement
+    {
+        try {
+            $stmt = $this->getConnection()->prepare($sql);
+            $stmt->execute($params);
+            return $stmt;
+        } catch (PDOException $e) {
+            error_log('[Vinamilk HRM] Query Error: ' . $e->getMessage() . ' | SQL: ' . $sql);
+            throw $e;
+        }
+    }
+
+    /**
+     * Thực thi câu truy vấn SELECT và trả về 1 bản ghi duy nhất.
+     */
+    public function queryOne(string $sql, array $params = []): array|false
+    {
+        try {
+            $stmt = $this->getConnection()->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->fetch();
+        } catch (PDOException $e) {
+            error_log('[Vinamilk HRM] QueryOne Error: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Thực thi câu lệnh INSERT, UPDATE, DELETE.
+     */
+    public function execute(string $sql, array $params = []): int
+    {
+        try {
+            $stmt = $this->getConnection()->prepare($sql);
+            $stmt->execute($params);
+            return $stmt->rowCount();
+        } catch (PDOException $e) {
+            error_log('[Vinamilk HRM] Execute Error: ' . $e->getMessage() . ' | SQL: ' . $sql);
+            throw $e;
+        }
+    }
+
+    /**
+     * Lấy ID của bản ghi vừa INSERT.
+     */
+    public function lastInsertId(): string
+    {
+        return $this->getConnection()->lastInsertId();
+    }
+
+    // =====================================================================
+    // TRANSACTION SUPPORT
+    // =====================================================================
+
+    public function beginTransaction(): bool
+    {
+        return $this->getConnection()->beginTransaction();
+    }
+
+    public function commit(): bool
+    {
+        return $this->getConnection()->commit();
+    }
+
+    public function rollBack(): bool
+    {
+        return $this->getConnection()->rollBack();
+    }
+
+    public function transaction(callable $callback): mixed
+    {
+        $this->beginTransaction();
+        try {
+            $result = $callback($this->getConnection());
+            $this->commit();
+            return $result;
+        } catch (\Throwable $e) {
+            $this->rollBack();
+            error_log('[Vinamilk HRM] Transaction Error: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Destructor - Đóng kết nối khi đối tượng bị hủy.
+     */
+    public function __destruct()
+    {
+        $this->connection = null;
+    }
+
+    public static function resetInstance(): void
+    {
+        if (self::$instance !== null) {
+            self::$instance->connection = null;
+            self::$instance = null;
+        }
+    }
 }
+
+// Hỗ trợ mã nguồn cũ: Cho phép gọi Database::getInstance() không cần namespace
+class_alias('App\Core\Database', 'Database');

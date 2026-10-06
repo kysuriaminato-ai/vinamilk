@@ -17,14 +17,14 @@ abstract class Model {
     protected string $primaryKey = 'ID';
 
     public function __construct() {
-        $this->db = Database::getInstance()->getConnection();
+        $this->db = \App\Core\Database::getInstance()->getConnection();
     }
 
     /**
      * Thực thi câu lệnh SQL tùy chỉnh
      */
     public function query(string $sql, array $params = []): PDOStatement {
-        return Database::getInstance()->query($sql, $params);
+        return \App\Core\Database::getInstance()->query($sql, $params);
     }
 
     /**
