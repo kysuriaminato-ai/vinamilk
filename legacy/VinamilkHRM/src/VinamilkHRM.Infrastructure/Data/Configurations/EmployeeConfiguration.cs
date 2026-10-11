@@ -50,6 +50,9 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(e => e.Allowance)
             .HasPrecision(18, 2);
 
+        builder.Property(e => e.InsuranceSalary)
+            .HasPrecision(18, 2);
+
         builder.Property(e => e.AnnualLeaveBalance)
             .HasPrecision(5, 2);
 

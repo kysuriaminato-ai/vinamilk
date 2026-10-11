@@ -1,0 +1,60 @@
+# =====================================================================
+# VINAMILK HRIS - ENTERPRISE .GITIGNORE
+# =====================================================================
+
+# 1. Environment and Secrets (OWASP A07 & Nghị định 13/2023/NĐ-CP)
+.env
+.env.*
+!.env.example
+cookies.txt
+*.cookie
+*.key
+*.pem
+*.crt
+*.cert
+*.pfx
+
+# 2. Composer & Node Dependencies
+/vendor/
+/node_modules/
+npm-debug.log
+yarn-error.log
+
+# 3. Laravel Storage & Cache
+/storage/*.key
+/storage/app/private/
+/storage/app/public/
+/storage/framework/cache/*
+!/storage/framework/cache/.gitignore
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
+/storage/logs/*
+!/storage/logs/.gitignore
+
+# 4. Database Dumps & Backups
+*.sql
+*.dump
+*.tar.gz
+*.zip
+/backup/
+/backups/
+
+# 5. IDE & OS Metadata
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.DS_Store
+Thumbs.db
+
+# 6. .NET / C# Build Outputs (for legacy and hybrid services)
+bin/
+obj/
+*.dll
+*.pdb
+*.exe
+.vs/

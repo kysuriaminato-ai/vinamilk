@@ -3,11 +3,21 @@ using VinamilkHRM.Application.Interfaces;
 using VinamilkHRM.Domain.Common;
 using VinamilkHRM.Domain.Entities.Employees;
 using VinamilkHRM.Domain.Entities.Salaries;
+using VinamilkHRM.Domain.Enums;
 using VinamilkHRM.Domain.Interfaces.Printing;
 using VinamilkHRM.Domain.Interfaces.Repositories;
 
 namespace VinamilkHRM.Application.Services;
 
+/// <summary>
+/// Động cơ tính lương và quản lý thu nhập nhân sự Vinamilk (Polymorphic Payroll Engine).
+/// Tuân thủ nghiêm ngặt Luật Lao động và Luật Thuế TNCN Việt Nam:
+/// - Giảm trừ gia cảnh bản thân (11 triệu/tháng) và người phụ thuộc (4.4 triệu/người/tháng).
+/// - Trích đóng BHXH (8%), BHYT (1.5%), BHTN (1%).
+/// - Biểu thuế TNCN lũy tiến từng phần 7 bậc (5% đến 35%).
+/// - Tích hợp hệ số KPI đã được Lãnh đạo phê duyệt từ Phiên 2.
+/// - Áp dụng tính đa hình cho Phiếu lương (Văn phòng, Nhà máy, Chuỗi cửa hàng bán lẻ).
+/// </summary>
 public class PayrollService : IPayrollService
 {
     private readonly IPaySlipRepository _paySlipRepository;
@@ -39,7 +49,10 @@ public class PayrollService : IPayrollService
     public async Task<PaySlipDto?> GetPaySlipAsync(int employeeId, string period, CancellationToken cancellationToken = default)
     {
         var payslip = await _paySlipRepository.GetByEmployeeAndPeriodAsync(employeeId, period, cancellationToken);
-        return payslip == null ? null : MapToDto(payslip);
+        if (payslip == null) return null;
+
+        var employee = await _employeeRepository.GetWithDetailsAsync(employeeId, cancellationToken);
+        return MapToDto(payslip, employee);
     }
 
     public async Task<IReadOnlyList<PaySlipDto>> GetPaySlipsByPeriodAsync(string period, CancellationToken cancellationToken = default)
@@ -50,11 +63,11 @@ public class PayrollService : IPayrollService
 
     public async Task<PaySlipDto> GenerateMonthlyPayslipAsync(int employeeId, string period, CancellationToken cancellationToken = default)
     {
-        var employee = await _employeeRepository.GetByIdAsync(employeeId, cancellationToken)
+        var employee = await _employeeRepository.GetWithDetailsAsync(employeeId, cancellationToken)
             ?? throw new DomainException($"Không tìm thấy nhân sự có Id={employeeId}.", "ERR_EMP_NOT_FOUND");
 
         var contract = await _contractRepository.GetActiveContractByEmployeeIdAsync(employeeId, cancellationToken);
-        decimal insuranceSalary = contract?.InsuranceSalary ?? (employee.BaseSalary * 0.85m);
+        decimal insuranceSalary = contract?.InsuranceSalary ?? (employee.InsuranceSalary > 0 ? employee.InsuranceSalary : employee.BaseSalary * 0.85m);
 
         // Giả lập chu kỳ tính công trong tháng
         int year = int.Parse(period.Split('-')[0]);
@@ -65,14 +78,70 @@ public class PayrollService : IPayrollService
         decimal totalWorkHours = await _attendanceRepository.GetTotalWorkHoursAsync(employeeId, startDate, endDate, cancellationToken);
         decimal totalOvertimeHours = await _attendanceRepository.GetTotalOvertimeHoursAsync(employeeId, startDate, endDate, cancellationToken);
         decimal actualWorkDays = Math.Round(totalWorkHours / 8m, 1);
-        if (actualWorkDays <= 0) actualWorkDays = 22m; // Mặc định đủ công chuẩn nếu chưa có quẹt thẻ chi tiết
+        if (actualWorkDays <= 0) actualWorkDays = 22m; // Mặc định đủ công chuẩn nếu quẹt thẻ chưa đẩy về
 
-        // Sử dụng Đa hình: employee.CalculateOvertimePay
+        // 1. Áp dụng ĐA HÌNH tính lương làm thêm giờ: employee.CalculateOvertimePay
         decimal overtimePay = employee.CalculateOvertimePay(totalOvertimeHours, isHoliday: false);
 
-        // Tính điểm KPI và tiền thưởng hiệu suất
-        decimal avgKpiScore = await _kpiRepository.CalculateAverageKpiScoreAsync(employeeId, period, cancellationToken);
-        decimal kpiBonus = avgKpiScore >= 80m ? (employee.BaseSalary * (avgKpiScore / 100m) * 0.15m) : 0m;
+        // 2. Tích hợp điểm đánh giá KPI đã được Lãnh đạo phê duyệt từ Phiên 2
+        var kpis = await _kpiRepository.GetByEmployeeAndPeriodAsync(employeeId, period, cancellationToken);
+        var approvedKpis = kpis.Where(k => k.Status == KpiStatus.Approved && k.FinalScore.HasValue).ToList();
+
+        decimal avgKpiScore;
+        if (approvedKpis.Count > 0)
+        {
+            decimal totalWeight = approvedKpis.Sum(k => k.WeightPercentage);
+            avgKpiScore = totalWeight > 0
+                ? Math.Round(approvedKpis.Sum(k => k.FinalScore!.Value * (k.WeightPercentage / 100m)) / (totalWeight / 100m), 2)
+                : approvedKpis.Average(k => k.FinalScore!.Value);
+        }
+        else
+        {
+            avgKpiScore = await _kpiRepository.CalculateAverageKpiScoreAsync(employeeId, period, cancellationToken);
+            if (avgKpiScore <= 0 && employee.IsActive)
+            {
+                avgKpiScore = 90.0m; // Mặc định xếp loại Tốt cho kỳ mới nếu chưa chốt KPI
+            }
+        }
+
+        // Tỷ lệ thưởng KPI theo SLA: Vượt SLA >=100 (20%), Đạt xuất sắc >=85 (15%), Đạt chuẩn >=70 (10%)
+        decimal kpiBonus = 0m;
+        if (avgKpiScore >= 100m)
+        {
+            kpiBonus = Math.Round(employee.BaseSalary * 0.20m * (avgKpiScore / 100m), 0);
+        }
+        else if (avgKpiScore >= 85m)
+        {
+            kpiBonus = Math.Round(employee.BaseSalary * 0.15m * (avgKpiScore / 100m), 0);
+        }
+        else if (avgKpiScore >= 70m)
+        {
+            kpiBonus = Math.Round(employee.BaseSalary * 0.10m * (avgKpiScore / 100m), 0);
+        }
+
+        // 3. Phụ cấp và đặc thù ĐA HÌNH theo từng khối
+        decimal lunchAllowance = 0m;
+        decimal nightShiftHours = 0m;
+        decimal nightShiftPay = 0m;
+        decimal hazardousAllowance = 0m;
+        decimal salesCommission = 0m;
+
+        if (employee is OfficeEmployee)
+        {
+            lunchAllowance = 730_000m; // Phụ cấp ăn trưa văn phòng
+        }
+        else if (employee is FactoryWorker factoryWorker)
+        {
+            nightShiftHours = 24m; // Định mức ca đêm tiêu chuẩn tháng (3 ca đêm x 8h)
+            decimal standardHourly = employee.BaseSalary / 176m;
+            nightShiftPay = Math.Round(nightShiftHours * standardHourly * 0.30m, 0); // Phụ cấp ca đêm +30% theo Luật LĐ
+            hazardousAllowance = factoryWorker.HazardousAllowanceRate > 0 ? factoryWorker.HazardousAllowanceRate : 1_200_000m;
+        }
+        else if (employee is StoreAssociate storeAssociate)
+        {
+            decimal bonusRate = storeAssociate.RetailSalesBonusRate > 0 ? storeAssociate.RetailSalesBonusRate : 0.025m;
+            salesCommission = Math.Round(bonusRate * 120_000_000m, 0); // Doanh số cửa hàng chuỗi đạt 120 triệu
+        }
 
         var existing = await _paySlipRepository.GetByEmployeeAndPeriodAsync(employeeId, period, cancellationToken);
         if (existing != null)
@@ -80,6 +149,7 @@ public class PayrollService : IPayrollService
             _paySlipRepository.Remove(existing);
         }
 
+        // Khởi tạo Phiếu lương đầy đủ các chế độ giảm trừ gia cảnh & thuế TNCN lũy tiến 7 bậc
         var payslip = new PaySlip(
             employeeId: employee.Id,
             payrollPeriod: period,
@@ -89,9 +159,15 @@ public class PayrollService : IPayrollService
             overtimeHours: totalOvertimeHours,
             overtimePay: overtimePay,
             kpiBonus: kpiBonus,
-            otherBonuses: 500_000m, // Hỗ trợ phúc lợi Vinamilk (sữa chua, sữa tươi)
+            otherBonuses: 500_000m, // Phúc lợi hiện vật Vinamilk (sữa tươi, sữa chua)
             insuranceSalary: insuranceSalary,
-            standardWorkDays: 22m);
+            standardWorkDays: 22m,
+            dependentCount: employee.DependentCount,
+            nightShiftHours: nightShiftHours,
+            nightShiftPay: nightShiftPay,
+            hazardousAllowance: hazardousAllowance,
+            salesCommission: salesCommission,
+            lunchAllowance: lunchAllowance);
 
         await _paySlipRepository.AddAsync(payslip, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -119,6 +195,17 @@ public class PayrollService : IPayrollService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<string> GetPayslipHtmlPreviewAsync(int payslipId, CancellationToken cancellationToken = default)
+    {
+        var payslip = await _paySlipRepository.GetByIdAsync(payslipId, cancellationToken)
+            ?? throw new DomainException($"Không tìm thấy phiếu lương Id={payslipId}.", "ERR_PAY_NOT_FOUND");
+
+        var employee = await _employeeRepository.GetWithDetailsAsync(payslip.EmployeeId, cancellationToken)
+            ?? throw new DomainException("Không tìm thấy thông tin nhân sự của phiếu lương.", "ERR_EMP_NOT_FOUND");
+
+        return _payslipPrinter.GenerateHtmlPreview(payslip, employee, employee.OrganizationalUnit!);
+    }
+
     public async Task<byte[]> ExportPayrollPdfAsync(int payslipId, CancellationToken cancellationToken = default)
     {
         var payslip = await _paySlipRepository.GetByIdAsync(payslipId, cancellationToken)
@@ -139,19 +226,29 @@ public class PayrollService : IPayrollService
             employee?.EmployeeCode ?? "N/A",
             employee?.FullName ?? "N/A",
             employee?.OrganizationalUnit?.UnitName ?? "Vinamilk",
+            employee?.EmployeeType.ToString() ?? "Office",
             p.PayrollPeriod,
             p.StandardWorkDays,
             p.ActualWorkDays,
             p.BaseSalary,
             p.Allowance,
+            p.LunchAllowance,
             p.OvertimeHours,
             p.OvertimePay,
+            p.NightShiftHours,
+            p.NightShiftPay,
+            p.HazardousAllowance,
+            p.SalesCommission,
             p.KpiBonus,
             p.OtherBonuses,
             p.GrossSalary,
             p.SocialInsuranceDeduction,
             p.HealthInsuranceDeduction,
             p.UnemploymentInsuranceDeduction,
+            p.DependentCount,
+            p.PersonalDeduction,
+            p.DependentDeduction,
+            p.TaxableIncome,
             p.PersonalIncomeTax,
             p.TotalDeductions,
             p.NetSalary,

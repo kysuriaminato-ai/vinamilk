@@ -39,6 +39,8 @@ public abstract class Employee : BaseAuditableEntity
 
     public decimal BaseSalary { get; protected set; }
     public decimal Allowance { get; protected set; }
+    public decimal InsuranceSalary { get; protected set; }            // Mức lương cơ sở trích nộp BHXH/BHYT/BHTN
+    public int DependentCount { get; protected set; } = 0;             // Số người phụ thuộc giảm trừ gia cảnh (4.4tr/người)
     public decimal AnnualLeaveBalance { get; protected set; } = 12.0m; // Quỹ phép năm chuẩn theo Luật Lao động
     public decimal DiligenceScore { get; protected set; } = 100.0m;   // Điểm chuyên cần (Sàn 0 - Trần 100)
 
@@ -104,6 +106,8 @@ public abstract class Employee : BaseAuditableEntity
         OrganizationalUnitId = organizationalUnitId;
         BaseSalary = baseSalary;
         Allowance = allowance;
+        InsuranceSalary = baseSalary > 0 ? Math.Round(baseSalary * 0.85m, 0) : 0m;
+        DependentCount = 0;
         ManagerId = managerId;
         IsActive = true;
     }
@@ -137,9 +141,32 @@ public abstract class Employee : BaseAuditableEntity
     }
 
     /// <summary>
-    /// Nghiệp vụ điều chỉnh hoặc nâng bậc lương cho nhân viên kèm theo lưu vết lý do.
+    /// Cập nhật số người phụ thuộc phục vụ tính giảm trừ gia cảnh thuế TNCN (4.4tr/người/tháng).
     /// </summary>
-    public void PromoteSalary(decimal newBaseSalary, decimal newAllowance, string reason)
+    public void UpdateDependents(int count)
+    {
+        if (count < 0)
+            throw new DomainException("Số người phụ thuộc không thể âm.", "ERR_EMP_DEPENDENTS_NEGATIVE");
+
+        DependentCount = count;
+    }
+
+    /// <summary>
+    /// Cập nhật mức lương đóng bảo hiểm bắt buộc (BHXH, BHYT, BHTN).
+    /// </summary>
+    public void SetInsuranceSalary(decimal insuranceSalary)
+    {
+        if (insuranceSalary < 0)
+            throw new DomainException("Mức lương đóng bảo hiểm không thể âm.", "ERR_EMP_INSURANCE_NEGATIVE");
+
+        InsuranceSalary = insuranceSalary;
+    }
+
+    /// <summary>
+    /// Nghiệp vụ điều chỉnh hoặc nâng bậc lương cho nhân viên kèm theo lưu vết lý do.
+    /// Tự động cập nhật mức lương đóng bảo hiểm theo tỷ lệ chuẩn nếu không chỉ định riêng.
+    /// </summary>
+    public void PromoteSalary(decimal newBaseSalary, decimal newAllowance, string reason, decimal? newInsuranceSalary = null)
     {
         if (!IsActive)
             throw new DomainException("Không thể điều chỉnh lương cho nhân sự đã nghỉ việc.", "ERR_EMP_INACTIVE");
@@ -155,6 +182,7 @@ public abstract class Employee : BaseAuditableEntity
 
         BaseSalary = newBaseSalary;
         Allowance = newAllowance;
+        InsuranceSalary = newInsuranceSalary ?? Math.Round(newBaseSalary * 0.85m, 0);
     }
 
     /// <summary>

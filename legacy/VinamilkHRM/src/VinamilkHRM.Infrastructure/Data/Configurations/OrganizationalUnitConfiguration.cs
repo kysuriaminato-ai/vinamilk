@@ -39,6 +39,15 @@ public class OrganizationalUnitConfiguration : IEntityTypeConfiguration<Organiza
         builder.Property(u => u.TaxCode)
             .HasMaxLength(50);
 
+        builder.Property(u => u.RegionId)
+            .IsRequired()
+            .HasDefaultValue(3);
+
+        builder.Property(u => u.RegionName)
+            .IsRequired()
+            .HasMaxLength(100)
+            .HasDefaultValue("Miền Nam");
+
         builder.Property(u => u.CreatedBy)
             .IsRequired()
             .HasMaxLength(100);

@@ -21,8 +21,13 @@ namespace VinamilkHRM.Infrastructure.Data;
 /// </summary>
 public class VinamilkHRMDbContext : DbContext, IApplicationDbContext
 {
-    public VinamilkHRMDbContext(DbContextOptions<VinamilkHRMDbContext> options) : base(options)
+    private readonly VinamilkHRM.Domain.Interfaces.IRegionScopeService? _regionScopeService;
+
+    public VinamilkHRMDbContext(
+        DbContextOptions<VinamilkHRMDbContext> options,
+        VinamilkHRM.Domain.Interfaces.IRegionScopeService? regionScopeService = null) : base(options)
     {
+        _regionScopeService = regionScopeService;
     }
 
     public DbSet<OrganizationalUnit> OrganizationalUnits => Set<OrganizationalUnit>();
@@ -41,6 +46,7 @@ public class VinamilkHRMDbContext : DbContext, IApplicationDbContext
     public DbSet<ProbationContract> ProbationContracts => Set<ProbationContract>();
     public DbSet<DefiniteContract> DefiniteContracts => Set<DefiniteContract>();
     public DbSet<IndefiniteContract> IndefiniteContracts => Set<IndefiniteContract>();
+    public DbSet<ElectronicContractAppendix> ElectronicContractAppendices => Set<ElectronicContractAppendix>();
 
     public DbSet<Shift> Shifts => Set<Shift>();
     public DbSet<Attendance> Attendances => Set<Attendance>();
@@ -51,11 +57,31 @@ public class VinamilkHRMDbContext : DbContext, IApplicationDbContext
     public DbSet<CompanyAsset> CompanyAssets => Set<CompanyAsset>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<DisciplinaryWarning> DisciplinaryWarnings => Set<DisciplinaryWarning>();
+    public DbSet<VinamilkHRM.Domain.Entities.Careers.JobPosting> JobPostings => Set<VinamilkHRM.Domain.Entities.Careers.JobPosting>();
+    public DbSet<VinamilkHRM.Domain.Entities.Careers.CandidateApplication> CandidateApplications => Set<VinamilkHRM.Domain.Entities.Careers.CandidateApplication>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(VinamilkHRMDbContext).Assembly);
+
+        // Global Query Filter: Regional Scoping & Multi-Unit (Phân vùng theo Miền & Khối Đơn vị)
+        if (_regionScopeService != null)
+        {
+            modelBuilder.Entity<OrganizationalUnit>().HasQueryFilter(u =>
+                !_regionScopeService.IsFilterActive ||
+                ((!_regionScopeService.CurrentRegionId.HasValue || u.RegionId == _regionScopeService.CurrentRegionId.Value) &&
+                 (!_regionScopeService.CurrentUnitType.HasValue || u.UnitType == _regionScopeService.CurrentUnitType.Value) &&
+                 (!_regionScopeService.CurrentUnitId.HasValue || u.Id == _regionScopeService.CurrentUnitId.Value))
+            );
+
+            modelBuilder.Entity<Employee>().HasQueryFilter(e =>
+                !_regionScopeService.IsFilterActive ||
+                ((!_regionScopeService.CurrentRegionId.HasValue || (e.OrganizationalUnit != null && e.OrganizationalUnit.RegionId == _regionScopeService.CurrentRegionId.Value)) &&
+                 (!_regionScopeService.CurrentUnitType.HasValue || (e.OrganizationalUnit != null && e.OrganizationalUnit.UnitType == _regionScopeService.CurrentUnitType.Value)) &&
+                 (!_regionScopeService.CurrentUnitId.HasValue || e.OrganizationalUnitId == _regionScopeService.CurrentUnitId.Value))
+            );
+        }
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

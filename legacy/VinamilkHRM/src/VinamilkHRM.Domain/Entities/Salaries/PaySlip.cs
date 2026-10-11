@@ -18,16 +18,25 @@ public class PaySlip : BaseAuditableEntity
     public decimal ActualWorkDays { get; private set; }
     public decimal BaseSalary { get; private set; }
     public decimal Allowance { get; private set; }
+    public decimal LunchAllowance { get; private set; }
     public decimal OvertimeHours { get; private set; }
     public decimal OvertimePay { get; private set; }
+    public decimal NightShiftHours { get; private set; }
+    public decimal NightShiftPay { get; private set; }                  // Phụ cấp làm ca đêm (+30%)
+    public decimal HazardousAllowance { get; private set; }             // Phụ cấp nặng nhọc/độc hại nhà máy
+    public decimal SalesCommission { get; private set; }                 // Hoa hồng doanh số bán lẻ chuỗi cửa hàng
     public decimal KpiBonus { get; private set; }
     public decimal OtherBonuses { get; private set; }
 
     public decimal GrossSalary { get; private set; }
-    public decimal SocialInsuranceDeduction { get; private set; }      // 8% BHXH
-    public decimal HealthInsuranceDeduction { get; private set; }      // 1.5% BHYT
+    public decimal SocialInsuranceDeduction { get; private set; }       // 8% BHXH
+    public decimal HealthInsuranceDeduction { get; private set; }       // 1.5% BHYT
     public decimal UnemploymentInsuranceDeduction { get; private set; } // 1% BHTN
-    public decimal PersonalIncomeTax { get; private set; }             // Thuế TNCN
+    public int DependentCount { get; private set; }                     // Số người phụ thuộc
+    public decimal PersonalDeduction { get; private set; }              // Giảm trừ bản thân (11tr)
+    public decimal DependentDeduction { get; private set; }             // Giảm trừ người phụ thuộc (4.4tr/người)
+    public decimal TaxableIncome { get; private set; }                  // Thu nhập tính thuế TNCN
+    public decimal PersonalIncomeTax { get; private set; }              // Thuế TNCN lũy tiến 7 bậc
     public decimal TotalDeductions { get; private set; }
     public decimal NetSalary { get; private set; }
 
@@ -50,7 +59,13 @@ public class PaySlip : BaseAuditableEntity
         decimal kpiBonus,
         decimal otherBonuses,
         decimal insuranceSalary,
-        decimal standardWorkDays = 22m)
+        decimal standardWorkDays = 22m,
+        int dependentCount = 0,
+        decimal nightShiftHours = 0m,
+        decimal nightShiftPay = 0m,
+        decimal hazardousAllowance = 0m,
+        decimal salesCommission = 0m,
+        decimal lunchAllowance = 0m)
     {
         if (employeeId <= 0)
             throw new DomainException("Mã nhân viên phiếu lương không hợp lệ.", "ERR_PAY_EMP_INVALID");
@@ -65,25 +80,32 @@ public class PaySlip : BaseAuditableEntity
         PayrollPeriod = payrollPeriod.Trim();
         BaseSalary = baseSalary;
         Allowance = allowance;
+        LunchAllowance = lunchAllowance >= 0 ? lunchAllowance : 0m;
         StandardWorkDays = standardWorkDays > 0 ? standardWorkDays : 22m;
         ActualWorkDays = actualWorkDays >= 0 ? actualWorkDays : 0m;
         OvertimeHours = overtimeHours >= 0 ? overtimeHours : 0m;
         OvertimePay = overtimePay >= 0 ? overtimePay : 0m;
+        NightShiftHours = nightShiftHours >= 0 ? nightShiftHours : 0m;
+        NightShiftPay = nightShiftPay >= 0 ? nightShiftPay : 0m;
+        HazardousAllowance = hazardousAllowance >= 0 ? hazardousAllowance : 0m;
+        SalesCommission = salesCommission >= 0 ? salesCommission : 0m;
         KpiBonus = kpiBonus >= 0 ? kpiBonus : 0m;
         OtherBonuses = otherBonuses >= 0 ? otherBonuses : 0m;
+        DependentCount = Math.Max(0, dependentCount);
 
         CalculateNetSalary(insuranceSalary);
     }
 
     /// <summary>
-    /// Tính toán tổng thu nhập trước thuế (Gross), các khoản trích nộp theo lương theo Luật VN, và lương thực nhận (Net).
+    /// Tính toán tổng thu nhập trước thuế (Gross), các khoản trích nộp theo lương theo Luật VN,
+    /// giảm trừ gia cảnh (bản thân 11tr, người phụ thuộc 4.4tr/người), biểu thuế TNCN lũy tiến 7 bậc, và lương Net.
     /// </summary>
     public void CalculateNetSalary(decimal insuranceSalary)
     {
         decimal workRatio = StandardWorkDays > 0 ? Math.Min(1.5m, ActualWorkDays / StandardWorkDays) : 1m;
         decimal earnedBaseSalary = Math.Round(BaseSalary * workRatio, 0);
 
-        GrossSalary = earnedBaseSalary + Allowance + OvertimePay + KpiBonus + OtherBonuses;
+        GrossSalary = earnedBaseSalary + Allowance + LunchAllowance + OvertimePay + NightShiftPay + HazardousAllowance + SalesCommission + KpiBonus + OtherBonuses;
 
         // Trích nộp BHXH (8%), BHYT (1.5%), BHTN (1%) trên lương đóng bảo hiểm
         SocialInsuranceDeduction = Math.Round(insuranceSalary * 0.08m, 0);
@@ -92,12 +114,17 @@ public class PaySlip : BaseAuditableEntity
 
         decimal statutoryInsuranceTotal = SocialInsuranceDeduction + HealthInsuranceDeduction + UnemploymentInsuranceDeduction;
 
-        // Ước tính giảm trừ gia cảnh bản thân (11 triệu đồng/tháng theo biểu thuế TNCN VN)
-        const decimal personalDeduction = 11_000_000m;
-        decimal taxableIncome = Math.Max(0m, GrossSalary - statutoryInsuranceTotal - personalDeduction);
+        // Giảm trừ gia cảnh theo Luật Thuế TNCN Việt Nam:
+        // - Bản thân: 11,000,000 đ/tháng
+        // - Người phụ thuộc: 4,400,000 đ/người/tháng
+        PersonalDeduction = 11_000_000m;
+        DependentDeduction = DependentCount * 4_400_000m;
+        decimal totalRelief = PersonalDeduction + DependentDeduction;
 
-        // Biểu thuế lũy tiến từng phần cơ bản
-        PersonalIncomeTax = CalculateProgressiveTax(taxableIncome);
+        TaxableIncome = Math.Max(0m, GrossSalary - statutoryInsuranceTotal - totalRelief);
+
+        // Biểu thuế lũy tiến từng phần 7 bậc (Luật Thuế TNCN VN)
+        PersonalIncomeTax = CalculateProgressiveTax(TaxableIncome);
 
         TotalDeductions = statutoryInsuranceTotal + PersonalIncomeTax;
         NetSalary = Math.Max(0m, GrossSalary - TotalDeductions);

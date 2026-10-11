@@ -9,11 +9,16 @@ namespace VinamilkHRM.Application.Services;
 public class EmployeeService : IEmployeeService
 {
     private readonly IEmployeeRepository _employeeRepository;
+    private readonly IOrganizationalUnitRepository _unitRepository;
     private readonly IUnitOfWork _unitOfWork;
 
-    public EmployeeService(IEmployeeRepository employeeRepository, IUnitOfWork unitOfWork)
+    public EmployeeService(
+        IEmployeeRepository employeeRepository,
+        IOrganizationalUnitRepository unitRepository,
+        IUnitOfWork unitOfWork)
     {
         _employeeRepository = employeeRepository ?? throw new ArgumentNullException(nameof(employeeRepository));
+        _unitRepository = unitRepository ?? throw new ArgumentNullException(nameof(unitRepository));
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
     }
 
@@ -39,6 +44,26 @@ public class EmployeeService : IEmployeeService
     {
         var employees = await _employeeRepository.GetByUnitIdAsync(unitId, cancellationToken);
         return employees.Select(MapToDto).ToList();
+    }
+
+    public async Task<IReadOnlyList<VinamilkHRM.Application.DTOs.OrganizationalUnits.OrganizationalUnitDto>> GetAllUnitsAsync(CancellationToken cancellationToken = default)
+    {
+        var units = await _unitRepository.GetAllAsync(cancellationToken);
+        return units.Select(u => new VinamilkHRM.Application.DTOs.OrganizationalUnits.OrganizationalUnitDto(
+            u.Id,
+            u.UnitCode,
+            u.UnitName,
+            u.UnitType,
+            u.Address,
+            u.PhoneNumber,
+            u.Email,
+            u.TaxCode,
+            u.ParentUnitId,
+            u.ParentUnit?.UnitName,
+            u.ManagerEmployeeId,
+            u.ManagerEmployee?.FullName,
+            u.Employees.Count
+        )).ToList();
     }
 
     /// <summary>

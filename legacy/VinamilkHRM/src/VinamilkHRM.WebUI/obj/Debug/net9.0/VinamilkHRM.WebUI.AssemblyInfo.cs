@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("VinamilkHRM.WebUI")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+344427edcce9f4ea79b2b700ff7e2f1609e29faa")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+0235509f7a155f3793bad95400453a473c9be1da")]
 [assembly: System.Reflection.AssemblyProductAttribute("VinamilkHRM.WebUI")]
 [assembly: System.Reflection.AssemblyTitleAttribute("VinamilkHRM.WebUI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

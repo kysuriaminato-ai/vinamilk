@@ -68,6 +68,8 @@ CREATE TABLE dbo.OrganizationalUnits
     PhoneNumber NVARCHAR(50) NOT NULL,
     Email NVARCHAR(150) NOT NULL,
     TaxCode NVARCHAR(50) NOT NULL,
+    RegionId INT NOT NULL CONSTRAINT DF_OrgUnits_RegionId DEFAULT 3, -- 1: Miền Bắc, 2: Miền Trung, 3: Miền Nam
+    RegionName NVARCHAR(100) NOT NULL CONSTRAINT DF_OrgUnits_RegionName DEFAULT N'Miền Nam',
     ParentUnitId INT NULL,
     ManagerEmployeeId INT NULL,
     
@@ -132,6 +134,8 @@ CREATE TABLE dbo.Employees
     ManagerId INT NULL,
     BaseSalary DECIMAL(18,2) NOT NULL,
     Allowance DECIMAL(18,2) NOT NULL CONSTRAINT DF_Employees_Allowance DEFAULT 0,
+    InsuranceSalary DECIMAL(18,2) NOT NULL CONSTRAINT DF_Employees_InsSalary DEFAULT 0,
+    DependentCount INT NOT NULL CONSTRAINT DF_Employees_Dependents DEFAULT 0,
     AnnualLeaveBalance DECIMAL(5,2) NOT NULL CONSTRAINT DF_Employees_LeaveBal DEFAULT 12.00,
     DiligenceScore DECIMAL(5,2) NOT NULL CONSTRAINT DF_Employees_Diligence DEFAULT 100.00,
 
@@ -232,6 +236,46 @@ CREATE TABLE dbo.LaborContracts
     CONSTRAINT CK_LaborContracts_BasicSalary CHECK (BasicSalary > 0),
     CONSTRAINT CK_LaborContracts_InsuranceSalary CHECK (InsuranceSalary > 0),
     CONSTRAINT CK_LaborContracts_Dates CHECK (EndDate IS NULL OR EndDate >= StartDate)
+);
+GO
+
+-- ----------------------------------------------------------------------------------------------------
+-- 3B. BẢNG: ElectronicContractAppendices (Phụ lục hợp đồng lao động điện tử - Tăng lương & Đặc cách)
+-- ----------------------------------------------------------------------------------------------------
+PRINT N'==> Tạo bảng [ElectronicContractAppendices]...';
+CREATE TABLE dbo.ElectronicContractAppendices
+(
+    Id INT IDENTITY(1,1) NOT NULL,
+    AppendixNumber NVARCHAR(100) NOT NULL,
+    LaborContractId INT NOT NULL,
+    EmployeeId INT NOT NULL,
+    EffectiveDate DATETIME2 NOT NULL,
+    SignDate DATETIME2 NOT NULL,
+    PreviousSalary DECIMAL(18,2) NOT NULL,
+    NewSalary DECIMAL(18,2) NOT NULL,
+    PreviousAllowance DECIMAL(18,2) NOT NULL,
+    NewAllowance DECIMAL(18,2) NOT NULL,
+    AdjustmentReason NVARCHAR(500) NOT NULL,
+    IsCeoOverride BIT NOT NULL CONSTRAINT DF_ECA_CeoOverride DEFAULT 0,
+    CeoOverrideCode NVARCHAR(100) NULL,
+    DigitalSignatureHash NVARCHAR(256) NOT NULL,
+    SignerName NVARCHAR(150) NOT NULL,
+    SignerTitle NVARCHAR(150) NOT NULL,
+    IsSigned BIT NOT NULL CONSTRAINT DF_ECA_Signed DEFAULT 1,
+
+    -- Audit fields
+    CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_ECA_CreatedAt DEFAULT SYSUTCDATETIME(),
+    CreatedBy NVARCHAR(100) NOT NULL CONSTRAINT DF_ECA_CreatedBy DEFAULT N'SYSTEM',
+    UpdatedAt DATETIME2 NULL,
+    UpdatedBy NVARCHAR(100) NULL,
+    IsDeleted BIT NOT NULL CONSTRAINT DF_ECA_IsDeleted DEFAULT 0,
+
+    CONSTRAINT PK_ElectronicContractAppendices PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT FK_ECA_LaborContract FOREIGN KEY (LaborContractId) 
+        REFERENCES dbo.LaborContracts(Id) ON DELETE NO ACTION,
+    CONSTRAINT FK_ECA_Employee FOREIGN KEY (EmployeeId) 
+        REFERENCES dbo.Employees(Id) ON DELETE NO ACTION,
+    CONSTRAINT UQ_ECA_Number UNIQUE (AppendixNumber)
 );
 GO
 
@@ -439,15 +483,24 @@ CREATE TABLE dbo.PaySlips
     ActualWorkDays DECIMAL(5,2) NOT NULL CONSTRAINT DF_PaySlips_ActDays DEFAULT 22.00,
     BaseSalary DECIMAL(18,2) NOT NULL,
     Allowance DECIMAL(18,2) NOT NULL,
+    LunchAllowance DECIMAL(18,2) NOT NULL CONSTRAINT DF_PaySlips_Lunch DEFAULT 0.00,
     OvertimeHours DECIMAL(5,2) NOT NULL CONSTRAINT DF_PaySlips_OTHours DEFAULT 0.00,
     OvertimePay DECIMAL(18,2) NOT NULL CONSTRAINT DF_PaySlips_OTPay DEFAULT 0.00,
+    NightShiftHours DECIMAL(5,2) NOT NULL CONSTRAINT DF_PaySlips_NightHours DEFAULT 0.00,
+    NightShiftPay DECIMAL(18,2) NOT NULL CONSTRAINT DF_PaySlips_NightPay DEFAULT 0.00,
+    HazardousAllowance DECIMAL(18,2) NOT NULL CONSTRAINT DF_PaySlips_Hazard DEFAULT 0.00,
+    SalesCommission DECIMAL(18,2) NOT NULL CONSTRAINT DF_PaySlips_Comm DEFAULT 0.00,
     KpiBonus DECIMAL(18,2) NOT NULL CONSTRAINT DF_PaySlips_KpiBonus DEFAULT 0.00,
     OtherBonuses DECIMAL(18,2) NOT NULL CONSTRAINT DF_PaySlips_OtherBonus DEFAULT 0.00,
     GrossSalary DECIMAL(18,2) NOT NULL,
     SocialInsuranceDeduction DECIMAL(18,2) NOT NULL,       -- 8%
     HealthInsuranceDeduction DECIMAL(18,2) NOT NULL,       -- 1.5%
     UnemploymentInsuranceDeduction DECIMAL(18,2) NOT NULL, -- 1%
-    PersonalIncomeTax DECIMAL(18,2) NOT NULL,              -- Thuế TNCN
+    DependentCount INT NOT NULL CONSTRAINT DF_PaySlips_DepCount DEFAULT 0,
+    PersonalDeduction DECIMAL(18,2) NOT NULL CONSTRAINT DF_PaySlips_PersonalRelief DEFAULT 11000000.00,
+    DependentDeduction DECIMAL(18,2) NOT NULL CONSTRAINT DF_PaySlips_DepRelief DEFAULT 0.00,
+    TaxableIncome DECIMAL(18,2) NOT NULL CONSTRAINT DF_PaySlips_Taxable DEFAULT 0.00,
+    PersonalIncomeTax DECIMAL(18,2) NOT NULL,              -- Thuế TNCN lũy tiến 7 bậc
     TotalDeductions DECIMAL(18,2) NOT NULL,
     NetSalary DECIMAL(18,2) NOT NULL,
     Status INT NOT NULL CONSTRAINT DF_PaySlips_Status DEFAULT 1, -- 1: Draft, 2: PendingApproval, 3: Approved, 4: Paid
@@ -548,6 +601,124 @@ CREATE TABLE dbo.DisciplinaryWarnings
 );
 GO
 
+-- ----------------------------------------------------------------------------------------------------
+-- 13. BẢNG: ElectronicContractAppendices (Phụ lục Hợp đồng Lao động Điện tử & Quyết định Nâng lương)
+-- ----------------------------------------------------------------------------------------------------
+PRINT N'==> Tạo bảng [ElectronicContractAppendices]...';
+CREATE TABLE dbo.ElectronicContractAppendices
+(
+    Id INT IDENTITY(1,1) NOT NULL,
+    AppendixNumber NVARCHAR(100) NOT NULL,
+    LaborContractId INT NOT NULL,
+    EmployeeId INT NOT NULL,
+    EffectiveDate DATETIME2 NOT NULL,
+    SignDate DATETIME2 NOT NULL,
+    PreviousSalary DECIMAL(18,2) NOT NULL,
+    NewSalary DECIMAL(18,2) NOT NULL,
+    PreviousAllowance DECIMAL(18,2) NOT NULL,
+    NewAllowance DECIMAL(18,2) NOT NULL,
+    AdjustmentReason NVARCHAR(500) NOT NULL,
+    IsCeoOverride BIT NOT NULL CONSTRAINT DF_Appendices_CeoOverride DEFAULT 0,
+    CeoOverrideCode NVARCHAR(100) NULL,
+    DigitalSignatureHash NVARCHAR(256) NOT NULL,
+    SignerName NVARCHAR(150) NOT NULL CONSTRAINT DF_Appendices_SignerName DEFAULT N'Mai Kiều Liên',
+    SignerTitle NVARCHAR(150) NOT NULL CONSTRAINT DF_Appendices_SignerTitle DEFAULT N'Tổng Giám Đốc (CEO) - Vinamilk',
+    IsSigned BIT NOT NULL CONSTRAINT DF_Appendices_IsSigned DEFAULT 1,
+
+    -- Audit fields
+    CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_Appendices_CreatedAt DEFAULT SYSUTCDATETIME(),
+    CreatedBy NVARCHAR(100) NOT NULL CONSTRAINT DF_Appendices_CreatedBy DEFAULT N'SYSTEM',
+    UpdatedAt DATETIME2 NULL,
+    UpdatedBy NVARCHAR(100) NULL,
+    IsDeleted BIT NOT NULL CONSTRAINT DF_Appendices_IsDeleted DEFAULT 0,
+
+    CONSTRAINT PK_ElectronicContractAppendices PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT FK_Appendices_Employee FOREIGN KEY (EmployeeId)
+        REFERENCES dbo.Employees(Id) ON DELETE NO ACTION,
+    CONSTRAINT FK_Appendices_LaborContract FOREIGN KEY (LaborContractId)
+        REFERENCES dbo.LaborContracts(Id) ON DELETE NO ACTION,
+    CONSTRAINT CK_Appendices_Salary CHECK (NewSalary > 0)
+);
+GO
+
+-- ----------------------------------------------------------------------------------------------------
+-- 14. BẢNG: JobPostings (Tin tuyển dụng công khai Cổng Careers Vinamilk - Chuẩn SEO & Google Jobs)
+-- ----------------------------------------------------------------------------------------------------
+PRINT N'==> Tạo bảng [JobPostings]...';
+CREATE TABLE dbo.JobPostings
+(
+    Id INT IDENTITY(1,1) NOT NULL,
+    JobCode NVARCHAR(50) NOT NULL,
+    Title NVARCHAR(250) NOT NULL,
+    Slug NVARCHAR(250) NOT NULL,
+    UnitType INT NOT NULL,
+    Department NVARCHAR(150) NOT NULL,
+    WorkLocation NVARCHAR(300) NOT NULL,
+    City NVARCHAR(100) NOT NULL,
+    RegionId INT NOT NULL CONSTRAINT DF_JobPostings_Region DEFAULT 3,
+    EmploymentType NVARCHAR(50) NOT NULL CONSTRAINT DF_JobPostings_EmpType DEFAULT N'FULL_TIME',
+    ExperienceLevel NVARCHAR(100) NULL,
+    EducationRequirement NVARCHAR(100) NULL,
+    SalaryMin DECIMAL(18,2) NULL,
+    SalaryMax DECIMAL(18,2) NULL,
+    SalaryDisplay NVARCHAR(150) NOT NULL,
+    DatePosted DATETIME2 NOT NULL,
+    ValidThrough DATETIME2 NOT NULL,
+    Description NVARCHAR(MAX) NOT NULL,
+    Requirements NVARCHAR(MAX) NOT NULL,
+    Benefits NVARCHAR(MAX) NOT NULL,
+    IsActive BIT NOT NULL CONSTRAINT DF_JobPostings_Active DEFAULT 1,
+    IsFeatured BIT NOT NULL CONSTRAINT DF_JobPostings_Featured DEFAULT 0,
+    ViewCount INT NOT NULL CONSTRAINT DF_JobPostings_Views DEFAULT 0,
+
+    CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_JobPostings_CreatedAt DEFAULT SYSUTCDATETIME(),
+    CreatedBy NVARCHAR(100) NOT NULL CONSTRAINT DF_JobPostings_CreatedBy DEFAULT N'SYSTEM',
+    UpdatedAt DATETIME2 NULL,
+    UpdatedBy NVARCHAR(100) NULL,
+    IsDeleted BIT NOT NULL CONSTRAINT DF_JobPostings_IsDeleted DEFAULT 0,
+
+    CONSTRAINT PK_JobPostings PRIMARY KEY CLUSTERED (Id)
+);
+GO
+
+-- ----------------------------------------------------------------------------------------------------
+-- 15. BẢNG: CandidateApplications (Hồ sơ ứng tuyển & Luồng Onboard Nhân viên Thử việc)
+-- ----------------------------------------------------------------------------------------------------
+PRINT N'==> Tạo bảng [CandidateApplications]...';
+CREATE TABLE dbo.CandidateApplications
+(
+    Id INT IDENTITY(1,1) NOT NULL,
+    JobPostingId INT NOT NULL,
+    FullName NVARCHAR(150) NOT NULL,
+    Email NVARCHAR(150) NOT NULL,
+    PhoneNumber NVARCHAR(50) NOT NULL,
+    CitizenId NVARCHAR(20) NULL,
+    DateOfBirth DATETIME2 NOT NULL,
+    Gender INT NOT NULL CONSTRAINT DF_CandApp_Gender DEFAULT 1,
+    Address NVARCHAR(300) NULL,
+    ResumeFileName NVARCHAR(250) NOT NULL,
+    CoverLetter NVARCHAR(2000) NULL,
+    PortfolioUrl NVARCHAR(300) NULL,
+    Status INT NOT NULL CONSTRAINT DF_CandApp_Status DEFAULT 1,
+    AppliedAt DATETIME2 NOT NULL CONSTRAINT DF_CandApp_AppliedAt DEFAULT SYSUTCDATETIME(),
+    InterviewDate DATETIME2 NULL,
+    InterviewScore DECIMAL(5,2) NULL,
+    EvaluationNotes NVARCHAR(1000) NULL,
+    HiredEmployeeId INT NULL,
+    HiredDate DATETIME2 NULL,
+
+    CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_CandApp_CreatedAt DEFAULT SYSUTCDATETIME(),
+    CreatedBy NVARCHAR(100) NOT NULL CONSTRAINT DF_CandApp_CreatedBy DEFAULT N'SYSTEM',
+    UpdatedAt DATETIME2 NULL,
+    UpdatedBy NVARCHAR(100) NULL,
+    IsDeleted BIT NOT NULL CONSTRAINT DF_CandApp_IsDeleted DEFAULT 0,
+
+    CONSTRAINT PK_CandidateApplications PRIMARY KEY CLUSTERED (Id),
+    CONSTRAINT FK_CandApp_Job FOREIGN KEY (JobPostingId) REFERENCES dbo.JobPostings(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_CandApp_Employee FOREIGN KEY (HiredEmployeeId) REFERENCES dbo.Employees(Id) ON DELETE SET NULL
+);
+GO
+
 -- ====================================================================================================
 -- PHẦN 4: THIẾT LẬP CÁC CHỈ MỤC HIỆU NĂNG CAO (NON-CLUSTERED INDEXES)
 -- ====================================================================================================
@@ -603,6 +774,30 @@ CREATE NONCLUSTERED INDEX IX_AuditLogs_PerformedAt
 
 CREATE NONCLUSTERED INDEX IX_AuditLogs_TableName 
     ON dbo.AuditLogs(TableName, EntityId);
+
+-- 10. Index trên Phụ lục hợp đồng lao động điện tử
+CREATE UNIQUE NONCLUSTERED INDEX IX_ElectronicContractAppendices_AppendixNumber 
+    ON dbo.ElectronicContractAppendices(AppendixNumber) 
+    WHERE IsDeleted = 0;
+
+CREATE NONCLUSTERED INDEX IX_ElectronicContractAppendices_EmployeeId 
+    ON dbo.ElectronicContractAppendices(EmployeeId);
+
+-- 11. Index trên Tin tuyển dụng (Slug và JobCode)
+CREATE UNIQUE NONCLUSTERED INDEX IX_JobPostings_JobCode 
+    ON dbo.JobPostings(JobCode) 
+    WHERE IsDeleted = 0;
+
+CREATE UNIQUE NONCLUSTERED INDEX IX_JobPostings_Slug 
+    ON dbo.JobPostings(Slug) 
+    WHERE IsDeleted = 0;
+
+-- 12. Index trên Hồ sơ ứng tuyển (JobPostingId và Email)
+CREATE NONCLUSTERED INDEX IX_CandidateApplications_JobPostingId 
+    ON dbo.CandidateApplications(JobPostingId);
+
+CREATE NONCLUSTERED INDEX IX_CandidateApplications_Email 
+    ON dbo.CandidateApplications(Email);
 GO
 
 -- ====================================================================================================
@@ -1031,47 +1226,81 @@ VALUES
 );
 
 -- ----------------------------------------------------------------------------------------------------
--- 9. DỮ LIỆU BẢNG LƯƠNG & PHIẾU LƯƠNG CHI TIẾT (PAYSLIPS) KỲ 2025-01
+-- 9. DỮ LIỆU BẢNG LƯƠNG & PHIẾU LƯƠNG CHI TIẾT (PAYSLIPS) KỲ 2025-01 (ĐA HÌNH & LUẬT LAO ĐỘNG VN)
 -- ----------------------------------------------------------------------------------------------------
 -- Phiếu lương Chuyên viên C&B (OfficeEmployee)
 INSERT INTO dbo.PaySlips
 (
-    EmployeeId, PayrollPeriod, StandardWorkDays, ActualWorkDays, BaseSalary, Allowance,
-    OvertimeHours, OvertimePay, KpiBonus, OtherBonuses, GrossSalary,
-    SocialInsuranceDeduction, HealthInsuranceDeduction, UnemploymentInsuranceDeduction,
-    PersonalIncomeTax, TotalDeductions, NetSalary, Status, PaymentDate, TransactionReference, CreatedBy
+    EmployeeId, PayrollPeriod, StandardWorkDays, ActualWorkDays, BaseSalary, Allowance, LunchAllowance,
+    OvertimeHours, OvertimePay, NightShiftHours, NightShiftPay, HazardousAllowance, SalesCommission,
+    KpiBonus, OtherBonuses, GrossSalary, SocialInsuranceDeduction, HealthInsuranceDeduction,
+    UnemploymentInsuranceDeduction, DependentCount, PersonalDeduction, DependentDeduction,
+    TaxableIncome, PersonalIncomeTax, TotalDeductions, NetSalary, Status, PaymentDate, TransactionReference, CreatedBy
 )
 VALUES
 (
-    @EmpOffice2Id, N'2025-01', 22.00, 22.00, 22500000.00, 3500000.00,
-    10.00, 1989000.00, 3307500.00, 500000.00, 31796500.00,
-    1520000.00, 285000.00, 190000.00, 1959000.00, 3954000.00,
-    27842500.00, 4, '2025-02-05 10:30:00', N'VCB-VNM-SAL-202501-0012', N'INIT_SEED'
+    @EmpOffice2Id, N'2025-01', 22.00, 22.00, 22500000.00, 3500000.00, 730000.00,
+    10.00, 1989000.00, 0.00, 0.00, 0.00, 0.00,
+    3307500.00, 500000.00, 32526500.00, 1800000.00, 337500.00,
+    225000.00, 1, 11000000.00, 4400000.00,
+    14764000.00, 1464600.00, 3827100.00, 28699400.00, 4, '2025-02-05 10:30:00', N'VCB-VNM-SAL-202501-0012', N'INIT_SEED'
 ),
--- Phiếu lương Kỹ sư Vận hành Nhà máy Mega (FactoryWorker)
+-- Phiếu lương Kỹ sư Vận hành Nhà máy Mega (FactoryWorker - Ca đêm +30%, Độc hại)
 (
-    @EmpFactory1Id, N'2025-01', 22.00, 22.00, 26000000.00, 4500000.00,
-    16.00, 3886000.00, 3705000.00, 500000.00, 38591000.00,
-    1760000.00, 330000.00, 220000.00, 3144000.00, 5454000.00,
-    33137000.00, 4, '2025-02-05 10:30:00', N'VCB-VNM-SAL-202501-0045', N'INIT_SEED'
+    @EmpFactory1Id, N'2025-01', 22.00, 22.00, 26000000.00, 4500000.00, 730000.00,
+    16.00, 3886000.00, 40.00, 1772727.00, 2500000.00, 0.00,
+    3705000.00, 500000.00, 43593727.00, 2080000.00, 390000.00,
+    260000.00, 2, 11000000.00, 8800000.00,
+    20963727.00, 2242745.00, 4972745.00, 38620982.00, 4, '2025-02-05 10:30:00', N'VCB-VNM-SAL-202501-0045', N'INIT_SEED'
 ),
 -- Phiếu lương Bác sĩ Thú y Trang trại Tây Ninh (FarmSpecialist)
 (
-    @EmpFarm1Id, N'2025-01', 22.00, 22.00, 28000000.00, 4500000.00,
-    12.00, 3345000.00, 4116000.00, 500000.00, 40461000.00,
-    1920000.00, 360000.00, 240000.00, 3518000.00, 6038000.00,
-    34423000.00, 4, '2025-02-05 10:30:00', N'VCB-VNM-SAL-202501-0078', N'INIT_SEED'
+    @EmpFarm1Id, N'2025-01', 22.00, 22.00, 28000000.00, 4500000.00, 730000.00,
+    12.00, 3345000.00, 0.00, 0.00, 0.00, 0.00,
+    4116000.00, 500000.00, 41191000.00, 2240000.00, 420000.00,
+    280000.00, 1, 11000000.00, 4400000.00,
+    22851000.00, 2620200.00, 5560200.00, 35630800.00, 4, '2025-02-05 10:30:00', N'VCB-VNM-SAL-202501-0078', N'INIT_SEED'
 ),
--- Phiếu lương Cửa hàng trưởng Chuỗi Giấc Mơ Sữa Việt (StoreAssociate)
+-- Phiếu lương Cửa hàng trưởng Chuỗi Giấc Mơ Sữa Việt (StoreAssociate - Hoa hồng chuỗi)
 (
-    @EmpStore1Id, N'2025-01', 22.00, 22.00, 17500000.00, 2500000.00,
-    8.00, 1193000.00, 2520000.00, 500000.00, 24213000.00,
-    1200000.00, 225000.00, 150000.00, 874000.00, 2449000.00,
-    21764000.00, 4, '2025-02-05 10:30:00', N'VCB-VNM-SAL-202501-0099', N'INIT_SEED'
+    @EmpStore1Id, N'2025-01', 22.00, 22.00, 17500000.00, 2500000.00, 730000.00,
+    8.00, 1193000.00, 0.00, 0.00, 0.00, 4250000.00,
+    2520000.00, 500000.00, 29193000.00, 1400000.00, 262500.00,
+    175000.00, 1, 11000000.00, 4400000.00,
+    11955500.00, 1043325.00, 2880825.00, 26312175.00, 4, '2025-02-05 10:30:00', N'VCB-VNM-SAL-202501-0099', N'INIT_SEED'
 );
 
 -- ----------------------------------------------------------------------------------------------------
--- 10. DỮ LIỆU TÀI SẢN & THIẾT BỊ CẤP PHÁT (COMPANY ASSETS)
+-- 10. DỮ LIỆU PHỤ LỤC HỢP ĐỒNG ĐIỆN TỬ (ELECTRONIC CONTRACT APPENDICES - CEO OVERRIDE & REGULAR)
+-- ----------------------------------------------------------------------------------------------------
+DECLARE @ContractOffice2Id INT;
+SELECT TOP 1 @ContractOffice2Id = Id FROM dbo.LaborContracts WHERE EmployeeId = @EmpOffice2Id;
+
+DECLARE @ContractFactory1Id INT;
+SELECT TOP 1 @ContractFactory1Id = Id FROM dbo.LaborContracts WHERE EmployeeId = @EmpFactory1Id;
+
+INSERT INTO dbo.ElectronicContractAppendices
+(
+    AppendixNumber, LaborContractId, EmployeeId, EffectiveDate, SignDate,
+    PreviousSalary, NewSalary, PreviousAllowance, NewAllowance, AdjustmentReason,
+    IsCeoOverride, CeoOverrideCode, DigitalSignatureHash, SignerName, SignerTitle, IsSigned, CreatedBy
+)
+VALUES
+(
+    N'PLHD-2025-VNM-001', @ContractOffice2Id, @EmpOffice2Id, '2025-01-01', '2024-12-28',
+    20000000.00, 22500000.00, 3000000.00, 3500000.00,
+    N'Nâng bậc lương định kỳ Khối Văn phòng theo thẩm định C&B và phê duyệt Hội đồng Nhân sự',
+    0, NULL, N'SHA256-VNM-PLHD-2025-001-9F83A20B71E4C118B8A992', N'Bùi Thị Hương', N'Giám Đốc Nhân Sự (HRD) - Vinamilk', 1, N'INIT_SEED'
+),
+(
+    N'PLHD-2025-FAST-001', @ContractFactory1Id, @EmpFactory1Id, '2025-01-01', '2024-12-30',
+    26000000.00, 30000000.00, 4500000.00, 5000000.00,
+    N'Tổng Giám Đốc ĐẶC CÁCH tăng lương vượt khung: Sáng kiến tiết kiệm năng lượng 15 tỷ VNĐ tại Mega Factory',
+    1, N'CEO-OVERRIDE-2025-VNM-001', N'SHA256-CEO-VNM-MKLIEN-8899A1C2E4F0B71190284AA9234BCDEF', N'Mai Kiều Liên', N'Tổng Giám Đốc (CEO) - Vinamilk', 1, N'CEO_OVERRIDE'
+);
+
+-- ----------------------------------------------------------------------------------------------------
+-- 11. DỮ LIỆU TÀI SẢN & THIẾT BỊ CẤP PHÁT (COMPANY ASSETS)
 -- ----------------------------------------------------------------------------------------------------
 INSERT INTO dbo.CompanyAssets
 (
@@ -1098,10 +1327,89 @@ VALUES
     N'AST-POS-004', N'Hệ thống Máy POS Bán hàng Cảm ứng Sunmi T2 Pro', N'Thiết bị Bán lẻ',
     N'SN-POS-SUNMI-991', @EmpStore1Id, '2023-08-01', 18900000.00, 2,
     N'Máy tính tiền và in hóa đơn cửa hàng Giấc Mơ Sữa Việt', N'INIT_SEED'
+-- ----------------------------------------------------------------------------------------------------
+-- 13. DỮ LIỆU TIN TUYỂN DỤNG CÔNG KHAI (JOB POSTINGS - CỔNG CAREERS VINAMILK)
+-- ----------------------------------------------------------------------------------------------------
+INSERT INTO dbo.JobPostings
+(
+    JobCode, Title, Slug, UnitType, Department, WorkLocation, City, RegionId,
+    EmploymentType, ExperienceLevel, EducationRequirement, SalaryMin, SalaryMax, SalaryDisplay,
+    DatePosted, ValidThrough, Description, Requirements, Benefits, IsActive, IsFeatured, ViewCount, CreatedBy
+)
+VALUES
+(
+    N'JOB-VNM-FAC-01', N'Kỹ sư Vận hành Dây chuyền Tetra Pak Mega Factory',
+    N'ky-su-van-hanh-day-chuyen-tetra-pak-mega-factory', 2, N'Khối Sản xuất & Kỹ thuật Nhà máy',
+    N'Khu công nghiệp Mỹ Phước 2, Thị xã Bến Cát', N'Bình Dương', 3,
+    N'FULL_TIME', N'2 - 5 năm kinh nghiệm', N'Đại học chuyên ngành Cơ điện tử / Tự động hóa',
+    22000000.00, 30000000.00, N'22,000,000 - 30,000,000 VNĐ',
+    '2025-01-05', '2025-03-31',
+    N'Vận hành dây chuyền chiết rót tiệt trùng tốc độ cao Tetra Pak A3/Speed. Giám sát các thông số kỹ thuật SCADA/PLC, thực hiện bảo trì ngăn ngừa và khắc phục sự cố vi mô. Đảm bảo năng suất OEE đạt trên 95% và tuân thủ tuyệt đối quy định an toàn vệ sinh thực phẩm FSSC 22000.',
+    N'- Tốt nghiệp Đại học chuyên ngành Cơ khí, Tự động hóa, Cơ điện tử.\n- Tối thiểu 2 năm kinh nghiệm vận hành dây chuyền tự động hóa thực phẩm, đồ uống.\n- Có thể làm việc theo ca (gồm ca 3 có phụ cấp đêm 30%).\n- Tinh thần trách nhiệm cao, tỉ mỉ và tuân thủ quy trình 5S.',
+    N'- Thu nhập cạnh tranh hàng đầu ngành FMCG: Lương cơ bản + Phụ cấp ca đêm 30% + Thưởng hiệu suất OEE.\n- Phụ cấp độc hại công nghiệp và bữa ăn ca dinh dưỡng tiệt trùng Vinamilk.\n- Thưởng tháng 13, thưởng hiệu quả kinh doanh cuối năm từ 2-4 tháng lương.\n- Bảo hiểm sức khỏe Vinamilk Care VIP toàn diện cho bản thân và gia đình.',
+    1, 1, 342, N'INIT_SEED'
+),
+(
+    N'JOB-VNM-RET-01', N'Cửa hàng trưởng Chuỗi Cửa hàng Giấc Mơ Sữa Việt Lê Duẩn',
+    N'cua-hang-truong-chuoi-cua-hang-giac-mo-sua-viet-le-duan', 4, N'Khối Kinh doanh & Chuỗi Bán lẻ',
+    N'120 Nguyễn Đình Chiểu, Phường Đa Kao, Quận 1', N'Hồ Chí Minh', 3,
+    N'FULL_TIME', N'1 - 3 năm kinh nghiệm', N'Cao đẳng / Đại học Quản trị kinh doanh, Bán lẻ',
+    16000000.00, 24000000.00, N'16,000,000 - 24,000,000 VNĐ + Doanh số',
+    '2025-01-10', '2025-04-15',
+    N'Quản lý toàn diện hoạt động kinh doanh tại cửa hàng Giấc Mơ Sữa Việt. Điều phối nhân viên bán hàng, kiểm soát tồn kho kho lạnh, tư vấn chuyên sâu các dòng sữa tươi dinh dưỡng cao cấp, phát triển doanh thu và duy trì điểm hài lòng khách hàng CSAT trên 4.9 sao.',
+    N'- Tốt nghiệp Cao đẳng trở lên chuyên ngành Kinh tế, Thương mại, QTKD.\n- Có kinh nghiệm làm Quản lý / Trưởng ca chuỗi bán lẻ, siêu thị tiện lợi, F&B.\n- Kỹ năng giao tiếp đàm phán xuất sắc, kỹ năng quản lý đội nhóm.\n- Trung thực, yêu thích ngành hàng tiêu dùng nhanh (FMCG).',
+    N'- Lương cơ bản + Thưởng hoa hồng chuỗi bán lẻ không giới hạn theo doanh thu.\n- Cơ hội thăng tiến lên Quản lý khu vực (Area Sales Manager) sau 12 tháng.\n- Trang bị đồng phục thiết kế thương hiệu mới Vinamilk cao cấp.\n- Hưởng đầy đủ chế độ BHXH, BHYT, BHTN và quà tặng sản phẩm sữa Vinamilk các dịp lễ.',
+    1, 1, 218, N'INIT_SEED'
+),
+(
+    N'JOB-VNM-FARM-01', N'Bác sĩ Thú y Lâm sàng & Kiểm soát Dịch tễ Bò sữa Organic',
+    N'bac-si-thu-y-lam-sang-kiem-soat-dich-te-bo-sua-organic', 3, N'Khối Trang trại & Nông nghiệp Công nghệ cao',
+    N'Trang trại Vinamilk Eco Farm, Thị trấn Bến Cầu', N'Tây Ninh', 3,
+    N'FULL_TIME', N'2 - 4 năm kinh nghiệm', N'Bác sĩ Thú y / Chăn nuôi Thú y',
+    25000000.00, 35000000.00, N'25,000,000 - 35,000,000 VNĐ',
+    '2025-01-12', '2025-03-31',
+    N'Chăm sóc sức khỏe, phòng ngừa dịch tễ và đỡ đẻ cho đàn bò thuần chủng HF và bò A2 Organic nhập khẩu. Ứng dụng phần mềm quản lý đàn bò SCR Heatime (Israel) để theo dõi thân nhiệt, sức nhai lại và thể trạng đàn bò công nghệ 4.0.',
+    N'- Tốt nghiệp Đại học chuyên ngành Thú y, Bác sĩ Thú y.\n- Có chứng chỉ hành nghề thú y hợp lệ.\n- Kinh nghiệm điều trị lâm sàng gia súc lớn (ưu tiên bò sữa).\n- Sẵn sàng lưu trú tại khu chuyên gia của Trang trại Sinh thái Tây Ninh.',
+    N'- Mức lương và phụ cấp thú y chuyên biệt hấp dẫn.\n- Cấp phòng nghỉ tiện nghi chuẩn resort tại khuôn viên trang trại Eco Farm.\n- Hỗ trợ chi phí đi lại TP.HCM - Tây Ninh hàng tuần.\n- Được đào tạo chuyên sâu bởi các chuyên gia chăn nuôi bò sữa hàng đầu từ Thụy Điển và Israel.',
+    1, 0, 156, N'INIT_SEED'
+);
+
+DECLARE @JobFacId INT;
+SELECT TOP 1 @JobFacId = Id FROM dbo.JobPostings WHERE JobCode = N'JOB-VNM-FAC-01';
+
+DECLARE @JobRetId INT;
+SELECT TOP 1 @JobRetId = Id FROM dbo.JobPostings WHERE JobCode = N'JOB-VNM-RET-01';
+
+-- ----------------------------------------------------------------------------------------------------
+-- 14. DỮ LIỆU HỒ SƠ ỨNG TUYỂN CỦA ỨNG VIÊN (CANDIDATE APPLICATIONS)
+-- ----------------------------------------------------------------------------------------------------
+INSERT INTO dbo.CandidateApplications
+(
+    JobPostingId, FullName, Email, PhoneNumber, CitizenId, DateOfBirth, Gender, Address,
+    ResumeFileName, CoverLetter, PortfolioUrl, Status, AppliedAt, InterviewDate, InterviewScore, EvaluationNotes, CreatedBy
+)
+VALUES
+(
+    @JobFacId, N'Hoàng Minh Đức', N'hoangminhduc@gmail.com', N'0903889922', N'079196001245',
+    '1996-08-14', 1, N'Số 88 Đại lộ Bình Dương, Phường Phú Hòa, TP. Thủ Dầu Một, Tỉnh Bình Dương',
+    N'CV_HoangMinhDuc_AutomationEngineer.pdf',
+    N'Tôi có 4 năm kinh nghiệm vận hành dây chuyền chiết rót tốc độ cao tại công ty đồ uống quốc tế, am hiểu sâu về hệ thống PLC Siemens và tiêu chuẩn FSSC 22000. Rất mong muốn được cống hiến cho Vinamilk.',
+    N'https://linkedin.com/in/hoangminhduc-automation', 4, DATEADD(DAY, -7, SYSUTCDATETIME()),
+    DATEADD(DAY, -3, SYSUTCDATETIME()), 92.50,
+    N'Ứng viên xuất sắc: Vượt qua bài kiểm tra kỹ thuật điều khiển tự động hóa 9.5/10. Tác phong công nghiệp tốt, sẵn sàng nhận việc ngay.', N'CAREERS_PORTAL'
+),
+(
+    @JobRetId, N'Lê Thu Thảo', N'lethuthao.retail@gmail.com', N'0918776655', N'079201004567',
+    '2000-11-20', 2, N'45 Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP.HCM',
+    N'CV_LeThuThao_StoreManager.pdf',
+    N'Với kinh nghiệm 2 năm làm Trưởng ca tại chuỗi tiện lợi FamilyMart, tôi tự tin sẽ quản lý tốt doanh số và trải nghiệm dịch vụ khách hàng tại cửa hàng Giấc Mơ Sữa Việt.',
+    NULL, 3, DATEADD(DAY, -4, SYSUTCDATETIME()),
+    DATEADD(DAY, -1, SYSUTCDATETIME()), 88.00,
+    N'Giao tiếp hoạt ngôn, xử lý tình huống khiếu nại khách hàng khéo léo. Đang chờ phê duyệt thư mời nhận việc.', N'CAREERS_PORTAL'
 );
 
 -- ----------------------------------------------------------------------------------------------------
--- 11. DỮ LIỆU NHẬT KÝ KIỂM TOÁN (AUDIT LOGS)
+-- 15. DỮ LIỆU NHẬT KÝ KIỂM TOÁN (AUDIT LOGS - BẢO MẬT & CEO FAST-TRACK OVERRIDE)
 -- ----------------------------------------------------------------------------------------------------
 INSERT INTO dbo.AuditLogs
 (
@@ -1110,7 +1418,7 @@ INSERT INTO dbo.AuditLogs
 VALUES
 (
     N'Database', N'INITIALIZE', N'VinamilkHRMDb', NULL,
-    N'{"Status":"Success","SchemaVersion":"1.0.0","Modules":["OrgUnits","Employees","Contracts","Shifts","Attendances","KPIs","PaySlips","Assets"]}',
+    N'{"Status":"Success","SchemaVersion":"1.0.0","Modules":["OrgUnits","Employees","Contracts","Shifts","Attendances","KPIs","PaySlips","Assets","Appendices","JobPostings","Applications"]}',
     N'PrincipalSoftwareArchitect', SYSUTCDATETIME(), N'127.0.0.1'
 ),
 (
@@ -1120,9 +1428,15 @@ VALUES
     N'hungnv@vinamilk.com.vn', DATEADD(DAY, -10, SYSUTCDATETIME()), N'10.20.16.45'
 ),
 (
+    N'Employees', N'CEO_FAST_TRACK_SALARY_OVERRIDE', CAST(@EmpFactory1Id AS NVARCHAR(50)),
+    N'{"BaseSalary":26000000,"Allowance":4500000}',
+    N'{"BaseSalary":30000000,"Allowance":5000000,"Reason":"Đặc cách vượt khung của CEO Mai Kiều Liên","OverrideCode":"CEO-OVERRIDE-2025-VNM-001","AppendixNumber":"PLHD-2025-FAST-001"}',
+    N'lienmk@vinamilk.com.vn', DATEADD(DAY, -5, SYSUTCDATETIME()), N'10.20.1.1'
+),
+(
     N'PaySlips', N'APPROVE_PAYROLL', N'2025-01',
     N'{"Status":"PendingApproval"}',
-    N'{"Status":"Approved","TotalEmployees":4,"TotalNetSalary":117166500}',
+    N'{"Status":"Approved","TotalEmployees":4,"TotalNetSalary":129263357}',
     N'hungnv@vinamilk.com.vn', DATEADD(DAY, -2, SYSUTCDATETIME()), N'10.20.16.45'
 );
 
@@ -1148,6 +1462,9 @@ SELECT 'LeaveRequests', COUNT(*) FROM dbo.LeaveRequests UNION ALL
 SELECT 'KpiAssignments', COUNT(*) FROM dbo.KpiAssignments UNION ALL
 SELECT 'SalaryProposals', COUNT(*) FROM dbo.SalaryProposals UNION ALL
 SELECT 'PaySlips', COUNT(*) FROM dbo.PaySlips UNION ALL
+SELECT 'ElectronicContractAppendices', COUNT(*) FROM dbo.ElectronicContractAppendices UNION ALL
+SELECT 'JobPostings', COUNT(*) FROM dbo.JobPostings UNION ALL
+SELECT 'CandidateApplications', COUNT(*) FROM dbo.CandidateApplications UNION ALL
 SELECT 'CompanyAssets', COUNT(*) FROM dbo.CompanyAssets UNION ALL
 SELECT 'AuditLogs', COUNT(*) FROM dbo.AuditLogs;
 

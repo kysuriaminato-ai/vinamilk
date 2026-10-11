@@ -12,6 +12,9 @@ public static class DependencyInjection
         services.AddScoped<IPayrollService, PayrollService>();
         services.AddScoped<IShiftAssignmentService, ShiftAssignmentService>();
         services.AddScoped<IKpiService, KpiService>();
+        services.AddScoped<ISalaryAdjustmentService, SalaryAdjustmentService>();
+        services.AddScoped<ICareersService, CareersService>();
+        services.AddScoped<IStrategicDashboardService, StrategicDashboardService>();
 
         return services;
     }

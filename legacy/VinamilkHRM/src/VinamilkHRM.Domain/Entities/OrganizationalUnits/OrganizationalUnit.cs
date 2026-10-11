@@ -17,6 +17,8 @@ public abstract class OrganizationalUnit : BaseAuditableEntity
     public string PhoneNumber { get; protected set; } = string.Empty;
     public string Email { get; protected set; } = string.Empty;
     public string TaxCode { get; protected set; } = string.Empty;
+    public int RegionId { get; protected set; } = 3; // 1: Miền Bắc, 2: Miền Trung, 3: Miền Nam
+    public string RegionName { get; protected set; } = "Miền Nam";
 
     public int? ParentUnitId { get; protected set; }
     public virtual OrganizationalUnit? ParentUnit { get; protected set; }
@@ -42,7 +44,9 @@ public abstract class OrganizationalUnit : BaseAuditableEntity
         string phoneNumber,
         string email,
         string taxCode,
-        int? parentUnitId = null)
+        int? parentUnitId = null,
+        int regionId = 3,
+        string regionName = "Miền Nam")
     {
         if (string.IsNullOrWhiteSpace(unitCode))
             throw new DomainException("Mã đơn vị tổ chức không được để trống.", "ERR_UNIT_CODE_EMPTY");
@@ -58,6 +62,17 @@ public abstract class OrganizationalUnit : BaseAuditableEntity
         Email = email?.Trim() ?? string.Empty;
         TaxCode = taxCode?.Trim() ?? string.Empty;
         ParentUnitId = parentUnitId;
+        RegionId = regionId > 0 ? regionId : 3;
+        RegionName = string.IsNullOrWhiteSpace(regionName) ? "Miền Nam" : regionName.Trim();
+    }
+
+    public void SetRegion(int regionId, string regionName)
+    {
+        if (regionId <= 0)
+            throw new DomainException("Mã phân vùng địa lý không hợp lệ.", "ERR_REGION_INVALID");
+
+        RegionId = regionId;
+        RegionName = string.IsNullOrWhiteSpace(regionName) ? "Miền Nam" : regionName.Trim();
     }
 
     public void UpdateGeneralInfo(string unitName, string address, string phoneNumber, string email, string taxCode)

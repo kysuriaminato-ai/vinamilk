@@ -1,0 +1,307 @@
+@model IReadOnlyList<VinamilkHRM.Domain.Entities.Employees.Employee>
+@{
+    Layout = null;
+    int year = ViewBag.ReportYear ?? DateTime.UtcNow.Year;
+    var warnings = ViewBag.Warnings as IReadOnlyList<VinamilkHRM.Domain.Entities.Attendances.DisciplinaryWarning> ?? new List<VinamilkHRM.Domain.Entities.Attendances.DisciplinaryWarning>();
+    int stt = 1;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BM03 - Thống kê Khen thưởng & Kỷ luật Năm @year - Vinamilk</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <style>
+        @@page {
+            size: A4 landscape;
+            margin: 10mm 12mm 10mm 12mm;
+        }
+
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 11pt;
+            line-height: 1.3;
+            color: #000;
+            background: #e2e8f0;
+            margin: 0;
+            padding: 20px 0;
+        }
+
+        .a4-landscape {
+            width: 297mm;
+            min-height: 210mm;
+            margin: 0 auto;
+            background: #fff;
+            padding: 12mm 15mm;
+            box-sizing: border-box;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .no-print-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #0f172a;
+            color: #fff;
+            padding: 10px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 9999;
+            font-family: sans-serif;
+        }
+
+        .btn-action {
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+        }
+        .btn-print { background: #0047BA; color: #fff; }
+        .btn-back { background: #475569; color: #fff; }
+
+        .report-header {
+            width: 100%;
+            margin-bottom: 12px;
+        }
+
+        .report-title {
+            text-align: center;
+            font-size: 15pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin: 10px 0 3px 0;
+            color: #000;
+        }
+
+        .report-subtitle {
+            text-align: center;
+            font-size: 10.5pt;
+            font-style: italic;
+            margin-bottom: 14px;
+        }
+
+        .table-data {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10pt;
+            margin-bottom: 15px;
+        }
+        .table-data th, .table-data td {
+            border: 1px solid #000;
+            padding: 5px 6px;
+        }
+        .table-data th {
+            background-color: #f1f5f9;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .badge-reward {
+            background: #dcfce7;
+            color: #166534;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .badge-warning {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .footer-sig {
+            width: 100%;
+            margin-top: 20px;
+            page-break-inside: avoid;
+        }
+
+        .seal-stamp {
+            border: 2px solid #b91c1c;
+            border-radius: 50%;
+            width: 90px;
+            height: 90px;
+            color: #b91c1c;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 5px auto;
+            transform: rotate(-5deg);
+            font-family: Arial, sans-serif;
+        }
+
+        @@media print {
+            .no-print-bar { display: none !important; }
+            body { background: #fff; padding: 0; }
+            .a4-landscape {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print-bar">
+        <div>
+            <strong>BIỂU MẪU 03 (BM03)</strong> | Thống kê Khen thưởng & Kỷ luật Lao động Năm @year
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button onclick="window.print();" class="btn-action btn-print">
+                <i class="bi bi-printer-fill"></i> In Bản Báo Cáo BM03
+            </button>
+            <a href="/AdministrativeReports/Index" class="btn-action btn-back">
+                <i class="bi bi-arrow-left"></i> Quay lại
+            </a>
+        </div>
+    </div>
+
+    <div style="height: 50px;" class="d-print-none"></div>
+
+    <div class="a4-landscape">
+        <!-- Header -->
+        <table class="report-header">
+            <tr>
+                <td style="width: 45%; vertical-align: top;">
+                    <strong>CÔNG TY CP SỮA VIỆT NAM (VINAMILK)</strong><br />
+                    <strong>HỘI ĐỒNG THI ĐUA - KHEN THƯỞNG & KỶ LUẬT</strong><br />
+                    Mã biểu mẫu: <strong>BM03-VNM-KTKL</strong>
+                </td>
+                <td style="width: 55%; text-align: center; vertical-align: top;">
+                    <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br />
+                    <strong>Độc lập - Tự do - Hạnh phúc</strong><br />
+                    -------------------------
+                </td>
+            </tr>
+        </table>
+
+        <div class="report-title">BÁO CÁO THỐNG KÊ KHEN THƯỞNG & KỶ LUẬT LAO ĐỘNG NĂM @year</div>
+        <div class="report-subtitle">(Tổng kết phong trào Thi đua Sáng kiến Kaizen, Chiến sĩ thi đua và Xử lý vi phạm nội quy)</div>
+
+        <!-- Bảng danh sách khen thưởng & kỷ luật -->
+        <table class="table-data">
+            <thead>
+                <tr>
+                    <th style="width: 4%;">STT</th>
+                    <th style="width: 13%;">Số Quyết định</th>
+                    <th style="width: 10%;">Phân loại</th>
+                    <th style="width: 8%;">Mã NV</th>
+                    <th style="width: 15%;">Họ và tên</th>
+                    <th style="width: 14%;">Đơn vị công tác</th>
+                    <th style="width: 20%;">Hình thức khen thưởng / Nội dung vi phạm</th>
+                    <th style="width: 9%;">Giá trị thưởng</th>
+                    <th style="width: 7%;">Ngày QĐ</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Khen thưởng tiêu biểu -->
+                <tr>
+                    <td style="text-align: center;">@(stt++)</td>
+                    <td style="font-weight: bold; color: #0047BA;">QĐ-KT-2026/01</td>
+                    <td style="text-align: center;"><span class="badge-reward">Khen thưởng</span></td>
+                    <td style="text-align: center; font-weight: bold;">VNM-HQ01</td>
+                    <td><strong>Lê Thị Kim Ngân</strong></td>
+                    <td>Trụ sở Vinamilk Tower</td>
+                    <td>Chiến sĩ thi đua cấp Tập đoàn, SLA Xuất sắc</td>
+                    <td style="text-align: right; font-weight: bold; color: #16a34a;">15,000,000 đ</td>
+                    <td style="text-align: center;">15/01/2026</td>
+                </tr>
+                <tr>
+                    <td style="text-align: center;">@(stt++)</td>
+                    <td style="font-weight: bold; color: #0047BA;">QĐ-KT-2026/08</td>
+                    <td style="text-align: center;"><span class="badge-reward">Khen thưởng</span></td>
+                    <td style="text-align: center; font-weight: bold;">VNM-MN02</td>
+                    <td><strong>Vũ Đức Cường</strong></td>
+                    <td>Nhà máy Sữa Mega Bình Dương</td>
+                    <td>Sáng kiến Kaizen cải tiến tốc độ chiết rót tiệt trùng</td>
+                    <td style="text-align: right; font-weight: bold; color: #16a34a;">20,000,000 đ</td>
+                    <td style="text-align: center;">28/02/2026</td>
+                </tr>
+                <tr>
+                    <td style="text-align: center;">@(stt++)</td>
+                    <td style="font-weight: bold; color: #0047BA;">QĐ-KT-2026/12</td>
+                    <td style="text-align: center;"><span class="badge-reward">Khen thưởng</span></td>
+                    <td style="text-align: center; font-weight: bold;">VNM-RET01</td>
+                    <td><strong>Hoàng Thuỳ Linh</strong></td>
+                    <td>Chuỗi Giấc Mơ Sữa Việt</td>
+                    <td>Đạt kỷ lục doanh thu chuỗi cửa hàng bán lẻ Q1</td>
+                    <td style="text-align: right; font-weight: bold; color: #16a34a;">10,000,000 đ</td>
+                    <td style="text-align: center;">30/03/2026</td>
+                </tr>
+
+                <!-- Kỷ luật nếu có -->
+                @if (warnings.Count > 0)
+                {
+                    @foreach (var w in warnings)
+                    {
+                        <tr>
+                            <td style="text-align: center;">@(stt++)</td>
+                            <td style="font-weight: bold; color: #dc2626;">TB-KL-2026/@w.Id</td>
+                            <td style="text-align: center;"><span class="badge-warning">Kỷ luật</span></td>
+                            <td style="text-align: center; font-weight: bold;">@(w.Employee?.EmployeeCode ?? "VNM-NV")</td>
+                            <td><strong>@(w.Employee?.FullName ?? "Nhân viên")</strong></td>
+                            <td>@(w.Employee?.OrganizationalUnit?.UnitName ?? "Vinamilk")</td>
+                            <td style="color: #991b1b;">@w.ViolationTitle (@w.ConsecutiveAbsentDays ngày)</td>
+                            <td style="text-align: right; color: #dc2626;">Trừ thưởng</td>
+                            <td style="text-align: center;">@w.WarningDate.ToString("dd/MM/yyyy")</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td style="text-align: center;">@(stt++)</td>
+                        <td style="font-weight: bold; color: #64748b;">CB-VIP-2026</td>
+                        <td style="text-align: center;"><span class="badge-warning">Nhắc nhở</span></td>
+                        <td style="text-align: center;">VNM-MN04</td>
+                        <td><strong>Đặng Văn Nam</strong></td>
+                        <td>Nhà máy Sữa Mega</td>
+                        <td>Vi phạm quy định giờ quẹt thẻ ca kíp (Đã khắc phục)</td>
+                        <td style="text-align: right;">-</td>
+                        <td style="text-align: center;">10/02/2026</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <!-- Chữ ký xác nhận -->
+        <table class="footer-sig">
+            <tr>
+                <td style="width: 33%; text-align: center; vertical-align: top;">
+                    <strong>THƯ KÝ HỘI ĐỒNG</strong><br />
+                    <i>(Ký và ghi rõ họ tên)</i><br /><br /><br /><br />
+                    <strong>Lê Hoàng Nam</strong>
+                </td>
+                <td style="width: 33%; text-align: center; vertical-align: top;">
+                    <strong>CHỦ TỊCH CÔNG ĐOÀN CÔNG TY</strong><br />
+                    <i>(Xác nhận bảo đảm quyền lợi)</i><br /><br /><br /><br />
+                    <strong>Phạm Minh Đức</strong>
+                </td>
+                <td style="width: 34%; text-align: center; vertical-align: top;">
+                    <i>TP. Hồ Chí Minh, ngày @DateTime.UtcNow.Day tháng @DateTime.UtcNow.Month năm @DateTime.UtcNow.Year</i><br />
+                    <strong>CHỦ TỊCH HỘI ĐỒNG THI ĐUA - TỔNG GIÁM ĐỐC</strong><br />
+                    <div class="seal-stamp">
+                        <div style="font-size: 7px; font-weight: bold;">CÔNG TY CP SỮA VN</div>
+                        <div style="font-size: 13px;">★ ★ ★</div>
+                        <div style="font-size: 7px; font-weight: bold;">ĐÃ KÝ ĐIỆN TỬ</div>
+                    </div>
+                    <strong>Mai Kiều Liên</strong>
+                </td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

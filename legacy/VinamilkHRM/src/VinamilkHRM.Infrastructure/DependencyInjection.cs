@@ -38,8 +38,15 @@ public static class DependencyInjection
         services.AddScoped<IKpiAssignmentRepository, KpiAssignmentRepository>();
 
         // Đăng ký Services Polymorphic
+        services.AddScoped<VinamilkHRM.Infrastructure.Services.Printing.OfficePayslipPrinter>();
+        services.AddScoped<VinamilkHRM.Infrastructure.Services.Printing.FactoryPayslipPrinter>();
+        services.AddScoped<VinamilkHRM.Infrastructure.Services.Printing.RetailStorePayslipPrinter>();
+        services.AddScoped<IPayslipPrinterFactory, VinamilkHRM.Infrastructure.Services.Printing.PayslipPrinterFactory>();
         services.AddScoped<IPayslipPrinter, PayslipPrinter>();
         services.AddScoped<IReportExporter, ReportExporter>();
+
+        // Đăng ký Quản lý Phân vùng Đa điểm (Regional Scoping & Multi-Unit)
+        services.AddScoped<VinamilkHRM.Domain.Interfaces.IRegionScopeService, VinamilkHRM.Infrastructure.Services.RegionScopeService>();
 
         return services;
     }

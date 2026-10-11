@@ -17,6 +17,7 @@ public interface IApplicationDbContext
     DbSet<OrganizationalUnit> OrganizationalUnits { get; }
     DbSet<Employee> Employees { get; }
     DbSet<LaborContract> LaborContracts { get; }
+    DbSet<ElectronicContractAppendix> ElectronicContractAppendices { get; }
     DbSet<Shift> Shifts { get; }
     DbSet<Attendance> Attendances { get; }
     DbSet<LeaveRequest> LeaveRequests { get; }
@@ -26,6 +27,8 @@ public interface IApplicationDbContext
     DbSet<CompanyAsset> CompanyAssets { get; }
     DbSet<AuditLog> AuditLogs { get; }
     DbSet<DisciplinaryWarning> DisciplinaryWarnings { get; }
+    DbSet<VinamilkHRM.Domain.Entities.Careers.JobPosting> JobPostings { get; }
+    DbSet<VinamilkHRM.Domain.Entities.Careers.CandidateApplication> CandidateApplications { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

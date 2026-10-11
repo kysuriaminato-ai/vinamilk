@@ -9,6 +9,7 @@ public interface IEmployeeService
     Task<EmployeeDto?> GetEmployeeByCodeAsync(string code, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<EmployeeDto>> GetAllEmployeesAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<EmployeeDto>> GetEmployeesByUnitAsync(int unitId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<VinamilkHRM.Application.DTOs.OrganizationalUnits.OrganizationalUnitDto>> GetAllUnitsAsync(CancellationToken cancellationToken = default);
     Task<decimal> CalculateOvertimePayAsync(int employeeId, decimal hours, bool isHoliday, CancellationToken cancellationToken = default);
     Task PromoteSalaryAsync(int employeeId, decimal newBaseSalary, decimal newAllowance, string reason, CancellationToken cancellationToken = default);
 }

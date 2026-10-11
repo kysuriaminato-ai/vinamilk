@@ -104,4 +104,23 @@ public class SalaryProposal : BaseAuditableEntity
         FinalDecisionDate = DateTime.UtcNow;
         Status = SalaryProposalStatus.Rejected;
     }
+
+    /// <summary>
+    /// Giám đốc ĐẶC CÁCH tăng lương (CEO Fast-Track Executive Override).
+    /// Bỏ qua toàn bộ quy trình thẩm định đa cấp, phê duyệt trực tiếp ngay lập tức.
+    /// </summary>
+    public void FastTrackCeoOverride(int ceoId, string justification, string? overrideCode = null)
+    {
+        if (Status == SalaryProposalStatus.Approved)
+            throw new DomainException("Đề xuất tăng lương này đã được phê duyệt trước đó.", "ERR_SAL_ALREADY_APPROVED");
+
+        if (string.IsNullOrWhiteSpace(justification))
+            throw new DomainException("Quyết định đặc cách của Tổng Giám đốc phải nêu rõ căn cứ và lý do.", "ERR_SAL_CEO_JUSTIFICATION_EMPTY");
+
+        string code = string.IsNullOrWhiteSpace(overrideCode) ? $"CEO-DECISION-{DateTime.UtcNow:yyyyMMdd-HHmm}" : overrideCode.Trim();
+        HRDirectorApprovedById = ceoId;
+        HRDirectorNotes = $"[CEO FAST-TRACK OVERRIDE - Mã QĐ: {code}] {justification.Trim()}";
+        FinalDecisionDate = DateTime.UtcNow;
+        Status = SalaryProposalStatus.Approved;
+    }
 }

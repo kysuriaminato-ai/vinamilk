@@ -9,5 +9,6 @@ public interface IPayrollService
     Task<PaySlipDto> GenerateMonthlyPayslipAsync(int employeeId, string period, CancellationToken cancellationToken = default);
     Task ApprovePaySlipAsync(int payslipId, CancellationToken cancellationToken = default);
     Task MarkPaySlipAsPaidAsync(int payslipId, string transactionReference, CancellationToken cancellationToken = default);
+    Task<string> GetPayslipHtmlPreviewAsync(int payslipId, CancellationToken cancellationToken = default);
     Task<byte[]> ExportPayrollPdfAsync(int payslipId, CancellationToken cancellationToken = default);
 }
