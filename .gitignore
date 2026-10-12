@@ -1,5 +1,5 @@
 # =====================================================================
-# VINAMILK HRM - ENTERPRISE .GITIGNORE
+# VINAMILK HRIS - ENTERPRISE .GITIGNORE
 # =====================================================================
 
 # 1. Environment and Secrets
@@ -14,49 +14,53 @@ cookies.txt
 *.cert
 *.pfx
 
-# 2. Dependencies & Package Managers
+# 2. Dependencies & Uploads
 vendor/
 /vendor/
+uploads/
+/uploads/
+**/uploads/
 node_modules/
 /node_modules/
 npm-debug.log
 yarn-error.log
-phpunit.phar
-composer.phar
 
-# 3. Uploads & Temporary Media
-uploads/
-/uploads/
-public/uploads/
-/public/uploads/
-
-# 4. Binary & Build Outputs (.NET / C# / Executables)
+# 3. .NET / C# Build Outputs
 **/bin
-**/bin/**
-**/obj
-**/obj/**
+**/bin/
 bin/
+**/obj
+**/obj/
 obj/
-*.exe
 *.dll
 *.pdb
+*.exe
 .vs/
 
-# 5. Storage & Logs
+# 4. Storage & Logs & Cache
+.phpunit.cache/
+/.phpunit.cache/
 /storage/*.key
+/storage/app/private/
+/storage/app/public/
+/storage/framework/cache/*
+!/storage/framework/cache/.gitignore
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
 /storage/logs/*
 !/storage/logs/.gitignore
-logs/
 *.log
 
-# 6. Database Dumps & Backups
+# 5. Database Dumps & Backups
 *.dump
 *.tar.gz
 *.zip
 /backup/
 /backups/
 
-# 7. IDE & OS Metadata
+# 6. IDE & OS Metadata
 .idea/
 .vscode/
 *.suo
@@ -65,3 +69,10 @@ logs/
 *.sln.docstates
 .DS_Store
 Thumbs.db
+
+# 7. Archived legacy components (Available in 'archive' branch)
+VinamilkHRM/
+legacy/VinamilkHRM/
+index.html
+js/
+legacy/js/
