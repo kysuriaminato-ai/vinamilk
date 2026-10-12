@@ -602,44 +602,8 @@ CREATE TABLE dbo.DisciplinaryWarnings
 GO
 
 -- ----------------------------------------------------------------------------------------------------
--- 13. BẢNG: ElectronicContractAppendices (Phụ lục Hợp đồng Lao động Điện tử & Quyết định Nâng lương)
+-- 13. BẢNG: ElectronicContractAppendices (Đã được tạo ở mục 3B)
 -- ----------------------------------------------------------------------------------------------------
-PRINT N'==> Tạo bảng [ElectronicContractAppendices]...';
-CREATE TABLE dbo.ElectronicContractAppendices
-(
-    Id INT IDENTITY(1,1) NOT NULL,
-    AppendixNumber NVARCHAR(100) NOT NULL,
-    LaborContractId INT NOT NULL,
-    EmployeeId INT NOT NULL,
-    EffectiveDate DATETIME2 NOT NULL,
-    SignDate DATETIME2 NOT NULL,
-    PreviousSalary DECIMAL(18,2) NOT NULL,
-    NewSalary DECIMAL(18,2) NOT NULL,
-    PreviousAllowance DECIMAL(18,2) NOT NULL,
-    NewAllowance DECIMAL(18,2) NOT NULL,
-    AdjustmentReason NVARCHAR(500) NOT NULL,
-    IsCeoOverride BIT NOT NULL CONSTRAINT DF_Appendices_CeoOverride DEFAULT 0,
-    CeoOverrideCode NVARCHAR(100) NULL,
-    DigitalSignatureHash NVARCHAR(256) NOT NULL,
-    SignerName NVARCHAR(150) NOT NULL CONSTRAINT DF_Appendices_SignerName DEFAULT N'Mai Kiều Liên',
-    SignerTitle NVARCHAR(150) NOT NULL CONSTRAINT DF_Appendices_SignerTitle DEFAULT N'Tổng Giám Đốc (CEO) - Vinamilk',
-    IsSigned BIT NOT NULL CONSTRAINT DF_Appendices_IsSigned DEFAULT 1,
-
-    -- Audit fields
-    CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_Appendices_CreatedAt DEFAULT SYSUTCDATETIME(),
-    CreatedBy NVARCHAR(100) NOT NULL CONSTRAINT DF_Appendices_CreatedBy DEFAULT N'SYSTEM',
-    UpdatedAt DATETIME2 NULL,
-    UpdatedBy NVARCHAR(100) NULL,
-    IsDeleted BIT NOT NULL CONSTRAINT DF_Appendices_IsDeleted DEFAULT 0,
-
-    CONSTRAINT PK_ElectronicContractAppendices PRIMARY KEY CLUSTERED (Id),
-    CONSTRAINT FK_Appendices_Employee FOREIGN KEY (EmployeeId)
-        REFERENCES dbo.Employees(Id) ON DELETE NO ACTION,
-    CONSTRAINT FK_Appendices_LaborContract FOREIGN KEY (LaborContractId)
-        REFERENCES dbo.LaborContracts(Id) ON DELETE NO ACTION,
-    CONSTRAINT CK_Appendices_Salary CHECK (NewSalary > 0)
-);
-GO
 
 -- ----------------------------------------------------------------------------------------------------
 -- 14. BẢNG: JobPostings (Tin tuyển dụng công khai Cổng Careers Vinamilk - Chuẩn SEO & Google Jobs)
@@ -722,6 +686,9 @@ GO
 -- ====================================================================================================
 -- PHẦN 4: THIẾT LẬP CÁC CHỈ MỤC HIỆU NĂNG CAO (NON-CLUSTERED INDEXES)
 -- ====================================================================================================
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
 PRINT N'==> Đang thiết lập các chỉ mục tối ưu hóa truy vấn...';
 
 -- 1. Index duy nhất trên Mã nhân viên (EmployeeCode)
@@ -1327,6 +1294,8 @@ VALUES
     N'AST-POS-004', N'Hệ thống Máy POS Bán hàng Cảm ứng Sunmi T2 Pro', N'Thiết bị Bán lẻ',
     N'SN-POS-SUNMI-991', @EmpStore1Id, '2023-08-01', 18900000.00, 2,
     N'Máy tính tiền và in hóa đơn cửa hàng Giấc Mơ Sữa Việt', N'INIT_SEED'
+);
+
 -- ----------------------------------------------------------------------------------------------------
 -- 13. DỮ LIỆU TIN TUYỂN DỤNG CÔNG KHAI (JOB POSTINGS - CỔNG CAREERS VINAMILK)
 -- ----------------------------------------------------------------------------------------------------

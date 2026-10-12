@@ -1,0 +1,71 @@
+{
+    "model_name": "Vinamilk_Turnover_Risk_Logistic_v1",
+    "algorithm": "Logistic_Regression_Standardized",
+    "created_at": "2026-10-12 18:42:17",
+    "dataset_info": {
+        "total_samples": 16621,
+        "train_samples": 13745,
+        "test_samples": 2876,
+        "time_split": "Months 1-18 (Train) vs Months 19-24 (Test)"
+    },
+    "evaluation_metrics": {
+        "logistic_regression": {
+            "auc": 0.6498,
+            "precision_at_top10": 0.1429
+        },
+        "random_forest": {
+            "auc": 0.6678,
+            "precision_at_top10": 0.1679,
+            "feature_importances": {
+                "tham_nien": 0.315,
+                "thang_tu_tang_luong": 0.242,
+                "ot_3_thang": 0.185,
+                "diem_kpi": 0.132,
+                "tuoi": 0.051,
+                "so_ngay_nghi": 0.038,
+                "khoi_idx": 0.023,
+                "so_lan_thuyen_chuyen": 0.014
+            }
+        }
+    },
+    "logistic_model": {
+        "intercept": -3.20705,
+        "coefficients": {
+            "tham_nien": -0.18288,
+            "tuoi": -0.13403,
+            "khoi_idx": -0.05484,
+            "ot_3_thang": 0.16839,
+            "so_ngay_nghi": 0.04177,
+            "thang_tu_tang_luong": 0.10754,
+            "diem_kpi": -0.23609,
+            "so_lan_thuyen_chuyen": 0.09983
+        },
+        "scaler": {
+            "mean": {
+                "tham_nien": 6.4043,
+                "tuoi": 42.3029,
+                "khoi_idx": 1.8562,
+                "ot_3_thang": 18.5628,
+                "so_ngay_nghi": 1.8945,
+                "thang_tu_tang_luong": 18.9157,
+                "diem_kpi": 92.6095,
+                "so_lan_thuyen_chuyen": 0.5021
+            },
+            "std": {
+                "tham_nien": 4.5796,
+                "tuoi": 10.1705,
+                "khoi_idx": 1.0411,
+                "ot_3_thang": 10.5904,
+                "so_ngay_nghi": 1.9692,
+                "thang_tu_tang_luong": 8.3327,
+                "diem_kpi": 18.9917,
+                "so_lan_thuyen_chuyen": 0.6639
+            }
+        }
+    },
+    "risk_thresholds": {
+        "high_risk": 0.5,
+        "medium_risk": 0.25
+    },
+    "disclaimer": "Mô hình huấn luyện trên dữ liệu giả lập"
+}

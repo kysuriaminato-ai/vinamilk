@@ -73,7 +73,8 @@ class AiExpertModel extends Model {
             $maDV = $u['MaDV'];
             $actual = (int)$u['ActualCount'];
             $retiring = (int)$u['RetiringSoonCount'];
-            $target = max($actual + rand(5, 15), 20); // Định mức nhân sự kỳ vọng
+            // Định mức nhân sự kỳ vọng theo quy hoạch chuẩn công suất (115% định biên cơ sở)
+            $target = max((int)round($actual * 1.15), 20);
 
             $shortage = $target - ($actual - $retiring);
 
