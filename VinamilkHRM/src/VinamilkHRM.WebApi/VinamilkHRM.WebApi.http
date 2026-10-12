@@ -1,0 +1,6 @@
+@VinamilkHRM.WebApi_HostAddress = http://localhost:5181
+
+GET {{VinamilkHRM.WebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

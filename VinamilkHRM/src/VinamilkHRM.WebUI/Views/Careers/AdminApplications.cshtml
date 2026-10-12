@@ -1,0 +1,302 @@
+@model IReadOnlyList<VinamilkHRM.Application.DTOs.Careers.CandidateApplicationDto>
+@{
+    ViewData["Title"] = "Quản Lý Ứng Viên & Luồng Onboard Tự Động - Vinamilk HRM";
+    var jobPostings = ViewData["JobPostings"] as IReadOnlyList<VinamilkHRM.Application.DTOs.Careers.JobPostingDto> ?? new List<VinamilkHRM.Application.DTOs.Careers.JobPostingDto>();
+    var units = ViewData["Units"] as IReadOnlyList<VinamilkHRM.Application.DTOs.OrganizationalUnits.OrganizationalUnitDto> ?? new List<VinamilkHRM.Application.DTOs.OrganizationalUnits.OrganizationalUnitDto>();
+    var employees = ViewData["Employees"] as IReadOnlyList<VinamilkHRM.Application.DTOs.Employees.EmployeeDto> ?? new List<VinamilkHRM.Application.DTOs.Employees.EmployeeDto>();
+    var selectedJobId = ViewData["SelectedJobId"] as int?;
+    var selectedStatus = ViewData["SelectedStatus"] as VinamilkHRM.Domain.Enums.JobApplicationStatus?;
+}
+
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+        <h1 class="h3 fw-bold text-dark mb-1">
+            <i class="bi bi-people-fill text-primary me-2"></i> Quản Lý Ứng Viên & Luồng Onboard Tự Động
+        </h1>
+        <p class="text-muted small mb-0">
+            Tiếp nhận hồ sơ trực tuyến từ Cổng Careers Vinamilk, đánh giá phỏng vấn và kích hoạt tự động Onboard Nhân viên Thử việc (Probation).
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/tuyen-dung" target="_blank" class="btn btn-outline-primary btn-sm fw-bold">
+            <i class="bi bi-box-arrow-up-right me-1"></i> Xem Cổng Careers Công Khai
+        </a>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi bi-check-circle-fill me-2 fs-5"></i>
+        <strong>@TempData["SuccessMessage"]</strong>
+        @if (TempData["OnboardInfo"] != null)
+        {
+            <div class="mt-2 p-2 bg-white rounded border text-primary fw-bold small">
+                <i class="bi bi-key-fill me-1"></i> @TempData["OnboardInfo"]
+            </div>
+        }
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+        <strong>@TempData["ErrorMessage"]</strong>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- Bộ lọc tìm kiếm ứng viên -->
+<div class="card-custom p-3 mb-4">
+    <form method="get" action="/tuyen-dung/quan-ly-ung-vien" class="row g-2 align-items-end">
+        <div class="col-md-5">
+            <label class="form-label small fw-bold text-muted">Lọc theo Vị trí tuyển dụng</label>
+            <select name="jobPostingId" class="form-select form-select-sm">
+                <option value="">-- Tất cả vị trí tuyển dụng (@jobPostings.Count) --</option>
+                @foreach (var j in jobPostings)
+                {
+                    <option value="@j.Id" selected="@(selectedJobId == j.Id)">[@j.JobCode] @j.Title</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label small fw-bold text-muted">Trạng thái hồ sơ</label>
+            <select name="status" class="form-select form-select-sm">
+                <option value="">-- Tất cả trạng thái --</option>
+                <option value="Submitted" selected="@(selectedStatus == VinamilkHRM.Domain.Enums.JobApplicationStatus.Submitted)">Đã nộp hồ sơ</option>
+                <option value="Interviewed" selected="@(selectedStatus == VinamilkHRM.Domain.Enums.JobApplicationStatus.Interviewed)">Đã phỏng vấn</option>
+                <option value="Offered" selected="@(selectedStatus == VinamilkHRM.Domain.Enums.JobApplicationStatus.Offered)">Đã gửi thư mời nhận việc (Offer)</option>
+                <option value="Hired" selected="@(selectedStatus == VinamilkHRM.Domain.Enums.JobApplicationStatus.Hired)">Đã trúng tuyển & Onboard Thử việc</option>
+                <option value="Rejected" selected="@(selectedStatus == VinamilkHRM.Domain.Enums.JobApplicationStatus.Rejected)">Không phù hợp</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold">
+                <i class="bi bi-filter me-1"></i> Lọc Dữ Liệu
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Bảng danh sách ứng viên -->
+<div class="card-custom p-0 overflow-hidden">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light text-muted small text-uppercase">
+                <tr>
+                    <th class="ps-4">Ứng Viên</th>
+                    <th>Vị Trí Ứng Tuyển</th>
+                    <th>Liên Hệ</th>
+                    <th>Ngày Nộp</th>
+                    <th>Trạng Thái</th>
+                    <th>Phỏng Vấn</th>
+                    <th class="text-end pe-4">Thao Tác Nghiệp Vụ</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model == null || !Model.Any())
+                {
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                            Không có hồ sơ ứng viên nào trong tiêu chí lọc hiện tại.
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var app in Model)
+                    {
+                        var statusBadge = app.Status switch
+                        {
+                            VinamilkHRM.Domain.Enums.JobApplicationStatus.Submitted => "bg-secondary",
+                            VinamilkHRM.Domain.Enums.JobApplicationStatus.Interviewed => "bg-info text-dark",
+                            VinamilkHRM.Domain.Enums.JobApplicationStatus.Offered => "bg-warning text-dark",
+                            VinamilkHRM.Domain.Enums.JobApplicationStatus.Hired => "bg-success text-white",
+                            VinamilkHRM.Domain.Enums.JobApplicationStatus.Rejected => "bg-danger text-white",
+                            _ => "bg-light text-dark"
+                        };
+
+                        <tr>
+                            <td class="ps-4">
+                                <div class="fw-bold text-dark">@app.FullName</div>
+                                <small class="text-muted">CCCD: @(string.IsNullOrWhiteSpace(app.CitizenId) ? "Chưa cấp" : app.CitizenId)</small>
+                            </td>
+                            <td>
+                                <div class="fw-bold small text-primary">@app.JobTitle</div>
+                                <span class="badge bg-light text-dark border" style="font-size: 0.7rem;">@app.JobCode</span>
+                            </td>
+                            <td class="small">
+                                <div><i class="bi bi-envelope me-1 text-muted"></i> @app.Email</div>
+                                <div><i class="bi bi-telephone me-1 text-muted"></i> @app.PhoneNumber</div>
+                            </td>
+                            <td class="small text-muted">
+                                @app.AppliedAt.ToString("dd/MM/yyyy HH:mm")
+                            </td>
+                            <td>
+                                <span class="badge @statusBadge px-2 py-1">@app.StatusName</span>
+                            </td>
+                            <td class="small">
+                                @if (app.InterviewScore.HasValue)
+                                {
+                                    <span class="badge bg-success-subtle text-success fw-bold">Điểm: @app.InterviewScore.Value / 100</span>
+                                }
+                                else if (app.InterviewDate.HasValue)
+                                {
+                                    <span class="text-muted"><i class="bi bi-calendar-event me-1"></i> @app.InterviewDate.Value.ToString("dd/MM/yyyy")</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Chưa xếp lịch</span>
+                                }
+                            </td>
+                            <td class="text-end pe-4">
+                                @if (app.Status == VinamilkHRM.Domain.Enums.JobApplicationStatus.Hired)
+                                {
+                                    <span class="badge bg-success-subtle text-success px-3 py-2 fw-bold">
+                                        <i class="bi bi-check-all me-1"></i> Đã Onboard (@app.HiredEmployeeCode)
+                                    </span>
+                                }
+                                else
+                                {
+                                    <div class="btn-group">
+                                        <button type="button" class="btn btn-sm btn-outline-success fw-bold" data-bs-toggle="modal" data-bs-target="#onboardModal-@app.Id">
+                                            <i class="bi bi-person-plus-fill me-1"></i> Phê Duyệt & Onboard
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown"></button>
+                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                            <li>
+                                                <button class="dropdown-item small text-info" data-bs-toggle="modal" data-bs-target="#statusModal-@app.Id">
+                                                    <i class="bi bi-calendar-check me-1"></i> Lên lịch phỏng vấn / Chấm điểm
+                                                </button>
+                                            </li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
+                                                <form method="post" action="/tuyen-dung/cap-nhat-trang-thai">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="ApplicationId" value="@app.Id" />
+                                                    <input type="hidden" name="NewStatus" value="Rejected" />
+                                                    <input type="hidden" name="Notes" value="Hồ sơ không đáp ứng tiêu chí đợt tuyển" />
+                                                    <button type="submit" class="dropdown-item small text-danger">
+                                                        <i class="bi bi-x-circle me-1"></i> Đánh dấu Không phù hợp
+                                                    </button>
+                                                </form>
+                                            </li>
+                                        </ul>
+                                    </div>
+
+                                    <!-- Modal Onboard sang Nhân viên thử việc -->
+                                    <div class="modal fade" id="onboardModal-@app.Id" tabindex="-1">
+                                        <div class="modal-dialog modal-dialog-centered">
+                                            <div class="modal-content border-0 shadow">
+                                                <div class="modal-header bg-success text-white">
+                                                    <h6 class="modal-title fw-bold">
+                                                        <i class="bi bi-person-check-fill me-2"></i> Onboard Ứng Viên: @app.FullName
+                                                    </h6>
+                                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <form method="post" action="/tuyen-dung/onboard">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="ApplicationId" value="@app.Id" />
+
+                                                    <div class="modal-body p-4 text-start">
+                                                        <div class="alert alert-info py-2 small mb-3">
+                                                            <i class="bi bi-info-circle me-1"></i> Hệ thống sẽ tự động sinh Mã NV mới, lập Hợp đồng thử việc 60 ngày (mức lương thử việc 85% lương chính thức theo Luật Lao động) và tạo tài khoản Cổng ESS.
+                                                        </div>
+
+                                                        <div class="mb-3">
+                                                            <label class="form-label small fw-bold">Đơn vị tiếp nhận làm việc <span class="text-danger">*</span></label>
+                                                            <select name="OrganizationalUnitId" class="form-select form-select-sm" required>
+                                                                @foreach (var u in units)
+                                                                {
+                                                                    <option value="@u.Id">@u.UnitName (@u.UnitCode)</option>
+                                                                }
+                                                            </select>
+                                                        </div>
+
+                                                        <div class="mb-3">
+                                                            <label class="form-label small fw-bold">Mức lương cơ bản chính thức (VNĐ) <span class="text-danger">*</span></label>
+                                                            <input type="number" name="OfficialBasicSalary" class="form-control form-control-sm" value="18000000" min="5000000" step="500000" required />
+                                                            <small class="text-muted" style="font-size: 0.75rem;">Lương thử việc thực tế sẽ tự động tính = 85% mức lương này.</small>
+                                                        </div>
+
+                                                        <div class="mb-3">
+                                                            <label class="form-label small fw-bold">Phụ cấp thử việc (VNĐ)</label>
+                                                            <input type="number" name="Allowance" class="form-control form-control-sm" value="2000000" min="0" step="500000" />
+                                                        </div>
+
+                                                        <div class="mb-3">
+                                                            <label class="form-label small fw-bold">Người quản lý trực tiếp / Mentor hướng dẫn</label>
+                                                            <select name="AssignedManagerId" class="form-select form-select-sm">
+                                                                <option value="">-- Không chỉ định --</option>
+                                                                @foreach (var emp in employees)
+                                                                {
+                                                                    <option value="@emp.Id">@emp.FullName (@emp.EmployeeCode)</option>
+                                                                }
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer bg-light">
+                                                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Hủy</button>
+                                                        <button type="submit" class="btn btn-success btn-sm fw-bold px-4">
+                                                            <i class="bi bi-check2-circle me-1"></i> Xác Nhận Onboard Thử Việc
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Modal Cập nhật Phỏng vấn & Đánh giá -->
+                                    <div class="modal fade" id="statusModal-@app.Id" tabindex="-1">
+                                        <div class="modal-dialog modal-dialog-centered">
+                                            <div class="modal-content border-0 shadow">
+                                                <div class="modal-header bg-primary text-white">
+                                                    <h6 class="modal-title fw-bold">Cập Nhật Tiến Độ: @app.FullName</h6>
+                                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <form method="post" action="/tuyen-dung/cap-nhat-trang-thai">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="ApplicationId" value="@app.Id" />
+
+                                                    <div class="modal-body p-4 text-start">
+                                                        <div class="mb-3">
+                                                            <label class="form-label small fw-bold">Trạng thái mới</label>
+                                                            <select name="NewStatus" class="form-select form-select-sm" required>
+                                                                <option value="Interviewed">Đã Phỏng Vấn</option>
+                                                                <option value="Offered">Gửi Thư Mời Nhận Việc (Offer)</option>
+                                                                <option value="Rejected">Không Đạt Yêu Cầu</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div class="mb-3">
+                                                            <label class="form-label small fw-bold">Điểm đánh giá phỏng vấn (Thang 100)</label>
+                                                            <input type="number" name="InterviewScore" class="form-control form-control-sm" value="88" min="0" max="100" />
+                                                        </div>
+
+                                                        <div class="mb-3">
+                                                            <label class="form-label small fw-bold">Ghi chú nhận xét của Hội đồng phỏng vấn</label>
+                                                            <textarea name="Notes" class="form-control form-control-sm" rows="3">Ứng viên có kiến thức chuyên môn vững vàng, giao tiếp tự tin, phù hợp văn hóa Vinamilk.</textarea>
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer bg-light">
+                                                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
+                                                        <button type="submit" class="btn btn-primary btn-sm fw-bold">
+                                                            Lưu Kết Quả
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

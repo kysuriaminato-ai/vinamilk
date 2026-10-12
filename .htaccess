@@ -1,0 +1,5 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^portal/(.*)$ portal/public/$1 [L]
+    RewriteRule ^portal$ portal/public/ [L]
+</IfModule>

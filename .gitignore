@@ -1,5 +1,5 @@
 # =====================================================================
-# VINAMILK HRIS - ENTERPRISE .GITIGNORE
+# VINAMILK HRM ENTERPRISE - ROOT .GITIGNORE
 # =====================================================================
 
 # 1. Environment and Secrets
@@ -14,65 +14,74 @@ cookies.txt
 *.cert
 *.pfx
 
-# 2. Dependencies & Uploads
-vendor/
-/vendor/
-uploads/
-/uploads/
-**/uploads/
-node_modules/
-/node_modules/
-npm-debug.log
-yarn-error.log
+# 2. Local Configuration Overrides
+appsettings.*.local.json
+appsettings.Development.local.json
+appsettings.Production.local.json
 
-# 3. .NET / C# Build Outputs
-**/bin
+# 3. .NET / Visual Studio Build Outputs & Caches
 **/bin/
-bin/
-**/obj
 **/obj/
+bin/
 obj/
-*.dll
-*.pdb
-*.exe
-.vs/
-
-# 4. Storage & Logs & Cache
-.phpunit.cache/
-/.phpunit.cache/
-/storage/*.key
-/storage/app/private/
-/storage/app/public/
-/storage/framework/cache/*
-!/storage/framework/cache/.gitignore
-/storage/framework/sessions/*
-!/storage/framework/sessions/.gitignore
-/storage/framework/views/*
-!/storage/framework/views/.gitignore
-/storage/logs/*
-!/storage/logs/.gitignore
-*.log
-
-# 5. Database Dumps & Backups
-*.dump
-*.tar.gz
-*.zip
-/backup/
-/backups/
-
-# 6. IDE & OS Metadata
-.idea/
-.vscode/
 *.suo
 *.user
 *.userosscache
 *.sln.docstates
+*.userprefs
+.vs/
+_ReSharper*/
+*.resharper
+packages/
+*.nupkg
+TestResults/
+*.launchsettings.json.user
+
+# 4. PHP / Composer / Testing
+portal/vendor/
+vendor/
+portal/composer.phar
+composer.phar
+.phpunit.cache/
+portal/.phpunit.cache/
+.phpunit.result.cache
+portal/.phpunit.result.cache
+
+# 5. User Uploads & Media Storage
+uploads/
+/uploads/
+**/uploads/
+storage/app/public/
+storage/logs/*
+!storage/logs/.gitignore
+portal/storage/logs/*
+!portal/storage/logs/.gitignore
+
+# 6. Node / NPM / Web Assets
+node_modules/
+/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# 7. Operating System & Editor Metadata
 .DS_Store
 Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*~
 
-# 7. Archived legacy components (Available in 'archive' branch)
-VinamilkHRM/
-legacy/VinamilkHRM/
-index.html
-js/
-legacy/js/
+# 8. Temporary Files & Logs
+*.log
+*.tmp
+*.bak
+*.dump
+*.tar.gz
+*.zip

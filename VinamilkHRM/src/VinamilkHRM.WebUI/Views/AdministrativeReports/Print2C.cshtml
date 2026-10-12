@@ -1,0 +1,377 @@
+@{
+    Layout = null;
+    var emp = ViewBag.Employee as VinamilkHRM.Domain.Entities.Employees.Employee;
+    var contract = ViewBag.LaborContract as VinamilkHRM.Domain.Entities.Contracts.LaborContract;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sơ yếu lý lịch 2C-BNV/2008 - @(emp?.FullName ?? "Nhân sự Vinamilk")</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <style>
+        @@page {
+            size: A4 portrait;
+            margin: 12mm 15mm 12mm 15mm;
+        }
+
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 12.5pt;
+            line-height: 1.35;
+            color: #000000;
+            background-color: #e5e7eb;
+            margin: 0;
+            padding: 20px 0;
+        }
+
+        .a4-container {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 15mm 18mm;
+            box-sizing: border-box;
+            box-shadow: 0 4px 25px rgba(0,0,0,0.15);
+        }
+
+        /* Toolbar điều khiển in ấn */
+        .no-print-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #1e293b;
+            color: #ffffff;
+            padding: 10px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 9999;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            font-family: sans-serif;
+        }
+
+        .btn-action {
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+        }
+        .btn-print { background: #0047BA; color: #fff; }
+        .btn-back { background: #475569; color: #fff; }
+
+        .header-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12px;
+        }
+
+        .main-title {
+            text-align: center;
+            font-size: 16pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin: 15px 0 4px 0;
+            color: #000;
+        }
+
+        .sub-title {
+            text-align: center;
+            font-size: 11pt;
+            font-style: italic;
+            margin-bottom: 16px;
+        }
+
+        .photo-box {
+            width: 3.5cm;
+            height: 4.5cm;
+            border: 1px solid #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 9.5pt;
+            text-align: center;
+            background: #fbfbfb;
+        }
+
+        .info-grid {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+        .info-grid td {
+            padding: 3px 4px;
+            vertical-align: top;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        .data-table th, .data-table td {
+            border: 1px solid #000;
+            padding: 5px 8px;
+            font-size: 11pt;
+        }
+        .data-table th {
+            background-color: #f2f2f2;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .seal-stamp {
+            border: 2px solid #b91c1c;
+            border-radius: 50%;
+            width: 110px;
+            height: 110px;
+            color: #b91c1c;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 8px auto;
+            transform: rotate(-6deg);
+            font-family: Arial, sans-serif;
+        }
+
+        .page-break {
+            page-break-after: always;
+        }
+
+        @@media print {
+            .no-print-bar { display: none !important; }
+            body { background: #ffffff; padding: 0; }
+            .a4-container {
+                box-shadow: none;
+                margin: 0;
+                width: 100%;
+                min-height: auto;
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print-bar">
+        <div>
+            <strong>Mẫu 2C-BNV/2008</strong> | Sơ yếu lý lịch cán bộ nhân viên Vinamilk: <strong>@(emp?.FullName)</strong> (@(emp?.EmployeeCode))
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button onclick="window.print();" class="btn-action btn-print">
+                <i class="bi bi-printer-fill"></i> In Mẫu 2C (Ctrl + P)
+            </button>
+            <a href="/AdministrativeReports/Index" class="btn-action btn-back">
+                <i class="bi bi-arrow-left"></i> Quay lại
+            </a>
+        </div>
+    </div>
+
+    <div style="height: 50px;" class="d-print-none"></div>
+
+    <div class="a4-container">
+        <!-- Quốc hiệu & Đơn vị -->
+        <table class="header-table">
+            <tr>
+                <td style="width: 45%; vertical-align: top;">
+                    <strong>CÔNG TY CP SỮA VIỆT NAM (VINAMILK)</strong><br />
+                    Đơn vị: <strong>@(emp?.OrganizationalUnit?.UnitName ?? "Trụ sở chính Vinamilk")</strong><br />
+                    Mã số hồ sơ: <strong>@(emp?.EmployeeCode)</strong>
+                </td>
+                <td style="width: 55%; text-align: center; vertical-align: top;">
+                    <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br />
+                    <strong>Độc lập - Tự do - Hạnh phúc</strong><br />
+                    -------------------------
+                </td>
+            </tr>
+        </table>
+
+        <div class="main-title">SƠ YẾU LÝ LỊCH CÁN BỘ, NHÂN VIÊN</div>
+        <div class="sub-title">(Ban hành kèm theo Quyết định số 02/2008/QĐ-BNV và Quy chế nhân sự Vinamilk)</div>
+
+        <!-- Phần ảnh & Thông tin cốt lõi -->
+        <table style="width: 100%; margin-bottom: 12px;">
+            <tr>
+                <td style="width: 4cm; vertical-align: top;">
+                    <div class="photo-box">
+                        <i class="bi bi-person-bounding-box" style="font-size: 28pt; color: #94a3b8;"></i>
+                        <div style="margin-top: 6px; font-weight: bold;">Ảnh 4 x 6</div>
+                        <div style="font-size: 8pt; color: #64748b;">(Đóng dấu giáp lai)</div>
+                    </div>
+                </td>
+                <td style="vertical-align: top; padding-left: 16px;">
+                    <table class="info-grid">
+                        <tr>
+                            <td style="width: 220px;">1) Họ và tên khai sinh:</td>
+                            <td><strong style="text-transform: uppercase; font-size: 13.5pt;">@(emp?.FullName)</strong></td>
+                        </tr>
+                        <tr>
+                            <td>2) Tên gọi khác:</td>
+                            <td>Không</td>
+                        </tr>
+                        <tr>
+                            <td>3) Ngày sinh:</td>
+                            <td>@(emp?.DateOfBirth.ToString("dd/MM/yyyy")) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Giới tính: <strong>@(emp?.Gender == VinamilkHRM.Domain.Enums.Gender.Male ? "Nam" : "Nữ")</strong></td>
+                        </tr>
+                        <tr>
+                            <td>4) Nơi sinh:</td>
+                            <td>@(emp?.Address ?? "TP. Hồ Chí Minh")</td>
+                        </tr>
+                        <tr>
+                            <td>5) Quê quán:</td>
+                            <td>@(emp?.Address ?? "Việt Nam")</td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+
+        <!-- Các thông tin chi tiết -->
+        <table class="info-grid">
+            <tr>
+                <td style="width: 220px;">6) Nơi đăng ký HKTT:</td>
+                <td>@(emp?.Address)</td>
+            </tr>
+            <tr>
+                <td>7) Nơi ở hiện nay:</td>
+                <td>@(emp?.Address)</td>
+            </tr>
+            <tr>
+                <td>8) Dân tộc / Tôn giáo:</td>
+                <td>Dân tộc: <strong>Kinh</strong> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Tôn giáo: <strong>Không</strong></td>
+            </tr>
+            <tr>
+                <td>9) Số CCCD / CMND:</td>
+                <td><strong>@(emp?.CitizenId)</strong> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Nơi cấp: Cục Cảnh sát QLHC về TTXH</td>
+            </tr>
+            <tr>
+                <td>10) Ngày tuyển dụng vào VNM:</td>
+                <td>@(emp?.HireDate.ToString("dd/MM/yyyy")) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Cơ quan tuyển dụng: <strong>Tập đoàn Vinamilk</strong></td>
+            </tr>
+            <tr>
+                <td>11) Chức danh hiện tại:</td>
+                <td><strong>Chuyên viên cao cấp - Khối @(emp?.EmployeeType)</strong></td>
+            </tr>
+            <tr>
+                <td>12) Đơn vị công tác hiện nay:</td>
+                <td><strong>@(emp?.OrganizationalUnit?.UnitName)</strong> (Mã ĐV: @(emp?.OrganizationalUnit?.UnitCode))</td>
+            </tr>
+            <tr>
+                <td>13) Ngạch lương / Bậc lương:</td>
+                <td>Ngạch VNM-L3 (Bậc 4) &nbsp;|&nbsp; Mức lương cơ bản: <strong>@(emp?.BaseSalary.ToString("N0")) đ</strong></td>
+            </tr>
+            <tr>
+                <td>14) Trình độ giáo dục phổ thông:</td>
+                <td>12/12</td>
+            </tr>
+            <tr>
+                <td>15) Trình độ chuyên môn cao nhất:</td>
+                <td>Đại học chính quy - Chuyên ngành Công nghệ Thực phẩm / QTKD</td>
+            </tr>
+            <tr>
+                <td>16) Trình độ lý luận chính trị:</td>
+                <td>Trung cấp / Sơ cấp Lý luận chính trị</td>
+            </tr>
+            <tr>
+                <td>17) Trình độ ngoại ngữ / Tin học:</td>
+                <td>Anh văn: TOEIC 850 / IELTS 7.0 &nbsp;|&nbsp; Tin học: Ứng dụng CNTT Nâng cao</td>
+            </tr>
+            <tr>
+                <td>18) Ngày vào Đảng CSVN:</td>
+                <td>Đảng viên &nbsp;|&nbsp; Ngày chính thức: 03/02/2020</td>
+            </tr>
+            <tr>
+                <td>19) Tình trạng sức khỏe:</td>
+                <td>Loại 1 (Tốt) &nbsp;|&nbsp; Chiều cao: 1m70 &nbsp;|&nbsp; Cân nặng: 65 kg &nbsp;|&nbsp; Nhóm máu: O</td>
+            </tr>
+            <tr>
+                <td>20) Số người phụ thuộc giảm trừ:</td>
+                <td><strong>@(emp?.DependentCount) người</strong> (Đã đăng ký MST cá nhân tại Cơ quan Thuế)</td>
+            </tr>
+        </table>
+
+        <!-- Bảng tóm tắt quá trình công tác -->
+        <div style="font-weight: bold; margin-top: 14px; margin-bottom: 6px;">21) TÓM TẮT QUÁ TRÌNH CÔNG TÁC TẠI CÔNG TY CP SỮA VIỆT NAM (VINAMILK):</div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width: 28%;">Từ tháng, năm đến tháng, năm</th>
+                    <th style="width: 48%;">Chức danh, chức vụ, đơn vị công tác</th>
+                    <th style="width: 24%;">Hình thức hợp đồng</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="text-align: center;">@(emp?.HireDate.ToString("MM/yyyy")) - 06 tháng sau</td>
+                    <td>Thử việc / Học việc quy trình chuẩn Vinamilk</td>
+                    <td style="text-align: center;">HĐ Thử việc</td>
+                </tr>
+                <tr>
+                    <td style="text-align: center;">@(emp?.HireDate.AddMonths(2).ToString("MM/yyyy")) - Nay</td>
+                    <td>@(emp?.FullName) - Công tác tại @(emp?.OrganizationalUnit?.UnitName)</td>
+                    <td style="text-align: center;">HĐLĐ Không xác định thời hạn</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Khen thưởng & Kỷ luật -->
+        <div style="font-weight: bold; margin-top: 12px; margin-bottom: 6px;">22) KHEN THƯỞNG VÀ KỶ LUẬT:</div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width: 20%;">Năm</th>
+                    <th style="width: 50%;">Hình thức khen thưởng / kỷ luật</th>
+                    <th style="width: 30%;">Cấp quyết định</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="text-align: center;">2024, 2025</td>
+                    <td>Chiến sĩ thi đua cấp Tập đoàn, Sáng kiến Kaizen Tiết kiệm năng lượng</td>
+                    <td>Tổng Giám Đốc Vinamilk</td>
+                </tr>
+                <tr>
+                    <td style="text-align: center;">2026</td>
+                    <td>Không có vi phạm kỷ luật (Điểm chuyên cần: @(emp?.DiligenceScore)/100)</td>
+                    <td>Hội đồng Kỷ luật</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Chữ ký & Xác nhận đóng dấu -->
+        <table style="width: 100%; margin-top: 25px; page-break-inside: avoid;">
+            <tr>
+                <td style="width: 50%; text-align: center; vertical-align: top;">
+                    <strong>NGƯỜI KHAI KÝ TÊN</strong><br />
+                    <i>(Ký và ghi rõ họ tên)</i><br /><br /><br /><br /><br />
+                    <strong style="text-transform: uppercase;">@(emp?.FullName)</strong>
+                </td>
+                <td style="width: 50%; text-align: center; vertical-align: top;">
+                    <i>TP. Hồ Chí Minh, ngày @DateTime.UtcNow.Day tháng @DateTime.UtcNow.Month năm @DateTime.UtcNow.Year</i><br />
+                    <strong>TM. HỘI ĐỒNG QUẢN TRỊ / BAN ĐIỀU HÀNH</strong><br />
+                    <strong>TỔNG GIÁM ĐỐC VINAMILK</strong><br />
+                    
+                    <!-- Con dấu mộc đỏ SVG -->
+                    <div class="seal-stamp">
+                        <div style="font-size: 8px; font-weight: bold;">CÔNG TY CP SỮA VN</div>
+                        <div style="font-size: 16px; margin: 1px 0;">★ ★ ★</div>
+                        <div style="font-size: 8px; font-weight: bold;">ĐÃ KÝ ĐIỆN TỬ</div>
+                        <div style="font-size: 7px;">VINAMILK CORP</div>
+                    </div>
+
+                    <strong>Mai Kiều Liên</strong>
+                </td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

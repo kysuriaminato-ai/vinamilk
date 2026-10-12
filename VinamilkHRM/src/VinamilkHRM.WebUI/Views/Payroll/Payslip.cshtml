@@ -1,0 +1,25 @@
+@{
+    ViewData["Title"] = "Chi Tiết Phiếu Lương Đa Hình - Vinamilk";
+    int payslipId = ViewBag.PayslipId ?? 0;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h3 class="fw-bold mb-1" style="color: #0047BA;">
+            <i class="bi bi-receipt me-2"></i>Chi Tiết Phiếu Lương Nhân Viên (Polymorphic Template)
+        </h3>
+        <p class="text-muted mb-0">Mẫu in được tối ưu hóa đa hình tự động theo chức danh công tác: Khối Văn phòng, Nhà máy hoặc Chuỗi bán lẻ.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a asp-action="PrintPayslip" asp-route-id="@payslipId" target="_blank" class="btn btn-primary btn-sm px-3 fw-bold">
+            <i class="bi bi-printer-fill me-1"></i> In Chuẩn A4 (Print Mode)
+        </a>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm px-3">
+            <i class="bi bi-arrow-left me-1"></i> Về bảng lương
+        </a>
+    </div>
+</div>
+
+<div class="card card-custom p-4 bg-white shadow-sm mb-4">
+    @Html.Raw(ViewBag.PayslipHtml)
+</div>

@@ -1,0 +1,193 @@
+@{
+    ViewData["Title"] = "Trung tâm In ấn Biểu mẫu Hành chính Chuẩn A4";
+    var employees = ViewBag.Employees as IReadOnlyList<VinamilkHRM.Domain.Entities.Employees.Employee> ?? new List<VinamilkHRM.Domain.Entities.Employees.Employee>();
+    var units = ViewBag.Units as IReadOnlyList<VinamilkHRM.Domain.Entities.OrganizationalUnits.OrganizationalUnit> ?? new List<VinamilkHRM.Domain.Entities.OrganizationalUnits.OrganizationalUnit>();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-1" style="color: #0047BA;">
+            <i class="bi bi-printer-fill me-2"></i>Trung Tâm In Ấn Biểu Mẫu Hành Chính
+        </h2>
+        <p class="text-muted mb-0">Hệ thống phôi in tự động chuẩn A4 CSS (<code>@@media print</code>) và chữ ký số điện tử Vinamilk Corporate.</p>
+    </div>
+    <div>
+        <span class="badge bg-primary px-3 py-2 fs-6">
+            <i class="bi bi-shield-check me-1"></i>Chuẩn Nghị định 30/2020/NĐ-CP & Bộ Nội Vụ
+        </span>
+    </div>
+</div>
+
+<!-- Grid 5 Biểu mẫu chính thức -->
+<div class="row g-4 mb-4">
+    <!-- Card 1: 2C-BNV/2008 -->
+    <div class="col-md-6 col-xl-4">
+        <div class="card card-custom h-100 border-top border-4 border-primary">
+            <div class="card-body d-flex flex-direction-column">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <span class="badge bg-primary-subtle text-primary fw-bold px-3 py-1">Khổ A4 Đứng (Portrait)</span>
+                    <i class="bi bi-person-lines-fill fs-2 text-primary"></i>
+                </div>
+                <h5 class="fw-bold text-dark mb-2">Mẫu 2C-BNV/2008: Sơ Yếu Lý Lịch</h5>
+                <p class="text-muted small mb-3">
+                    Phôi in sơ yếu lý lịch cán bộ nhân viên 26 mục theo chuẩn Quyết định số 02/2008/QĐ-BNV. Đầy đủ ảnh 4x6, bảng quá trình công tác, đào tạo và xác nhận đóng dấu điện tử.
+                </p>
+                <div class="mt-auto">
+                    <form method="get" action="/AdministrativeReports/Print2C" target="_blank" class="d-flex gap-2">
+                        <select name="id" class="form-select form-select-sm">
+                            @foreach (var emp in employees)
+                            {
+                                <option value="@emp.Id">@emp.EmployeeCode - @emp.FullName</option>
+                            }
+                        </select>
+                        <button type="submit" class="btn btn-primary btn-sm px-3 text-nowrap fw-bold">
+                            <i class="bi bi-printer me-1"></i> In Mẫu 2C
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 2: BM01 Trích ngang nhân sự -->
+    <div class="col-md-6 col-xl-4">
+        <div class="card card-custom h-100 border-top border-4 border-success">
+            <div class="card-body d-flex flex-direction-column">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <span class="badge bg-success-subtle text-success fw-bold px-3 py-1">Khổ A4 Ngang (Landscape)</span>
+                    <i class="bi bi-table fs-2 text-success"></i>
+                </div>
+                <h5 class="fw-bold text-dark mb-2">Biểu Mẫu 01 (BM01): Trích Ngang Nhân Sự</h5>
+                <p class="text-muted small mb-3">
+                    Báo cáo trích ngang danh sách CBNV theo phòng ban hoặc toàn tập đoàn: Họ tên, ngày sinh, CCCD, chức danh, mức lương cơ bản, phụ cấp, người phụ thuộc, quỹ phép năm.
+                </p>
+                <div class="mt-auto">
+                    <form method="get" action="/AdministrativeReports/BM01_Summary" target="_blank" class="d-flex gap-2">
+                        <select name="unitId" class="form-select form-select-sm">
+                            <option value="">-- Toàn bộ đơn vị VNM --</option>
+                            @foreach (var u in units)
+                            {
+                                <option value="@u.Id">@u.UnitName</option>
+                            }
+                        </select>
+                        <button type="submit" class="btn btn-success btn-sm px-3 text-nowrap fw-bold">
+                            <i class="bi bi-printer me-1"></i> Xuất BM01
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 3: BM02 Biến động nhân sự -->
+    <div class="col-md-6 col-xl-4">
+        <div class="card card-custom h-100 border-top border-4 border-warning">
+            <div class="card-body d-flex flex-direction-column">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <span class="badge bg-warning-subtle text-warning-emphasis fw-bold px-3 py-1">Khổ A4 Ngang (Landscape)</span>
+                    <i class="bi bi-graph-up-arrow fs-2 text-warning"></i>
+                </div>
+                <h5 class="fw-bold text-dark mb-2">Biểu Mẫu 02 (BM02): Biến Động Nhân Sự</h5>
+                <p class="text-muted small mb-3">
+                    Báo cáo tổng hợp số liệu biến động theo năm: Tuyển dụng mới, Nâng bậc lương thường lệ, Giám đốc đặc cách tăng lương, Điều chuyển nội bộ, Thôi việc và số liệu lũy kế.
+                </p>
+                <div class="mt-auto d-flex justify-content-between align-items-center">
+                    <span class="small text-muted">Kỳ năm: <strong>@DateTime.UtcNow.Year</strong></span>
+                    <a href="/AdministrativeReports/BM02_Fluctuations" target="_blank" class="btn btn-warning btn-sm px-3 fw-bold text-dark">
+                        <i class="bi bi-printer me-1"></i> Xuất BM02
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 4: BM03 Khen thưởng & Kỷ luật -->
+    <div class="col-md-6 col-xl-6">
+        <div class="card card-custom h-100 border-top border-4 border-info">
+            <div class="card-body d-flex flex-direction-column">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <span class="badge bg-info-subtle text-info fw-bold px-3 py-1">Khổ A4 Ngang (Landscape)</span>
+                    <i class="bi bi-trophy-fill fs-2 text-info"></i>
+                </div>
+                <h5 class="fw-bold text-dark mb-2">Biểu Mẫu 03 (BM03): Thống Kê Khen Thưởng & Kỷ Luật</h5>
+                <p class="text-muted small mb-3">
+                    Báo cáo các quyết định Khen thưởng (Sáng kiến Kaizen, Chiến sĩ thi đua cấp Tập đoàn, Thưởng doanh số chuỗi) và Kỷ luật lao động tự động kích hoạt (theo Điều 125 Bộ luật Lao động).
+                </p>
+                <div class="mt-auto d-flex justify-content-between align-items-center">
+                    <span class="small text-muted">Hội đồng thi đua khen thưởng Vinamilk</span>
+                    <a href="/AdministrativeReports/BM03_DisciplineRewards" target="_blank" class="btn btn-info btn-sm px-4 fw-bold text-dark">
+                        <i class="bi bi-printer me-1"></i> Xuất BM03
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 5: BM04 Nhân sự tiệm cận nghỉ hưu -->
+    <div class="col-md-6 col-xl-6">
+        <div class="card card-custom h-100 border-top border-4 border-danger">
+            <div class="card-body d-flex flex-direction-column">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <span class="badge bg-danger-subtle text-danger fw-bold px-3 py-1">Khổ A4 Ngang (Landscape)</span>
+                    <i class="bi bi-hourglass-split fs-2 text-danger"></i>
+                </div>
+                <h5 class="fw-bold text-dark mb-2">Biểu Mẫu 04 (BM04): Danh Sách Tiệm Cận Nghỉ Hưu</h5>
+                <p class="text-muted small mb-3">
+                    Thống kê nhân sự sắp đến tuổi nghỉ hưu theo lộ trình Nghị định 135/2020/NĐ-CP (Nam 62 tuổi, Nữ 60 tuổi). Tự động xác định thời hạn gửi thông báo trước 6 tháng và ra quyết định trước 3 tháng.
+                </p>
+                <div class="mt-auto d-flex justify-content-between align-items-center">
+                    <span class="small text-muted">Kế hoạch chuyển giao & Kế thừa nhân sự</span>
+                    <a href="/AdministrativeReports/BM04_Retirement" target="_blank" class="btn btn-danger btn-sm px-4 fw-bold">
+                        <i class="bi bi-printer me-1"></i> Xuất BM04
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bảng hướng dẫn chuẩn in ấn A4 CSS -->
+<div class="card card-custom">
+    <div class="card-header bg-white py-3">
+        <h6 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-info-circle-fill text-primary me-2"></i>Hướng Dẫn In Ấn & Xuất PDF Chuẩn Hành Chính A4
+        </h6>
+    </div>
+    <div class="card-body">
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="d-flex gap-3">
+                    <div class="rounded-circle bg-primary-subtle text-primary p-3 d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                        <i class="bi bi-aspect-ratio fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold">1. Định dạng Khổ giấy</div>
+                        <div class="small text-muted">CSS <code>@@page &#123; size: A4; &#125;</code> tự động thiết lập khổ in (Portrait cho 2C, Landscape cho BM01-04). Trình duyệt tự nhận diện chính xác mà không cần chỉnh tay.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex gap-3">
+                    <div class="rounded-circle bg-success-subtle text-success p-3 d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                        <i class="bi bi-file-earmark-pdf fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold">2. Tùy chọn Xuất File PDF</div>
+                        <div class="small text-muted">Khi mở hộp thoại in (Ctrl + P), chọn đích đến là <strong>"Save as PDF"</strong> / <strong>"Lưu dưới dạng PDF"</strong>, chọn Margin = "Default" để giữ nguyên chuẩn lề 12-15mm.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex gap-3">
+                    <div class="rounded-circle bg-warning-subtle text-warning p-3 d-flex align-items-center justify-content-center" style="width: 48px; height: 48px;">
+                        <i class="bi bi-vector-pen fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold">3. Con dấu & Chữ ký số</div>
+                        <div class="small text-muted">Tất cả biểu mẫu đều nhúng sẵn mộc đỏ vector SVG điện tử Vinamilk và mã băm SHA256 chống làm giả văn bản nội bộ.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

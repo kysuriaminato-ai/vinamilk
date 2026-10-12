@@ -139,23 +139,23 @@ Trang đăng nhập hỗ trợ tính năng **1-Click Quick Login** giúp giám k
 
 ## 👥 3. DANH MỤC TÀI KHOẢN DEMO CHUẨN SEED
 
-Tất cả tài khoản hệ thống đều được băm bảo mật bằng thuật toán `Bcrypt` chuẩn PHP với mật khẩu chung: **`Vinamilk@2026`**.
+Toàn bộ tài khoản hệ thống khi khởi tạo đều được kích hoạt cờ bảo mật **`MustChangePassword = 1`** theo tiêu chuẩn an toàn thông tin doanh nghiệp. Người dùng bắt buộc phải thiết lập mật khẩu cá nhân mới khi đăng nhập lần đầu tiên.
 
-| STT | Tài khoản (Username) | Mật khẩu | Mã Vai Trò | Chức danh & Phạm vi nghiệp vụ | Mã NV | Đơn vị trực thuộc & Cấp thẩm quyền |
+| STT | Tài khoản (Username) | Trạng thái bảo mật | Mã Vai Trò | Chức danh & Phạm vi nghiệp vụ | Mã NV | Đơn vị trực thuộc & Cấp thẩm quyền |
 | :---: | :--- | :--- | :--- | :--- | :---: | :--- |
-| **1** | `admin` | `Vinamilk@2026` | `Admin` | **Quản trị hệ thống**: Toàn quyền bảo mật, cấu hình tham số lương, nhật ký kiểm toán. | `VNM-0020` | Trụ sở Tập đoàn (`PB_IT`) - Toàn quyền |
-| **2** | `bod.ceo` | `Vinamilk@2026` | `BOD` | **Tổng Giám Đốc (CEO)**: Xem Dashboard phân tích HR, định biên, cơ cấu tổ chức toàn quốc. | `VNM-0001` | Ban Điều hành Tập đoàn (`VINAMILK`) |
-| **3** | `hr.tapdoan` | `Vinamilk@2026` | `HR_TAPDOAN` | **Trưởng phòng HR Tập đoàn**: Quản lý 300 hồ sơ, thuyên chuyển, bổ nhiệm, phê duyệt toàn quốc. | `VNM-0004` | Ban Quản trị Nguồn nhân lực (`PB_NHANSU`) |
-| **4** | `ketoan.luong` | `Vinamilk@2026` | `KETOAN_LUONG` | **Kế toán Tiền lương**: Chạy tính lương 3P, Biểu thuế 5 bậc 2026, khóa bảng lương bất biến. | `VNM-0013` | Khối Tài chính Kế toán (`PB_TAICHINH`) |
-| **5** | `hr.binhduong` | `Vinamilk@2026` | `HR_DONVI` | **Nhân sự Nhà máy Bình Dương**: Quản lý 45 nhân sự, HĐLĐ và chấm công NM Bình Dương. | `VNM-0047` | Nhà máy Sữa Mega Bình Dương (`NM_BD`) |
-| **6** | `hr.tienson` | `Vinamilk@2026` | `HR_DONVI` | **Nhân sự Nhà máy Tiên Sơn**: Quản lý 45 nhân sự NM Tiên Sơn (Bắc Ninh). | `VNM-0092` | Nhà máy Sữa Tiên Sơn (`NM_TS`) |
-| **7** | `hr.thongnhat` | `Vinamilk@2026` | `HR_DONVI` | **Nhân sự Nhà máy Thống Nhất**: Quản lý 45 nhân sự NM Thống Nhất (TP.HCM). | `VNM-0137` | Nhà máy Sữa Thống Nhất (`NM_TL`) |
-| **8** | `hr.saigon` | `Vinamilk@2026` | `HR_DONVI` | **Nhân sự Nhà máy Sài Gòn**: Quản lý 45 nhân sự NM Sài Gòn. | `VNM-0182` | Nhà máy Sữa Sài Gòn (`NM_SG`) |
-| **9** | `hr.tayninh` | `Vinamilk@2026` | `HR_DONVI` | **Nhân sự Trang trại Tây Ninh**: Quản lý 23 nhân sự Trang trại Green Farm Tây Ninh. | `VNM-0227` | Trang trại Green Farm Tây Ninh (`TT_GREEN1`) |
-| **10** | `quanly.binhduong` | `Vinamilk@2026` | `QUANLY_TRUCTIEP` | **Quản đốc Xưởng Tetra Pak**: Phê duyệt nghỉ phép Cấp 1, xếp ca tuần, xác nhận công. | `VNM-0049` | Xưởng Chiết rót Bình Dương (`NM_BD_XUONG1`) |
-| **11** | `congnhan.bd` | `Vinamilk@2026` | `NHANVIEN` | **Công nhân Vận hành Ca 1 (ESS)**: Cổng tự phục vụ xem phiếu lương cá nhân, gửi đơn nghỉ phép. | `VNM-0055` | Ca Sản xuất 1 Bình Dương (`NM_BD_CA1`) |
+| **1** | `admin` | `Yêu cầu đổi MK lần đầu` | `Admin` | **Quản trị hệ thống**: Toàn quyền bảo mật, cấu hình tham số lương, nhật ký kiểm toán. | `VNM-0020` | Trụ sở Tập đoàn (`PB_IT`) - Toàn quyền |
+| **2** | `bod.ceo` | `Yêu cầu đổi MK lần đầu` | `BOD` | **Tổng Giám Đốc (CEO)**: Xem Dashboard phân tích HR, định biên, cơ cấu tổ chức toàn quốc. | `VNM-0001` | Ban Điều hành Tập đoàn (`VINAMILK`) |
+| **3** | `hr.tapdoan` | `Yêu cầu đổi MK lần đầu` | `HR_TAPDOAN` | **Trưởng phòng HR Tập đoàn**: Quản lý 300 hồ sơ, thuyên chuyển, bổ nhiệm, phê duyệt toàn quốc. | `VNM-0004` | Ban Quản trị Nguồn nhân lực (`PB_NHANSU`) |
+| **4** | `ketoan.luong` | `Yêu cầu đổi MK lần đầu` | `KETOAN_LUONG` | **Kế toán Tiền lương**: Chạy tính lương 3P, Biểu thuế 5 bậc 2026, khóa bảng lương bất biến. | `VNM-0013` | Khối Tài chính Kế toán (`PB_TAICHINH`) |
+| **5** | `hr.binhduong` | `Yêu cầu đổi MK lần đầu` | `HR_DONVI` | **Nhân sự Nhà máy Bình Dương**: Quản lý 45 nhân sự, HĐLĐ và chấm công NM Bình Dương. | `VNM-0047` | Nhà máy Sữa Mega Bình Dương (`NM_BD`) |
+| **6** | `hr.tienson` | `Yêu cầu đổi MK lần đầu` | `HR_DONVI` | **Nhân sự Nhà máy Tiên Sơn**: Quản lý 45 nhân sự NM Tiên Sơn (Bắc Ninh). | `VNM-0092` | Nhà máy Sữa Tiên Sơn (`NM_TS`) |
+| **7** | `hr.thongnhat` | `Yêu cầu đổi MK lần đầu` | `HR_DONVI` | **Nhân sự Nhà máy Thống Nhất**: Quản lý 45 nhân sự NM Thống Nhất (TP.HCM). | `VNM-0137` | Nhà máy Sữa Thống Nhất (`NM_TL`) |
+| **8** | `hr.saigon` | `Yêu cầu đổi MK lần đầu` | `HR_DONVI` | **Nhân sự Nhà máy Sài Gòn**: Quản lý 45 nhân sự NM Sài Gòn. | `VNM-0182` | Nhà máy Sữa Sài Gòn (`NM_SG`) |
+| **9** | `hr.tayninh` | `Yêu cầu đổi MK lần đầu` | `HR_DONVI` | **Nhân sự Trang trại Tây Ninh**: Quản lý 23 nhân sự Trang trại Green Farm Tây Ninh. | `VNM-0227` | Trang trại Green Farm Tây Ninh (`TT_GREEN1`) |
+| **10** | `quanly.binhduong` | `Yêu cầu đổi MK lần đầu` | `QUANLY_TRUCTIEP` | **Quản đốc Xưởng Tetra Pak**: Phê duyệt nghỉ phép Cấp 1, xếp ca tuần, xác nhận công. | `VNM-0049` | Xưởng Chiết rót Bình Dương (`NM_BD_XUONG1`) |
+| **11** | `congnhan.bd` | `Yêu cầu đổi MK lần đầu` | `NHANVIEN` | **Công nhân Vận hành Ca 1 (ESS)**: Cổng tự phục vụ xem phiếu lương cá nhân, gửi đơn nghỉ phép. | `VNM-0055` | Ca Sản xuất 1 Bình Dương (`NM_BD_CA1`) |
 
-> 💡 **Tài khoản ESS cho toàn bộ nhân sự**: Cả 300 nhân sự đều có tài khoản đăng nhập cá nhân theo định dạng `vnm.0001`, `vnm.0002`, ..., `vnm.0300` với mật khẩu chung `Vinamilk@2026`.
+> 💡 **Tài khoản ESS cho toàn bộ nhân sự**: Cả 300 nhân sự đều có tài khoản đăng nhập cá nhân theo định dạng `vnm.0001`, `vnm.0002`, ..., `vnm.0300` với cờ `MustChangePassword = 1` được kích hoạt theo mặc định.
 
 ---
 
