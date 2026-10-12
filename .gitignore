@@ -1,8 +1,8 @@
 # =====================================================================
-# VINAMILK HRIS - ENTERPRISE .GITIGNORE
+# VINAMILK HRM - ENTERPRISE .GITIGNORE
 # =====================================================================
 
-# 1. Environment and Secrets (OWASP A07 & Nghị định 13/2023/NĐ-CP)
+# 1. Environment and Secrets
 .env
 .env.*
 !.env.example
@@ -14,34 +14,49 @@ cookies.txt
 *.cert
 *.pfx
 
-# 2. Composer & Node Dependencies
+# 2. Dependencies & Package Managers
+vendor/
 /vendor/
+node_modules/
 /node_modules/
 npm-debug.log
 yarn-error.log
+phpunit.phar
+composer.phar
 
-# 3. Laravel Storage & Cache
+# 3. Uploads & Temporary Media
+uploads/
+/uploads/
+public/uploads/
+/public/uploads/
+
+# 4. Binary & Build Outputs (.NET / C# / Executables)
+**/bin
+**/bin/**
+**/obj
+**/obj/**
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+.vs/
+
+# 5. Storage & Logs
 /storage/*.key
-/storage/app/private/
-/storage/app/public/
-/storage/framework/cache/*
-!/storage/framework/cache/.gitignore
-/storage/framework/sessions/*
-!/storage/framework/sessions/.gitignore
-/storage/framework/views/*
-!/storage/framework/views/.gitignore
 /storage/logs/*
 !/storage/logs/.gitignore
+logs/
+*.log
 
-# 4. Database Dumps & Backups
-*.sql
+# 6. Database Dumps & Backups
 *.dump
 *.tar.gz
 *.zip
 /backup/
 /backups/
 
-# 5. IDE & OS Metadata
+# 7. IDE & OS Metadata
 .idea/
 .vscode/
 *.suo
@@ -50,11 +65,3 @@ yarn-error.log
 *.sln.docstates
 .DS_Store
 Thumbs.db
-
-# 6. .NET / C# Build Outputs (for legacy and hybrid services)
-bin/
-obj/
-*.dll
-*.pdb
-*.exe
-.vs/
