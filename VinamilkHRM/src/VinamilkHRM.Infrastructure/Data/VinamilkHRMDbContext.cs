@@ -18,6 +18,7 @@ using VinamilkHRM.Domain.Entities.Statutory;
 using VinamilkHRM.Domain.Entities.Workflows;
 using VinamilkHRM.Domain.Entities.Notifications;
 using VinamilkHRM.Domain.Entities.OnboardingOffboarding;
+using VinamilkHRM.Domain.Entities.Privacy;
 using VinamilkHRM.Infrastructure.Identity;
 
 namespace VinamilkHRM.Infrastructure.Data;
@@ -168,6 +169,11 @@ public class VinamilkHRMDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<EmployeeChecklistTask> EmployeeChecklistTasks => Set<EmployeeChecklistTask>();
     public DbSet<SocialInsuranceDeclaration> SocialInsuranceDeclarations => Set<SocialInsuranceDeclaration>();
     public DbSet<FinalSettlement> FinalSettlements => Set<FinalSettlement>();
+
+    // Personal Data Protection DbSets (Session 11 P1-5)
+    public DbSet<PersonalDataConsent> PersonalDataConsents => Set<PersonalDataConsent>();
+    public DbSet<DataRetentionPolicy> DataRetentionPolicies => Set<DataRetentionPolicy>();
+    public DbSet<PersonalDataAccessLog> PersonalDataAccessLogs => Set<PersonalDataAccessLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

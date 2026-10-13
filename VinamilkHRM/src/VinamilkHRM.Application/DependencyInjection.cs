@@ -51,6 +51,9 @@ public static class DependencyInjection
                 // Session 11 P1-4 Onboarding / Offboarding Service
         services.AddScoped<VinamilkHRM.Application.OnboardingOffboarding.IOnboardingOffboardingService, VinamilkHRM.Application.OnboardingOffboarding.OnboardingOffboardingService>();
 
+                // Session 11 P1-5 Personal Data Protection Service
+        services.AddScoped<VinamilkHRM.Application.Privacy.IPersonalDataProtectionService, VinamilkHRM.Application.Privacy.PersonalDataProtectionService>();
+
         return services;
     }
 }

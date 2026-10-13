@@ -1,4 +1,4 @@
-using VinamilkHRM.Domain.Common;
+﻿using VinamilkHRM.Domain.Common;
 using VinamilkHRM.Domain.Entities.Employees;
 using VinamilkHRM.Domain.Enums;
 
@@ -35,6 +35,9 @@ public class CandidateApplication : BaseAuditableEntity
     public int? HiredEmployeeId { get; private set; }
     public virtual Employee? HiredEmployee { get; private set; }
     public DateTime? HiredDate { get; private set; }
+
+    public bool IsAnonymized { get; private set; }
+    public DateTime? AnonymizedAt { get; private set; }
 
     protected CandidateApplication()
     {
@@ -102,6 +105,21 @@ public class CandidateApplication : BaseAuditableEntity
         HiredEmployeeId = employeeId;
         HiredDate = DateTime.UtcNow;
         Status = JobApplicationStatus.Hired;
+    }
+
+    public void Anonymize()
+    {
+        FullName = "HỒ SƠ ĐÃ ẨN DANH";
+        Email = $"anonymized_{Id}@vinamilk.invalid";
+        PhoneNumber = "0000000000";
+        CitizenId = "REDACTED";
+        Address = "REDACTED";
+        ResumeFileName = string.Empty;
+        CoverLetter = string.Empty;
+        PortfolioUrl = string.Empty;
+        EvaluationNotes = $"[Ẩn danh theo Nghị định 13/2023/NĐ-CP ngày {DateTime.UtcNow:dd/MM/yyyy}]";
+        IsAnonymized = true;
+        AnonymizedAt = DateTime.UtcNow;
     }
 
     public void Reject(string reason = "")

@@ -15,6 +15,7 @@ using VinamilkHRM.Domain.Entities.Statutory;
 using VinamilkHRM.Domain.Entities.Workflows;
 using VinamilkHRM.Domain.Entities.Notifications;
 using VinamilkHRM.Domain.Entities.OnboardingOffboarding;
+using VinamilkHRM.Domain.Entities.Privacy;
 
 namespace VinamilkHRM.Application.Common.Interfaces;
 
@@ -130,6 +131,11 @@ public interface IApplicationDbContext
     DbSet<EmployeeChecklistTask> EmployeeChecklistTasks { get; }
     DbSet<SocialInsuranceDeclaration> SocialInsuranceDeclarations { get; }
     DbSet<FinalSettlement> FinalSettlements { get; }
+
+    // Personal Data Protection DbSets (Session 11 P1-5)
+    DbSet<PersonalDataConsent> PersonalDataConsents { get; }
+    DbSet<DataRetentionPolicy> DataRetentionPolicies { get; }
+    DbSet<PersonalDataAccessLog> PersonalDataAccessLogs { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
