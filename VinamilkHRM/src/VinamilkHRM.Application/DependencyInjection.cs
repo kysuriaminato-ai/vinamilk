@@ -44,6 +44,10 @@ public static class DependencyInjection
                 // Session 11 P1-2 Notification Service
         services.AddScoped<VinamilkHRM.Domain.Interfaces.Notifications.INotificationService, VinamilkHRM.Application.Notifications.NotificationService>();
 
+                // Session 11 P1-3 Contract Management & Document Generation Services
+        services.AddScoped<VinamilkHRM.Application.Contracts.IContractDocumentGenerator, VinamilkHRM.Application.Contracts.DocxContractDocumentGenerator>();
+        services.AddScoped<VinamilkHRM.Application.Contracts.IContractManagementService, VinamilkHRM.Application.Contracts.ContractManagementService>();
+
         return services;
     }
 }

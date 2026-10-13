@@ -104,6 +104,9 @@ public static class DependencyInjection
         // Session 11 P1-2 Smtp Email Sender
         services.AddTransient<VinamilkHRM.Domain.Interfaces.Notifications.IEmailSender, VinamilkHRM.Infrastructure.Services.Notifications.SmtpEmailSender>();
 
+        // Session 11 P1-3 E-Signature Provider
+        services.AddScoped<VinamilkHRM.Domain.Interfaces.Contracts.IESignProvider, VinamilkHRM.Infrastructure.Services.Contracts.MockESignProvider>();
+
         // Cấu hình Hangfire lưu trên SQL Server
         services.AddHangfire(config => config
             .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
