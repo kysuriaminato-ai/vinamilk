@@ -16,6 +16,7 @@ using VinamilkHRM.Domain.Entities.Workflows;
 using VinamilkHRM.Domain.Entities.Notifications;
 using VinamilkHRM.Domain.Entities.OnboardingOffboarding;
 using VinamilkHRM.Domain.Entities.Privacy;
+using VinamilkHRM.Domain.Entities.P2;
 
 namespace VinamilkHRM.Application.Common.Interfaces;
 
@@ -136,6 +137,17 @@ public interface IApplicationDbContext
     DbSet<PersonalDataConsent> PersonalDataConsents { get; }
     DbSet<DataRetentionPolicy> DataRetentionPolicies { get; }
     DbSet<PersonalDataAccessLog> PersonalDataAccessLogs { get; }
+
+    // Phase 2 Skeleton DbSets (Session 11 P2)
+    DbSet<JobRequisition> JobRequisitions { get; }
+    DbSet<TrainingCourse> TrainingCourses { get; }
+    DbSet<EmployeeCertification> EmployeeCertifications { get; }
+    DbSet<CompetencyFramework> CompetencyFrameworks { get; }
+    DbSet<Evaluation360> Evaluation360s { get; }
+    DbSet<NineBoxPlacement> NineBoxPlacements { get; }
+    DbSet<SafetyIncident> SafetyIncidents { get; }
+    DbSet<LegalEntity> LegalEntities { get; }
+    DbSet<ReportTemplateDefinition> ReportTemplateDefinitions { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

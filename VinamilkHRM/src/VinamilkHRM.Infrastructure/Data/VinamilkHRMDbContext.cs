@@ -19,6 +19,7 @@ using VinamilkHRM.Domain.Entities.Workflows;
 using VinamilkHRM.Domain.Entities.Notifications;
 using VinamilkHRM.Domain.Entities.OnboardingOffboarding;
 using VinamilkHRM.Domain.Entities.Privacy;
+using VinamilkHRM.Domain.Entities.P2;
 using VinamilkHRM.Infrastructure.Identity;
 
 namespace VinamilkHRM.Infrastructure.Data;
@@ -174,6 +175,17 @@ public class VinamilkHRMDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<PersonalDataConsent> PersonalDataConsents => Set<PersonalDataConsent>();
     public DbSet<DataRetentionPolicy> DataRetentionPolicies => Set<DataRetentionPolicy>();
     public DbSet<PersonalDataAccessLog> PersonalDataAccessLogs => Set<PersonalDataAccessLog>();
+
+    // Phase 2 Skeleton DbSets (Session 11 P2)
+    public DbSet<JobRequisition> JobRequisitions => Set<JobRequisition>();
+    public DbSet<TrainingCourse> TrainingCourses => Set<TrainingCourse>();
+    public DbSet<EmployeeCertification> EmployeeCertifications => Set<EmployeeCertification>();
+    public DbSet<CompetencyFramework> CompetencyFrameworks => Set<CompetencyFramework>();
+    public DbSet<Evaluation360> Evaluation360s => Set<Evaluation360>();
+    public DbSet<NineBoxPlacement> NineBoxPlacements => Set<NineBoxPlacement>();
+    public DbSet<SafetyIncident> SafetyIncidents => Set<SafetyIncident>();
+    public DbSet<LegalEntity> LegalEntities => Set<LegalEntity>();
+    public DbSet<ReportTemplateDefinition> ReportTemplateDefinitions => Set<ReportTemplateDefinition>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
