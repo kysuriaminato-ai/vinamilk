@@ -8,6 +8,11 @@ public abstract class BaseEntity
 {
     public int Id { get; protected set; }
 
+    /// <summary>
+    /// Concurrency token để kiểm soát tương tranh lạc quan (Optimistic Concurrency Control).
+    /// </summary>
+    public byte[] RowVersion { get; set; } = [];
+
     private readonly List<IDomainEvent> _domainEvents = new();
 
     public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();

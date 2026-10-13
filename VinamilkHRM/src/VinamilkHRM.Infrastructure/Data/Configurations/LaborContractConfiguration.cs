@@ -9,7 +9,7 @@ public class LaborContractConfiguration : IEntityTypeConfiguration<LaborContract
 {
     public void Configure(EntityTypeBuilder<LaborContract> builder)
     {
-        builder.ToTable("LaborContracts");
+        builder.ToTable("LaborContracts", b => b.IsTemporal());
 
         builder.HasKey(c => c.Id);
 

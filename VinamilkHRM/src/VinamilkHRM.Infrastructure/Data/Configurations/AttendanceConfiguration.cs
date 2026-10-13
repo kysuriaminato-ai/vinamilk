@@ -8,7 +8,7 @@ public class AttendanceConfiguration : IEntityTypeConfiguration<Attendance>
 {
     public void Configure(EntityTypeBuilder<Attendance> builder)
     {
-        builder.ToTable("Attendances");
+        builder.ToTable("Attendances", b => b.IsTemporal());
 
         builder.HasKey(a => a.Id);
 
@@ -25,6 +25,13 @@ public class AttendanceConfiguration : IEntityTypeConfiguration<Attendance>
 
         builder.Property(a => a.Note)
             .HasMaxLength(500);
+
+        builder.Property(a => a.IsImported)
+            .IsRequired()
+            .HasDefaultValue(false);
+
+        builder.Property(a => a.LegacyId);
+        builder.HasIndex(a => a.LegacyId);
 
         builder.Property(a => a.CreatedBy)
             .IsRequired()

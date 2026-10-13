@@ -1,0 +1,87 @@
+# =====================================================================
+# VINAMILK HRM ENTERPRISE - ROOT .GITIGNORE
+# =====================================================================
+
+# 1. Environment and Secrets
+.env
+.env.*
+!.env.example
+cookies.txt
+*.cookie
+*.key
+*.pem
+*.crt
+*.cert
+*.pfx
+
+# 2. Local Configuration Overrides
+appsettings.*.local.json
+appsettings.Development.local.json
+appsettings.Production.local.json
+
+# 3. .NET / Visual Studio Build Outputs & Caches
+**/bin/
+**/obj/
+bin/
+obj/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+.vs/
+_ReSharper*/
+*.resharper
+packages/
+*.nupkg
+TestResults/
+*.launchsettings.json.user
+
+# 4. PHP / Composer / Testing
+portal/vendor/
+vendor/
+portal/composer.phar
+composer.phar
+.phpunit.cache/
+portal/.phpunit.cache/
+.phpunit.result.cache
+portal/.phpunit.result.cache
+
+# 5. User Uploads & Media Storage
+uploads/
+/uploads/
+**/uploads/
+storage/app/public/
+storage/logs/*
+!storage/logs/.gitignore
+portal/storage/logs/*
+!portal/storage/logs/.gitignore
+
+# 6. Node / NPM / Web Assets
+node_modules/
+/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# 7. Operating System & Editor Metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*~
+
+# 8. Temporary Files & Logs
+*.log
+*.tmp
+*.bak
+*.dump
+*.tar.gz
+*.zip

@@ -1,0 +1,22 @@
+{
+    "name": "vinamilk/hris",
+    "description": "Hệ thống Quản trị Nhân lực Vinamilk - PHP MVC",
+    "type": "project",
+    "require": {
+        "php": "^8.0",
+        "vlucas/phpdotenv": "^5.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Mai Thu",
+            "email": "admin@vinamilk.com.vn"
+        }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

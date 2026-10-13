@@ -1,0 +1,838 @@
+/**
+ * =====================================================================
+ * VINAMILK ENTERPRISE HRM - DESIGN SYSTEM & TOKENS (CSS)
+ * =====================================================================
+ * Tuân thủ WCAG AA:
+ * - Tương phản màu chuẩn (Text trên nền >= 4.5:1, UI lớn/đồ họa >= 3:1)
+ * - Hiệu ứng focus-visible rõ nét (2px solid #0033A0 + 2px offset)
+ * - Thang khoảng cách 8px (8, 16, 24, 32, 40, 48, 56, 64px)
+ * - Font chữ: Be Vietnam Pro (Google Fonts)
+ * =====================================================================
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+
+:root {
+    /* --- BẢNG MÀU CHỦ ĐẠO (VINAMILK ROYAL BLUE & WHITE) --- */
+    --vnm-primary: #0033A0;            /* Vinamilk Primary Blue */
+    --vnm-primary-hover: #002575;      /* Đậm hơn khi hover */
+    --vnm-primary-active: #001B54;     /* Nhấn chọn */
+    --vnm-primary-subtle: #EBF1FA;     /* Nền xanh nhạt pastel */
+    --vnm-primary-border: #99B2DC;     /* Viền xanh nhạt */
+    
+    --vnm-white: #FFFFFF;              /* Trắng tinh khiết */
+    --vnm-surface: #F8FAFC;            /* Nền ứng dụng */
+    --vnm-surface-subtle: #F1F5F9;     /* Nền bảng/khu vực con */
+    --vnm-surface-card: #FFFFFF;       /* Nền card */
+    --vnm-border: #E2E8F0;             /* Viền mỏng mặc định */
+    --vnm-border-strong: #CBD5E1;      /* Viền đậm hơn */
+
+    /* --- MÀU CHỮ & ĐỘ TƯƠNG PHẢN WCAG AA --- */
+    --vnm-text-main: #0F172A;          /* Chữ chính (Tương phản ~15.6:1 trên trắng) */
+    --vnm-text-muted: #475569;         /* Chữ phụ (Tương phản ~5.9:1 trên trắng) */
+    --vnm-text-inverse: #FFFFFF;       /* Chữ trắng (Tương phản ~8.7:1 trên #0033A0) */
+
+    /* --- MÀU TRẠNG THÁI (STATUS COLORS - WCAG AA COMPLIANT) --- */
+    /* 1. Thành công (Đã duyệt / Hiệu lực / Hoàn thành) */
+    --vnm-success: #10B981;
+    --vnm-success-bg: #ECFDF5;
+    --vnm-success-border: #A7F3D0;
+    --vnm-success-text: #065F46;       /* Contrast 6.8:1 */
+
+    /* 2. Cảnh báo (Chờ duyệt / Sắp hết hạn / Cần chú ý) */
+    --vnm-warning: #F59E0B;
+    --vnm-warning-bg: #FFFBEB;
+    --vnm-warning-border: #FDE68A;
+    --vnm-warning-text: #92400E;       /* Contrast 5.3:1 */
+
+    /* 3. Lỗi / Nguy hiểm (Từ chối / Quá hạn / Khóa) */
+    --vnm-danger: #EF4444;
+    --vnm-danger-bg: #FEF2F2;
+    --vnm-danger-border: #FECACA;
+    --vnm-danger-text: #991B1B;        /* Contrast 6.9:1 */
+
+    /* 4. Thông tin (Hướng dẫn / Đang xử lý) */
+    --vnm-info: #0284C7;
+    --vnm-info-bg: #F0F9FF;
+    --vnm-info-border: #BAE6FD;
+    --vnm-info-text: #075985;          /* Contrast 6.5:1 */
+
+    /* --- THANG ĐO KHOẢNG CÁCH 8PX (8PX SPACING SCALE) --- */
+    --vnm-space-1: 8px;
+    --vnm-space-2: 16px;
+    --vnm-space-3: 24px;
+    --vnm-space-4: 32px;
+    --vnm-space-5: 40px;
+    --vnm-space-6: 48px;
+    --vnm-space-7: 56px;
+    --vnm-space-8: 64px;
+
+    /* --- BO GÓC & BÓNG ĐỔ --- */
+    --vnm-radius-sm: 6px;
+    --vnm-radius-md: 10px;
+    --vnm-radius-lg: 14px;
+    --vnm-radius-full: 9999px;
+    --vnm-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --vnm-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+    --vnm-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+}
+
+/* =====================================================================
+ * RESET & NỀN TẢNG TIÊU CHUẨN
+ * ===================================================================== */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: var(--vnm-surface);
+    color: var(--vnm-text-main);
+    line-height: 1.5;
+    font-size: 0.9375rem; /* 15px */
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* =====================================================================
+ * WCAG AA ACCESSIBILITY & FOCUS-VISIBLE
+ * ===================================================================== */
+/* Skip Link cho người dùng bàn phím */
+.skip-link {
+    position: absolute;
+    top: -100px;
+    left: var(--vnm-space-2);
+    background: var(--vnm-primary);
+    color: var(--vnm-white);
+    padding: var(--vnm-space-1) var(--vnm-space-2);
+    border-radius: var(--vnm-radius-sm);
+    font-weight: 600;
+    z-index: 9999;
+    text-decoration: none;
+    box-shadow: var(--vnm-shadow-md);
+    transition: top 0.2s ease-in-out;
+}
+.skip-link:focus {
+    top: var(--vnm-space-2);
+    outline: 3px solid #FCD34D;
+    outline-offset: 2px;
+}
+
+/* Viền Focus chuẩn WCAG AA cho mọi tương tác bàn phím */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--vnm-primary) !important;
+    outline-offset: 2px !important;
+    box-shadow: 0 0 0 3px rgba(0, 51, 160, 0.2) !important;
+}
+
+/* Ẩn hình ảnh khỏi trình đọc màn hình nhưng vẫn trực quan */
+.visually-hidden-focusable:not(:focus):not(:focus-within) {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+
+/* =====================================================================
+ * LAYOUT HEADER & BRANDING
+ * ===================================================================== */
+.header-vnm {
+    background: var(--vnm-primary);
+    color: var(--vnm-white);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+    box-shadow: 0 2px 8px rgba(0, 32, 96, 0.15);
+}
+
+.brand-badge {
+    background: var(--vnm-white);
+    color: var(--vnm-primary);
+    font-weight: 800;
+    font-size: 0.95rem;
+    padding: 3px 10px;
+    border-radius: var(--vnm-radius-sm);
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* Header breadcrumb bar (thanh phụ ngay dưới top bar) */
+.breadcrumb-bar {
+    background: var(--vnm-white);
+    border-bottom: 1px solid var(--vnm-border);
+    padding: var(--vnm-space-1) var(--vnm-space-3);
+}
+
+.breadcrumb-vnm {
+    margin: 0;
+    padding: 0;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    list-style: none;
+}
+
+.breadcrumb-vnm .breadcrumb-item + .breadcrumb-item::before {
+    content: "/";
+    padding: 0 var(--vnm-space-1);
+    color: var(--vnm-text-muted);
+}
+
+.breadcrumb-vnm a {
+    color: var(--vnm-primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.breadcrumb-vnm a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb-vnm .active {
+    color: var(--vnm-text-muted);
+    font-weight: 600;
+}
+
+/* =====================================================================
+ * SEARCH NHANH NHÂN VIÊN (QUICK SEARCH)
+ * ===================================================================== */
+.quick-search-wrapper {
+    position: relative;
+    max-width: 380px;
+    width: 100%;
+}
+
+.quick-search-input {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: var(--vnm-white) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: var(--vnm-radius-md);
+    padding: 6px 36px 6px 36px;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+    width: 100%;
+}
+
+.quick-search-input::placeholder {
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.quick-search-input:focus {
+    background-color: var(--vnm-white);
+    color: var(--vnm-text-main) !important;
+    border-color: var(--vnm-white);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.quick-search-input:focus::placeholder {
+    color: var(--vnm-text-muted);
+}
+
+.quick-search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255, 255, 255, 0.8);
+    pointer-events: none;
+    font-size: 0.9rem;
+}
+
+.quick-search-input:focus ~ .quick-search-icon {
+    color: var(--vnm-primary);
+}
+
+.quick-search-shortcut {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.7rem;
+    background: rgba(255, 255, 255, 0.25);
+    color: var(--vnm-white);
+    padding: 1px 6px;
+    border-radius: 4px;
+    pointer-events: none;
+    font-weight: 600;
+}
+
+.quick-search-input:focus ~ .quick-search-shortcut {
+    display: none;
+}
+
+/* Dropdown kết quả tìm kiếm */
+.quick-search-results {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: var(--vnm-white);
+    border: 1px solid var(--vnm-border);
+    border-radius: var(--vnm-radius-md);
+    box-shadow: var(--vnm-shadow-lg);
+    z-index: 1050;
+    max-height: 380px;
+    overflow-y: auto;
+    display: none;
+}
+
+.quick-search-results.show {
+    display: block;
+}
+
+.quick-search-item {
+    padding: var(--vnm-space-1) var(--vnm-space-2);
+    border-bottom: 1px solid var(--vnm-border);
+    display: flex;
+    align-items: center;
+    gap: var(--vnm-space-1);
+    text-decoration: none;
+    color: var(--vnm-text-main);
+    transition: background-color 0.15s ease;
+}
+
+.quick-search-item:last-child {
+    border-bottom: none;
+}
+
+.quick-search-item:hover, .quick-search-item:focus {
+    background-color: var(--vnm-primary-subtle);
+    color: var(--vnm-primary);
+    outline: none;
+}
+
+/* =====================================================================
+ * NOTIFICATION BELL & DROPDOWN
+ * ===================================================================== */
+.btn-notif {
+    position: relative;
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--vnm-white);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: var(--vnm-radius-md);
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.btn-notif:hover, .btn-notif:focus {
+    background: rgba(255, 255, 255, 0.25);
+    color: var(--vnm-white);
+}
+
+.notif-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--vnm-danger);
+    color: var(--vnm-white);
+    font-size: 0.7rem;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: var(--vnm-radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--vnm-primary);
+}
+
+.notif-dropdown-menu {
+    width: 380px;
+    max-width: 95vw;
+    border-radius: var(--vnm-radius-md);
+    box-shadow: var(--vnm-shadow-lg);
+    border: 1px solid var(--vnm-border);
+    padding: 0;
+    overflow: hidden;
+}
+
+.notif-header {
+    background: var(--vnm-surface-subtle);
+    border-bottom: 1px solid var(--vnm-border);
+    padding: var(--vnm-space-1) var(--vnm-space-2);
+}
+
+.notif-category-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--vnm-text-muted);
+    padding: var(--vnm-space-1) var(--vnm-space-2) 4px;
+    background: var(--vnm-surface);
+}
+
+.notif-item {
+    padding: 10px var(--vnm-space-2);
+    border-bottom: 1px solid var(--vnm-border);
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    text-decoration: none;
+    color: var(--vnm-text-main);
+    transition: background 0.15s;
+}
+
+.notif-item:hover, .notif-item:focus {
+    background: var(--vnm-primary-subtle);
+}
+
+.notif-item-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--vnm-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* =====================================================================
+ * SIDEBAR MENU TỰ ĐỘNG SINH TỪ DATABASE
+ * ===================================================================== */
+.sidebar-vnm {
+    width: 270px;
+    background: var(--vnm-white);
+    border-right: 1px solid var(--vnm-border);
+    min-height: calc(100vh - 58px);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.sidebar-nav {
+    padding: var(--vnm-space-2) var(--vnm-space-1);
+    list-style: none;
+    margin: 0;
+}
+
+.sidebar-category {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--vnm-text-muted);
+    padding: var(--vnm-space-2) var(--vnm-space-2) 6px;
+}
+
+.sidebar-link {
+    color: var(--vnm-text-main);
+    font-weight: 500;
+    padding: 9px var(--vnm-space-2);
+    border-radius: var(--vnm-radius-md);
+    margin: 2px 0;
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+.sidebar-link i {
+    font-size: 1.15rem;
+    margin-right: 12px;
+    color: var(--vnm-text-muted);
+    width: 22px;
+    text-align: center;
+    transition: color 0.15s ease;
+}
+
+.sidebar-link:hover {
+    background-color: var(--vnm-primary-subtle);
+    color: var(--vnm-primary);
+    font-weight: 600;
+}
+
+.sidebar-link:hover i {
+    color: var(--vnm-primary);
+}
+
+.sidebar-link.active {
+    background-color: var(--vnm-primary);
+    color: var(--vnm-white);
+    font-weight: 600;
+}
+
+.sidebar-link.active i {
+    color: var(--vnm-white);
+}
+
+/* Accordion menu con */
+.sidebar-submenu {
+    list-style: none;
+    padding-left: 36px;
+    margin: 0;
+}
+
+.sidebar-submenu .sidebar-link {
+    padding: 7px 12px;
+    font-size: 0.875rem;
+}
+
+.sidebar-submenu .sidebar-link.active {
+    background-color: var(--vnm-primary-subtle);
+    color: var(--vnm-primary);
+    font-weight: 700;
+}
+
+.sidebar-submenu .sidebar-link.active i {
+    color: var(--vnm-primary);
+}
+
+/* Footer chân sidebar */
+.sidebar-footer {
+    padding: var(--vnm-space-2);
+    border-top: 1px solid var(--vnm-border);
+    background: var(--vnm-surface);
+}
+
+/* =====================================================================
+ * THÀNH PHẦN DÙNG CHUNG: THẺ KPI (KPI CARDS)
+ * ===================================================================== */
+.vnm-kpi-card {
+    background: var(--vnm-white);
+    border: 1px solid var(--vnm-border);
+    border-radius: var(--vnm-radius-lg);
+    padding: var(--vnm-space-3);
+    box-shadow: var(--vnm-shadow-sm);
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.vnm-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--vnm-shadow-md);
+    border-color: var(--vnm-primary-border);
+}
+
+.vnm-kpi-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--vnm-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--vnm-space-1);
+}
+
+.vnm-kpi-value {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--vnm-text-main);
+    line-height: 1.2;
+    margin-bottom: var(--vnm-space-1);
+}
+
+.vnm-kpi-icon-badge {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--vnm-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+}
+
+.vnm-kpi-trend {
+    font-size: 0.8125rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+}
+
+/* =====================================================================
+ * THÀNH PHẦN DÙNG CHUNG: BADGE TRẠNG THÁI (WCAG AA)
+ * ===================================================================== */
+.vnm-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--vnm-radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.3px;
+    border: 1px solid transparent;
+}
+
+.vnm-badge-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: var(--vnm-radius-full);
+    display: inline-block;
+}
+
+/* Success */
+.vnm-badge-success {
+    background-color: var(--vnm-success-bg);
+    color: var(--vnm-success-text);
+    border-color: var(--vnm-success-border);
+}
+.vnm-badge-success .vnm-badge-dot {
+    background-color: var(--vnm-success);
+}
+
+/* Warning */
+.vnm-badge-warning {
+    background-color: var(--vnm-warning-bg);
+    color: var(--vnm-warning-text);
+    border-color: var(--vnm-warning-border);
+}
+.vnm-badge-warning .vnm-badge-dot {
+    background-color: var(--vnm-warning);
+}
+
+/* Danger / Error */
+.vnm-badge-danger {
+    background-color: var(--vnm-danger-bg);
+    color: var(--vnm-danger-text);
+    border-color: var(--vnm-danger-border);
+}
+.vnm-badge-danger .vnm-badge-dot {
+    background-color: var(--vnm-danger);
+}
+
+/* Info */
+.vnm-badge-info {
+    background-color: var(--vnm-info-bg);
+    color: var(--vnm-info-text);
+    border-color: var(--vnm-info-border);
+}
+.vnm-badge-info .vnm-badge-dot {
+    background-color: var(--vnm-info);
+}
+
+/* Neutral */
+.vnm-badge-neutral {
+    background-color: var(--vnm-surface-subtle);
+    color: var(--vnm-text-muted);
+    border-color: var(--vnm-border-strong);
+}
+.vnm-badge-neutral .vnm-badge-dot {
+    background-color: var(--vnm-text-muted);
+}
+
+/* =====================================================================
+ * THÀNH PHẦN DÙNG CHUNG: BẢNG DỮ LIỆU CHUẨN (DATA TABLE)
+ * ===================================================================== */
+.vnm-table-container {
+    background: var(--vnm-white);
+    border: 1px solid var(--vnm-border);
+    border-radius: var(--vnm-radius-lg);
+    box-shadow: var(--vnm-shadow-sm);
+    overflow: hidden;
+}
+
+.vnm-table-toolbar {
+    padding: var(--vnm-space-2) var(--vnm-space-3);
+    background: var(--vnm-white);
+    border-bottom: 1px solid var(--vnm-border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vnm-space-2);
+    align-items: center;
+    justify-content: space-between;
+}
+
+.vnm-table {
+    width: 100%;
+    margin-bottom: 0;
+    vertical-align: middle;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.vnm-table thead th {
+    background-color: var(--vnm-surface-subtle);
+    color: var(--vnm-text-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 12px var(--vnm-space-2);
+    border-bottom: 1px solid var(--vnm-border);
+    white-space: nowrap;
+}
+
+.vnm-table thead th a.sort-link {
+    color: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.vnm-table thead th a.sort-link:hover {
+    color: var(--vnm-primary);
+}
+
+.vnm-table tbody td {
+    padding: 14px var(--vnm-space-2);
+    border-bottom: 1px solid var(--vnm-border);
+    font-size: 0.875rem;
+    color: var(--vnm-text-main);
+    background: var(--vnm-white);
+    transition: background-color 0.1s ease;
+}
+
+.vnm-table tbody tr:hover td {
+    background-color: #F8FAFC;
+}
+
+.vnm-table-footer {
+    padding: var(--vnm-space-2) var(--vnm-space-3);
+    background: var(--vnm-white);
+    border-top: 1px solid var(--vnm-border);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--vnm-space-2);
+}
+
+/* =====================================================================
+ * THÀNH PHẦN DÙNG CHUNG: TRẠNG THÁI RỖNG (EMPTY STATE)
+ * ===================================================================== */
+.vnm-empty-state {
+    padding: var(--vnm-space-6) var(--vnm-space-3);
+    text-align: center;
+}
+
+.vnm-empty-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto var(--vnm-space-2);
+    border-radius: var(--vnm-radius-full);
+    background-color: var(--vnm-primary-subtle);
+    color: var(--vnm-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+}
+
+.vnm-empty-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--vnm-text-main);
+    margin-bottom: var(--vnm-space-1);
+}
+
+.vnm-empty-desc {
+    color: var(--vnm-text-muted);
+    font-size: 0.9rem;
+    max-width: 420px;
+    margin: 0 auto var(--vnm-space-3);
+}
+
+/* =====================================================================
+ * THÀNH PHẦN DÙNG CHUNG: MODAL XÁC NHẬN (CONFIRMATION MODAL)
+ * ===================================================================== */
+.vnm-modal-content {
+    border-radius: var(--vnm-radius-lg);
+    border: none;
+    box-shadow: var(--vnm-shadow-lg);
+    overflow: hidden;
+}
+
+.vnm-modal-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: var(--vnm-radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: var(--vnm-space-2);
+}
+
+/* =====================================================================
+ * CÁC LỚP TIỆN ÍCH VINAMILK (UTILITIES)
+ * ===================================================================== */
+.btn-vnm-primary {
+    background-color: var(--vnm-primary);
+    color: var(--vnm-white);
+    border: 1px solid var(--vnm-primary);
+    font-weight: 600;
+    border-radius: var(--vnm-radius-md);
+    padding: 8px 18px;
+    transition: all 0.15s ease;
+}
+
+.btn-vnm-primary:hover, .btn-vnm-primary:focus {
+    background-color: var(--vnm-primary-hover);
+    border-color: var(--vnm-primary-hover);
+    color: var(--vnm-white);
+}
+
+.btn-vnm-outline {
+    background-color: transparent;
+    color: var(--vnm-primary);
+    border: 1px solid var(--vnm-primary);
+    font-weight: 600;
+    border-radius: var(--vnm-radius-md);
+    padding: 8px 18px;
+    transition: all 0.15s ease;
+}
+
+.btn-vnm-outline:hover, .btn-vnm-outline:focus {
+    background-color: var(--vnm-primary-subtle);
+    color: var(--vnm-primary-hover);
+}
+
+/* Card chung */
+.card-vnm {
+    background: var(--vnm-white);
+    border: 1px solid var(--vnm-border);
+    border-radius: var(--vnm-radius-lg);
+    box-shadow: var(--vnm-shadow-sm);
+}
+
+/* In ấn tiêu chuẩn A4 */
+@media print {
+    .no-print, .header-vnm, .breadcrumb-bar, .sidebar-vnm, .btn, .pagination, footer, .modal {
+        display: none !important;
+    }
+
+    body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-size: 11pt !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    .content-wrapper {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+    }
+
+    .vnm-table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+    }
+
+    .vnm-table th, .vnm-table td {
+        border: 1px solid #333333 !important;
+        padding: 5px 8px !important;
+    }
+}

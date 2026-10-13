@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using VinamilkHRM.Domain.Entities.Salaries;
 
@@ -8,7 +8,7 @@ public class SalaryProposalConfiguration : IEntityTypeConfiguration<SalaryPropos
 {
     public void Configure(EntityTypeBuilder<SalaryProposal> builder)
     {
-        builder.ToTable("SalaryProposals");
+        builder.ToTable("SalaryProposals", b => b.IsTemporal());
 
         builder.HasKey(s => s.Id);
 
@@ -23,6 +23,24 @@ public class SalaryProposalConfiguration : IEntityTypeConfiguration<SalaryPropos
 
         builder.Property(s => s.ProposedAllowance)
             .HasPrecision(18, 2);
+
+        builder.Property(s => s.IncreasePercentage)
+            .HasPrecision(5, 2);
+
+        builder.Property(s => s.CompaRatioBefore)
+            .HasPrecision(5, 4);
+
+        builder.Property(s => s.CompaRatioAfter)
+            .HasPrecision(5, 4);
+
+        builder.Property(s => s.AnnualKpiScore)
+            .HasPrecision(5, 2);
+
+        builder.Property(s => s.Evidence)
+            .HasMaxLength(500);
+
+        builder.Property(s => s.ConflictReason)
+            .HasMaxLength(500);
 
         builder.Property(s => s.Reason)
             .IsRequired()
@@ -49,6 +67,16 @@ public class SalaryProposalConfiguration : IEntityTypeConfiguration<SalaryPropos
         builder.HasOne(s => s.ProposedBy)
             .WithMany()
             .HasForeignKey(s => s.ProposedById)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(s => s.SalaryReviewCycle)
+            .WithMany(c => c.Adjustments)
+            .HasForeignKey(s => s.SalaryReviewCycleId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(s => s.OrganizationalUnit)
+            .WithMany()
+            .HasForeignKey(s => s.OrganizationalUnitId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

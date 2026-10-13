@@ -1,0 +1,282 @@
+@model VinamilkHRM.Application.DTOs.Careers.JobPostingDto
+@{
+    ViewData["Title"] = $"{Model.Title} - Tuyển Dụng Vinamilk";
+    var relatedJobs = ViewBag.RelatedJobs as IReadOnlyList<VinamilkHRM.Application.DTOs.Careers.JobPostingDto> ?? new List<VinamilkHRM.Application.DTOs.Careers.JobPostingDto>();
+}
+
+<!-- Dynamic Meta Tags & Structured Data Schema.org/JobPosting cho Google Jobs -->
+@section Scripts {
+    <meta name="description" content="@(Model.Title) tại Vinamilk - @(Model.Department). Mức thu nhập: @(Model.SalaryDisplay). Làm việc tại @(Model.WorkLocation), @(Model.City)." />
+    <meta property="og:title" content="@Model.Title - Tuyển Dụng Vinamilk" />
+    <meta property="og:description" content="Ứng tuyển vị trí @Model.Title tại @Model.UnitTypeName. Thu nhập hấp dẫn: @Model.SalaryDisplay, môi trường chuẩn quốc tế." />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://tuyendung.vinamilk.com.vn/tuyen-dung/@Model.Slug" />
+    <meta property="og:image" content="https://www.vinamilk.com.vn/assets/images/job-banner-share.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="@Model.Title - Tuyển Dụng Vinamilk" />
+    <meta name="twitter:description" content="Khám phá cơ hội nghề nghiệp @Model.Title tại Vinamilk - Doanh nghiệp sữa số 1 Việt Nam." />
+
+    <!-- Schema.org JobPosting JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@@context": "https://schema.org/",
+      "@@type": "JobPosting",
+      "title": "@Html.Raw(Model.Title)",
+      "description": "@Html.Raw(Model.Description.Replace("\"", "\\\"").Replace("\r\n", " ").Replace("\n", " "))",
+      "identifier": {
+        "@@type": "PropertyValue",
+        "name": "Vinamilk",
+        "value": "@Model.JobCode"
+      },
+      "datePosted": "@Model.DatePosted.ToString("yyyy-MM-dd")",
+      "validThrough": "@Model.ValidThrough.ToString("yyyy-MM-dd")",
+      "employmentType": "@Model.EmploymentType",
+      "hiringOrganization": {
+        "@@type": "Organization",
+        "name": "Công ty Cổ phần Sữa Việt Nam (Vinamilk)",
+        "sameAs": "https://www.vinamilk.com.vn",
+        "logo": "https://www.vinamilk.com.vn/assets/images/logo-vinamilk.png"
+      },
+      "jobLocation": {
+        "@@type": "Place",
+        "address": {
+          "@@type": "PostalAddress",
+          "streetAddress": "@Html.Raw(Model.WorkLocation)",
+          "addressLocality": "@Html.Raw(Model.City)",
+          "addressRegion": "@Html.Raw(Model.RegionName)",
+          "addressCountry": "VN"
+        }
+      },
+      "baseSalary": {
+        "@@type": "MonetaryAmount",
+        "currency": "VND",
+        "value": {
+          "@@type": "QuantitativeValue",
+          "minValue": @(Model.SalaryMin ?? 15000000),
+          "maxValue": @(Model.SalaryMax ?? 35000000),
+          "unitText": "MONTH"
+        }
+      }
+    }
+    </script>
+}
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/" class="text-decoration-none">Trang chủ</a></li>
+        <li class="breadcrumb-item"><a href="/tuyen-dung" class="text-decoration-none">Cổng Tuyển dụng</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@Model.Title</li>
+    </ol>
+</nav>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi bi-check-circle-fill me-2 fs-5"></i>
+        <strong>@TempData["SuccessMessage"]</strong>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+        <strong>@TempData["ErrorMessage"]</strong>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="row g-4">
+    <!-- Nội dung chi tiết công việc -->
+    <div class="col-lg-8">
+        <article class="card-custom p-4 p-md-5 mb-4">
+            <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                <span class="badge bg-primary px-3 py-2">@Model.UnitTypeName</span>
+                <span class="badge bg-light text-dark border px-3 py-2"><i class="bi bi-qr-code me-1"></i> Mã: @Model.JobCode</span>
+            </div>
+
+            <h1 class="h2 fw-extrabold text-dark mb-3">@Model.Title</h1>
+
+            <!-- Quick summary badges -->
+            <div class="row g-3 p-3 bg-light rounded-3 mb-4">
+                <div class="col-sm-6 col-md-3">
+                    <div class="text-muted small">Thu nhập dự kiến</div>
+                    <div class="fw-bold text-success">@Model.SalaryDisplay</div>
+                </div>
+                <div class="col-sm-6 col-md-3">
+                    <div class="text-muted small">Kinh nghiệm</div>
+                    <div class="fw-bold text-dark">@Model.ExperienceLevel</div>
+                </div>
+                <div class="col-sm-6 col-md-3">
+                    <div class="text-muted small">Hạn nộp hồ sơ</div>
+                    <div class="fw-bold text-danger">@Model.ValidThrough.ToString("dd/MM/yyyy")</div>
+                </div>
+                <div class="col-sm-6 col-md-3">
+                    <div class="text-muted small">Hình thức làm việc</div>
+                    <div class="fw-bold text-dark">@Model.EmploymentType</div>
+                </div>
+            </div>
+
+            <section class="mb-4">
+                <h3 class="h5 fw-bold text-primary border-bottom pb-2 mb-3">
+                    <i class="bi bi-card-text me-2"></i> 1. Mô tả công việc (Job Description)
+                </h3>
+                <div class="text-secondary" style="line-height: 1.8; white-space: pre-line;">
+                    @Model.Description
+                </div>
+            </section>
+
+            <section class="mb-4">
+                <h3 class="h5 fw-bold text-primary border-bottom pb-2 mb-3">
+                    <i class="bi bi-check2-square me-2"></i> 2. Yêu cầu ứng viên (Requirements)
+                </h3>
+                <div class="text-secondary" style="line-height: 1.8; white-space: pre-line;">
+                    @Model.Requirements
+                </div>
+            </section>
+
+            <section class="mb-4">
+                <h3 class="h5 fw-bold text-primary border-bottom pb-2 mb-3">
+                    <i class="bi bi-gift me-2"></i> 3. Quyền lợi & Chế độ đãi ngộ Vinamilk Care (Benefits)
+                </h3>
+                <div class="text-secondary" style="line-height: 1.8; white-space: pre-line;">
+                    @Model.Benefits
+                </div>
+            </section>
+
+            <!-- Nút ứng tuyển lớn -->
+            <div class="p-4 bg-primary text-white rounded-3 mt-4 text-center">
+                <h4 class="fw-bold mb-2">Bạn đã sẵn sàng đồng hành cùng Vinamilk?</h4>
+                <p class="text-white-50 mb-3">Hãy nộp hồ sơ ngay hôm nay để trở thành mảnh ghép quan trọng của Tập đoàn.</p>
+                <button type="button" class="btn btn-warning btn-lg fw-bold px-5 text-dark rounded-pill shadow" data-bs-toggle="modal" data-bs-target="#applyModal">
+                    <i class="bi bi-send-fill me-2"></i> ỨNG TUYỂN NGAY BÂY GIỜ
+                </button>
+            </div>
+        </article>
+    </div>
+
+    <!-- Cột thông tin bên lề & Việc làm tương tự -->
+    <div class="col-lg-4">
+        <!-- Card thông tin đơn vị -->
+        <div class="card-custom p-4 mb-4">
+            <h4 class="h6 fw-bold text-uppercase text-muted border-bottom pb-2 mb-3">Thông Tin Đơn Vị Tuyển Dụng</h4>
+            <div class="d-flex align-items-center gap-3 mb-3">
+                <div class="bg-primary text-white p-3 rounded-3">
+                    <i class="bi bi-buildings fs-3"></i>
+                </div>
+                <div>
+                    <h5 class="fw-bold mb-0">Tập Đoàn Vinamilk</h5>
+                    <small class="text-muted">Doanh nghiệp sữa quốc gia</small>
+                </div>
+            </div>
+            <ul class="list-unstyled text-muted small mb-0">
+                <li class="mb-2"><i class="bi bi-geo-alt-fill text-danger me-2"></i> <strong>Địa điểm:</strong> @Model.WorkLocation, @Model.City</li>
+                <li class="mb-2"><i class="bi bi-diagram-3-fill text-info me-2"></i> <strong>Bộ phận:</strong> @Model.Department</li>
+                <li class="mb-2"><i class="bi bi-mortarboard-fill text-warning me-2"></i> <strong>Trình độ:</strong> @Model.EducationRequirement</li>
+                <li class="mb-2"><i class="bi bi-people-fill text-primary me-2"></i> <strong>Hồ sơ đã nộp:</strong> @Model.ApplicationCount ứng viên</li>
+                <li><i class="bi bi-calendar-event me-2 text-secondary"></i> <strong>Ngày đăng tin:</strong> @Model.DatePosted.ToString("dd/MM/yyyy")</li>
+            </ul>
+        </div>
+
+        <!-- Việc làm cùng khối -->
+        @if (relatedJobs.Any())
+        {
+            <div class="card-custom p-4">
+                <h4 class="h6 fw-bold text-uppercase text-muted border-bottom pb-2 mb-3">Việc Làm Cùng Khối</h4>
+                <div class="d-flex flex-column gap-3">
+                    @foreach (var rel in relatedJobs)
+                    {
+                        <div class="border-bottom pb-2">
+                            <h6 class="fw-bold mb-1">
+                                <a href="/tuyen-dung/@rel.Slug" class="text-decoration-none text-dark hover-primary">
+                                    @rel.Title
+                                </a>
+                            </h6>
+                            <div class="small text-muted mb-1">
+                                <i class="bi bi-geo-alt"></i> @rel.City | <span class="text-success fw-semibold">@rel.SalaryDisplay</span>
+                            </div>
+                            <small class="text-muted"><i class="bi bi-clock"></i> Hạn: @rel.ValidThrough.ToString("dd/MM/yyyy")</small>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Modal Ứng tuyển Trực tuyến -->
+<div class="modal fade" id="applyModal" tabindex="-1" aria-labelledby="applyModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold" id="applyModalLabel">
+                    <i class="bi bi-file-earmark-person me-2"></i> Ứng Tuyển: @Model.Title
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="/tuyen-dung/@Model.Slug/ung-tuyen">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="JobPostingId" value="@Model.Id" />
+
+                <div class="modal-body p-4">
+                    <div class="alert alert-info py-2 small mb-4">
+                        <i class="bi bi-info-circle me-1"></i> Hồ sơ của bạn sẽ được chuyển thẳng tới Ban Tuyển Dụng - Khối Nhân Sự Tập Đoàn Vinamilk.
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Họ và Tên đầy đủ <span class="text-danger">*</span></label>
+                            <input type="text" name="FullName" class="form-control" required placeholder="Nguyễn Văn A" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Email liên hệ <span class="text-danger">*</span></label>
+                            <input type="email" name="Email" class="form-control" required placeholder="email@example.com" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Số điện thoại <span class="text-danger">*</span></label>
+                            <input type="tel" name="PhoneNumber" class="form-control" required placeholder="0912 345 678" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Số Căn cước công dân (CCCD) <span class="text-danger">*</span></label>
+                            <input type="text" name="CitizenId" class="form-control" required placeholder="079090001234" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Ngày tháng năm sinh</label>
+                            <input type="date" name="DateOfBirth" class="form-control" value="1998-05-15" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Giới tính</label>
+                            <select name="Gender" class="form-select">
+                                <option value="Male">Nam</option>
+                                <option value="Female">Nữ</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold small">Địa chỉ hiện tại</label>
+                            <input type="text" name="Address" class="form-control" placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Tên tệp CV / Sơ yếu lý lịch đính kèm</label>
+                            <input type="text" name="ResumeFileName" class="form-control" value="CV_UngTuyen_Vinamilk.pdf" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Đường dẫn Portfolio / LinkedIn (nếu có)</label>
+                            <input type="url" name="PortfolioUrl" class="form-control" placeholder="https://linkedin.com/in/..." />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold small">Thư giới thiệu bản thân / Lý do muốn gia nhập Vinamilk</label>
+                            <textarea name="CoverLetter" class="form-control" rows="3" placeholder="Chia sẻ đôi nét về mục tiêu nghề nghiệp và kinh nghiệm nổi bật của bạn..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">
+                        <i class="bi bi-send-fill me-1"></i> Gửi Hồ Sơ Ứng Tuyển
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

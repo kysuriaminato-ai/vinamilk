@@ -1,0 +1,83 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vinamilk_hris_app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+    networks:
+      - vinamilk_network
+    depends_on:
+      - db
+      - redis
+
+  web:
+    image: nginx:alpine
+    container_name: vinamilk_hris_nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/conf.d/:/etc/nginx/conf.d/
+    networks:
+      - vinamilk_network
+    depends_on:
+      - app
+
+  db:
+    image: mysql:8.0
+    container_name: vinamilk_hris_db
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_DATABASE: vinamilk_hris
+      MYSQL_ROOT_PASSWORD: root_secret_password
+      MYSQL_USER: vnm_user
+      MYSQL_PASSWORD: vnm_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - vnm_db_data:/var/lib/mysql
+    networks:
+      - vinamilk_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: vinamilk_hris_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - vinamilk_network
+
+  queue_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vinamilk_hris_worker
+    restart: unless-stopped
+    working_dir: /var/www
+    command: php artisan queue:work redis --queue=default,payroll,notifications --tries=3 --timeout=1800
+    volumes:
+      - ./:/var/www
+    networks:
+      - vinamilk_network
+    depends_on:
+      - app
+      - redis
+
+networks:
+  vinamilk_network:
+    driver: bridge
+
+volumes:
+  vnm_db_data:
+    driver: local

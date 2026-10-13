@@ -8,7 +8,7 @@ public class KpiAssignmentConfiguration : IEntityTypeConfiguration<KpiAssignment
 {
     public void Configure(EntityTypeBuilder<KpiAssignment> builder)
     {
-        builder.ToTable("KpiAssignments");
+        builder.ToTable("KpiAssignments", b => b.IsTemporal());
 
         builder.HasKey(k => k.Id);
 

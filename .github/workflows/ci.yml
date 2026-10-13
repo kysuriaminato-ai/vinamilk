@@ -1,0 +1,131 @@
+# ====================================================================================================
+# VINAMILK ENTERPRISE HRM - CI/CD GITHUB ACTIONS PIPELINE
+# ====================================================================================================
+# Pipeline tích hợp liên tục tự động:
+#   1. Kiểm tra cú pháp toàn diện: `php -l` cho toàn bộ mã nguồn PHP
+#   2. Khởi tạo Service Container MySQL 8.0 với cơ sở dữ liệu `vinamilk_hrm`
+#   3. Import các tệp SQL schema & migrations vào MySQL service container
+#   4. Seed dữ liệu mẫu: 300 nhân sự theo đúng tỷ lệ thực tế & 24 tháng bảng lương/chấm công
+#   5. Chạy bộ kiểm thử tự động PHPUnit Suite (PayrollService, ScopeByUnit, ContractWarning, LeaveApproval)
+# ====================================================================================================
+
+name: "Vinamilk HRM CI Pipeline"
+
+on:
+  push:
+    branches: [ "main", "master", "redesign", "**" ]
+  pull_request:
+    branches: [ "main", "master", "redesign" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci_test_and_verify:
+    name: "PHP Lint, MySQL Import & PHPUnit Tests"
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: vinamilk_hrm
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping -h 127.0.0.1 -u root --password=root" --health-interval=10s --health-timeout=5s --health-retries=10
+
+    steps:
+      # 1. Checkout mã nguồn
+      - name: "Checkout source code"
+        uses: actions/checkout@v4
+
+      # 2. Thiết lập PHP 8.2 & PDO MySQL extensions
+      - name: "Setup PHP 8.2 & Extensions"
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, pdo_mysql, mbstring, json, intl, curl, openssl
+          coverage: none
+
+      # 3. Kiểm tra cú pháp PHP (PHP Lint: php -l)
+      - name: "Step 1: Run PHP Lint (php -l)"
+        run: |
+          echo "========================================================"
+          echo " Đang quét kiểm tra cú pháp PHP (PHP Syntax Linting)..."
+          echo "========================================================"
+          FAILED=0
+          for file in $(find app routes tests database -name "*.php"); do
+            php -l "$file" > /dev/null 2>&1
+            if [ $? -ne 0 ]; then
+              echo "[-] Lỗi cú pháp tại: $file"
+              php -l "$file"
+              FAILED=1
+            fi
+          done
+
+          if [ $FAILED -ne 0 ]; then
+            echo "[!] Phát hiện lỗi cú pháp PHP!"
+            exit 1
+          fi
+          echo "[+] Tất cả các tệp PHP trong hệ thống đều đạt chuẩn cú pháp!"
+
+      # 4. Chờ MySQL service container hoàn toàn sẵn sàng
+      - name: "Step 2: Wait for MySQL Service to be ready"
+        run: |
+          echo "Đang kiểm tra kết nối tới MySQL container..."
+          until mysqladmin ping -h 127.0.0.1 -u root -proot --silent; do
+            echo "Đang đợi MySQL service khởi động..."
+            sleep 2
+          done
+          echo "[+] MySQL service 8.0 đã sẵn sàng kết nối!"
+
+      # 5. Import SQL vào MySQL service container
+      - name: "Step 3: Import SQL Schemas into MySQL Service"
+        run: |
+          echo "========================================================"
+          echo " Đang nạp cơ sở dữ liệu SQL vào MySQL service container..."
+          echo "========================================================"
+          
+          # Nạp file schema nền tảng
+          if [ -f "database/vinamilk_hrm.sql" ]; then
+            echo "-> Nạp database/vinamilk_hrm.sql ..."
+            mysql -h 127.0.0.1 -u root -proot vinamilk_hrm < database/vinamilk_hrm.sql
+          fi
+
+          # Nạp file migration nâng cao (tham số cấu hình lương, 7 vai trò, audit log, cây đơn vị)
+          if [ -f "database/migrations/2026_10_12_vinamilk_hrm_full_migration.sql" ]; then
+            echo "-> Nạp database/migrations/2026_10_12_vinamilk_hrm_full_migration.sql ..."
+            mysql -h 127.0.0.1 -u root -proot vinamilk_hrm < database/migrations/2026_10_12_vinamilk_hrm_full_migration.sql
+          fi
+
+          echo "[+] Hoàn tất import các tệp SQL vào MySQL service container!"
+
+      # 6. Khởi tạo dữ liệu mẫu 300 nhân sự & 24 tháng bảng lương
+      - name: "Step 4: Seed 300 Employees & 24 Months Payroll"
+        env:
+          DB_HOST: "127.0.0.1"
+          DB_PORT: "3306"
+          DB_NAME: "vinamilk_hrm"
+          DB_USER: "root"
+          DB_PASS: "root"
+        run: |
+          echo "========================================================"
+          echo " Bắt đầu thực thi Seed 300 nhân sự & 24 tháng lương/công..."
+          echo "========================================================"
+          php database/seeders/seed_300_employees.php
+
+      # 7. Chạy bộ kiểm thử tự động PHPUnit
+      - name: "Step 5: Run PHPUnit Test Suite"
+        env:
+          DB_HOST: "127.0.0.1"
+          DB_PORT: "3306"
+          DB_NAME: "vinamilk_hrm"
+          DB_USER: "root"
+          DB_PASS: "root"
+        run: |
+          echo "========================================================"
+          echo " Bắt đầu chạy PHPUnit Test Suite..."
+          echo "========================================================"
+          php phpunit.phar --testdox --colors=always

@@ -1,0 +1,158 @@
+@model IReadOnlyList<VinamilkHRM.Application.DTOs.Careers.JobPostingDto>
+@{
+    ViewData["Title"] = "Cơ Hội Nghề Nghiệp & Tuyển Dụng - Tập Đoàn Vinamilk";
+    var keyword = ViewBag.Keyword as string ?? "";
+    var selectedUnitType = ViewBag.SelectedUnitType as VinamilkHRM.Domain.Enums.UnitType?;
+    var selectedCity = ViewBag.SelectedCity as string ?? "";
+}
+
+<!-- Dynamic Meta Tags & SEO Header -->
+@section Scripts {
+    <meta name="description" content="Khám phá cơ hội nghề nghiệp tại Vinamilk - Doanh nghiệp sữa số 1 Việt Nam. Môi trường làm việc chuẩn quốc tế, chế độ đãi ngộ vượt trội, văn hóa phát triển bền vững." />
+    <meta property="og:title" content="Cơ Hội Nghề Nghiệp & Tuyển Dụng - Tập Đoàn Vinamilk" />
+    <meta property="og:description" content="Gia nhập đội ngũ 10,000+ nhân tài cùng kiến tạo 'Giấc Mơ Sữa Việt'. Khám phá việc làm tại Nhà máy Mega, Trang trại Eco Farm, Hệ thống bán lẻ và Trụ sở chính." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://www.vinamilk.com.vn/assets/images/careers-og-banner.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Cơ Hội Nghề Nghiệp & Tuyển Dụng - Tập Đoàn Vinamilk" />
+}
+
+<!-- Hero Banner Tuyển Dụng Chuẩn SEO -->
+<div class="card-custom mb-4 overflow-hidden border-0" style="background: linear-gradient(135deg, #002B7A 0%, #0047BA 50%, #0077D7 100%); color: white;">
+    <div class="p-4 p-md-5">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <span class="badge bg-warning text-dark fw-bold px-3 py-2 rounded-pill mb-3">
+                    <i class="bi bi-award-fill me-1"></i> TOP 1 NƠI LÀM VIỆC TỐT NHẤT VIỆT NAM (10 NĂM LIÊN TIẾP)
+                </span>
+                <h1 class="display-5 fw-extrabold mb-3 text-white">Cùng Vinamilk Vươn Cao Tầm Vóc Việt</h1>
+                <p class="lead text-white-50 mb-4" style="max-width: 680px;">
+                    Nơi hội tụ hơn 10,000 cán bộ nhân viên tài năng, đổi mới sáng tạo trên hành trình mang nguồn dinh dưỡng tiêu chuẩn quốc tế đến hàng triệu gia đình.
+                </p>
+                <div class="d-flex gap-3 flex-wrap">
+                    <a href="#danh-sach-viec-lam" class="btn btn-warning text-dark fw-bold px-4 py-2 rounded-pill shadow-sm">
+                        <i class="bi bi-search me-1"></i> Khám Phá @Model.Count Vị Trí Tuyển Dụng
+                    </a>
+                    <a href="/tuyen-dung/quan-ly-ung-vien" class="btn btn-outline-light fw-semibold px-4 py-2 rounded-pill">
+                        <i class="bi bi-shield-lock me-1"></i> Cổng Quản Trị Nhân Sự HR
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-4 text-center d-none d-lg-block">
+                <div class="p-4 rounded-4" style="background: rgba(255,255,255,0.1); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.2);">
+                    <div class="display-4 fw-bold text-warning mb-1">10,000+</div>
+                    <div class="text-white-50 small mb-3">Nhân sự toàn quốc</div>
+                    <div class="display-4 fw-bold text-white mb-1">15+</div>
+                    <div class="text-white-50 small mb-3">Nhà máy & Trang trại công nghệ cao</div>
+                    <div class="display-4 fw-bold text-success mb-1">100%</div>
+                    <div class="text-white-50 small">Bảo hiểm sức khỏe VIP toàn diện</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bộ lọc tìm kiếm việc làm Semantic -->
+<section class="card-custom p-4 mb-4" id="danh-sach-viec-lam">
+    <form method="get" action="/tuyen-dung" class="row g-3 align-items-end">
+        <div class="col-md-5">
+            <label class="form-label fw-bold text-muted small"><i class="bi bi-search me-1"></i> Vị trí / Từ khóa tuyển dụng</label>
+            <input type="text" name="keyword" value="@keyword" class="form-control" placeholder="vd: Kỹ sư vận hành, Bán lẻ, Thú y, C&B..." />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label fw-bold text-muted small"><i class="bi bi-buildings me-1"></i> Khối hoạt động</label>
+            <select name="unitType" class="form-select">
+                <option value="">-- Tất cả các khối --</option>
+                <option value="Factory" selected="@(selectedUnitType == VinamilkHRM.Domain.Enums.UnitType.Factory)">Khối Nhà máy Sữa (Mega Factory)</option>
+                <option value="RetailStore" selected="@(selectedUnitType == VinamilkHRM.Domain.Enums.UnitType.RetailStore)">Khối Bán lẻ (Giấc Mơ Sữa Việt)</option>
+                <option value="DairyFarm" selected="@(selectedUnitType == VinamilkHRM.Domain.Enums.UnitType.DairyFarm)">Khối Trang trại Sinh thái Eco Farm</option>
+                <option value="Headquarters" selected="@(selectedUnitType == VinamilkHRM.Domain.Enums.UnitType.Headquarters)">Khối Hành chính Văn phòng (HQ Q7)</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label fw-bold text-muted small"><i class="bi bi-geo-alt me-1"></i> Địa điểm</label>
+            <select name="city" class="form-select">
+                <option value="">-- Toàn quốc --</option>
+                <option value="Hồ Chí Minh" selected="@(selectedCity == "Hồ Chí Minh")">Hồ Chí Minh</option>
+                <option value="Bình Dương" selected="@(selectedCity == "Bình Dương")">Bình Dương</option>
+                <option value="Tây Ninh" selected="@(selectedCity == "Tây Ninh")">Tây Ninh</option>
+                <option value="Hà Nội" selected="@(selectedCity == "Hà Nội")">Hà Nội</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100 fw-bold">
+                <i class="bi bi-filter me-1"></i> Tìm Việc
+            </button>
+        </div>
+    </form>
+</section>
+
+<!-- Danh sách tin tuyển dụng -->
+<div class="row g-4">
+    @if (Model == null || !Model.Any())
+    {
+        <div class="col-12">
+            <div class="card-custom p-5 text-center">
+                <i class="bi bi-inbox text-muted display-3 mb-3"></i>
+                <h5 class="fw-bold">Hiện chưa tìm thấy vị trí tuyển dụng phù hợp</h5>
+                <p class="text-muted">Quý ứng viên vui lòng thử thay đổi từ khóa hoặc bộ lọc khối hoạt động.</p>
+                <a href="/tuyen-dung" class="btn btn-outline-primary btn-sm mx-auto">Xem tất cả việc làm</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        @foreach (var job in Model)
+        {
+            var unitBadgeClass = job.UnitType switch
+            {
+                VinamilkHRM.Domain.Enums.UnitType.Factory => "bg-warning text-dark",
+                VinamilkHRM.Domain.Enums.UnitType.RetailStore => "bg-success text-white",
+                VinamilkHRM.Domain.Enums.UnitType.DairyFarm => "bg-info text-dark",
+                _ => "bg-primary text-white"
+            };
+
+            <div class="col-md-6 col-lg-4">
+                <article class="card-custom h-100 d-flex flex-column p-4 position-relative">
+                    @if (job.IsFeatured)
+                    {
+                        <span class="position-absolute top-0 end-0 bg-danger text-white small fw-bold px-3 py-1 rounded-bl-4 rounded-tr-3" style="border-top-right-radius: 12px; border-bottom-left-radius: 12px;">
+                            <i class="bi bi-fire me-1"></i> HOT JOB
+                        </span>
+                    }
+
+                    <div class="mb-2">
+                        <span class="badge @unitBadgeClass me-1">@job.UnitTypeName</span>
+                        <span class="badge bg-light text-dark border">@job.EmploymentType</span>
+                    </div>
+
+                    <h2 class="h5 fw-bold mb-2">
+                        <a href="/tuyen-dung/@job.Slug" class="text-decoration-none text-dark hover-primary">
+                            @job.Title
+                        </a>
+                    </h2>
+
+                    <div class="text-muted small mb-3">
+                        <div><i class="bi bi-building me-1 text-primary"></i> Phòng ban: <strong>@job.Department</strong></div>
+                        <div><i class="bi bi-geo-alt me-1 text-danger"></i> @job.WorkLocation, @job.City</div>
+                        <div><i class="bi bi-cash-stack me-1 text-success"></i> Thu nhập: <strong class="text-success">@job.SalaryDisplay</strong></div>
+                        <div><i class="bi bi-hourglass-split me-1 text-muted"></i> Hạn nộp: @job.ValidThrough.ToString("dd/MM/yyyy")</div>
+                    </div>
+
+                    <p class="text-muted small flex-grow-1" style="display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
+                        @job.Description
+                    </p>
+
+                    <div class="pt-3 border-top d-flex align-items-center justify-content-between mt-auto">
+                        <small class="text-muted">
+                            <i class="bi bi-people me-1"></i> @job.ApplicationCount ứng tuyển | <i class="bi bi-eye"></i> @job.ViewCount lượt xem
+                        </small>
+                        <a href="/tuyen-dung/@job.Slug" class="btn btn-sm btn-outline-primary fw-bold rounded-pill px-3">
+                            Xem Chi Tiết & Ứng Tuyển <i class="bi bi-arrow-right ms-1"></i>
+                        </a>
+                    </div>
+                </article>
+            </div>
+        }
+    }
+</div>

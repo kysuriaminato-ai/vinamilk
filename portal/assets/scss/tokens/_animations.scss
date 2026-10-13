@@ -1,0 +1,28 @@
+/* Standard Transitions: 200-250ms ease-out */
+.transition-standard {
+  transition: transform 220ms cubic-bezier(0, 0, 0.2, 1), opacity 220ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.hover-lift {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--vnm-shadow-md);
+  }
+}
+
+/* Reduced Motion Override - Mandatory Criteria 3 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .hover-lift:hover {
+    transform: none !important;
+  }
+}

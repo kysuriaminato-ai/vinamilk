@@ -1,0 +1,89 @@
+{% extends "layouts/base.twig" %}
+{% block title %}Lịch Phân Ca & Chấm Công — Vinamilk HRM{% endblock %}
+{% block breadcrumb %}Ma Trận Phân Ca Vận Hành{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 24px;">
+
+  <!-- Header -->
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+    <div>
+      <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--vnm-text-main);">Lưới Phân Ca: Nhà Máy Sữa Thống Nhất</h1>
+      <p style="font-size: 0.875rem; color: var(--vnm-text-muted);">Tuần 42 (12/10/2026 - 18/10/2026) · Hỗ trợ kéo thả ca và phát hiện vi phạm luật lao động</p>
+    </div>
+
+    <!-- Shift Legend -->
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <span class="vnm-badge" style="background: #E0F2FE; color: #0369A1;">Ca 1: Sáng (06:00 - 14:00)</span>
+      <span class="vnm-badge" style="background: #FEF3C7; color: #92400E;">Ca 2: Chiều (14:00 - 22:00)</span>
+      <span class="vnm-badge" style="background: #EDE9FE; color: #6D28D9;">Ca 3: Đêm (22:00 - 06:00)</span>
+      <span class="vnm-badge" style="background: #FEE2E2; color: #DC2626;">Vi Phạm Ràng Buộc</span>
+    </div>
+  </div>
+
+  <!-- Shift Matrix Table -->
+  <div class="shift-matrix-container">
+    <table class="shift-matrix-table">
+      <thead>
+        <tr style="background: var(--vnm-bg);">
+          <th style="min-width: 180px; text-align: left; padding: 12px 16px;">Nhân Viên / Vị Trí</th>
+          <th>T2 (12/10)</th>
+          <th>T3 (13/10)</th>
+          <th>T4 (14/10)</th>
+          <th>T5 (15/10)</th>
+          <th>T6 (16/10)</th>
+          <th>T7 (17/10)</th>
+          <th>CN (18/10)</th>
+          <th>Tổng Giờ</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="text-align: left; padding: 12px 16px;">
+            <strong>Nguyễn Văn An</strong><br><small style="color: var(--vnm-text-muted);">Trưởng kíp Vận hành</small>
+          </td>
+          <td><div class="shift-cell shift-morning">C1</div></td>
+          <td><div class="shift-cell shift-morning">C1</div></td>
+          <td><div class="shift-cell shift-afternoon">C2</div></td>
+          <td><div class="shift-cell shift-afternoon">C2</div></td>
+          <td><div class="shift-cell shift-night">C3</div></td>
+          <td><div class="shift-cell shift-off">OFF</div></td>
+          <td><div class="shift-cell shift-off">OFF</div></td>
+          <td><strong>40h</strong></td>
+        </tr>
+        <tr>
+          <td style="text-align: left; padding: 12px 16px;">
+            <strong>Trần Quốc Bảo</strong><br><small style="color: var(--vnm-text-muted);">Kỹ thuật viên Chiết rót</small>
+          </td>
+          <td><div class="shift-cell shift-night">C3</div></td>
+          <td><div class="shift-cell shift-violation" title="Vi phạm: Khoảng cách giữa 2 ca liên tiếp < 12 giờ!">C1 ⚠️</div></td>
+          <td><div class="shift-cell shift-morning">C1</div></td>
+          <td><div class="shift-cell shift-morning">C1</div></td>
+          <td><div class="shift-cell shift-morning">C1</div></td>
+          <td><div class="shift-cell shift-morning">C1</div></td>
+          <td><div class="shift-cell shift-violation" title="Vi phạm: Làm việc liên tục quá 6 ngày không nghỉ!">C1 ⚠️</div></td>
+          <td><strong style="color: var(--vnm-danger);">56h</strong></td>
+        </tr>
+        <tr>
+          <td style="text-align: left; padding: 12px 16px;">
+            <strong>Phạm Thị Mai</strong><br><small style="color: var(--vnm-text-muted);">Kiểm soát Chất lượng (QC)</small>
+          </td>
+          <td><div class="shift-cell shift-morning">C1</div></td>
+          <td><div class="shift-cell shift-morning">C1</div></td>
+          <td><div class="shift-cell shift-morning">C1</div></td>
+          <td><div class="shift-cell shift-morning">C1</div></td>
+          <td><div class="shift-cell shift-morning">C1</div></td>
+          <td><div class="shift-cell shift-off">OFF</div></td>
+          <td><div class="shift-cell shift-off">OFF</div></td>
+          <td><strong>40h</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="background-color: var(--vnm-surface); border: 1px solid var(--vnm-border); border-radius: var(--vnm-radius-md); padding: 16px; font-size: 0.8125rem; color: var(--vnm-text-muted);">
+    💡 <strong>Gợi ý thông minh:</strong> Các ô vi phạm viền nét đứt màu đỏ lập tức cảnh báo khi ca phân bổ vi phạm Điều 107 Bộ luật Lao động 2019 (thời gian nghỉ giữa hai ca tối thiểu 12 giờ, hoặc làm việc liên tục quá 6 ngày/tuần).
+  </div>
+
+</div>
+{% endblock %}

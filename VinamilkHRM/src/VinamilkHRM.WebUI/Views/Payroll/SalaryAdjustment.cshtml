@@ -1,0 +1,350 @@
+@model IReadOnlyList<VinamilkHRM.Application.DTOs.Salaries.SalaryProposalDto>
+@{
+    ViewData["Title"] = "Quy Trình Tăng Lương & Giám Đốc Đặc Cách";
+    var employees = ViewBag.Employees as IReadOnlyList<VinamilkHRM.Domain.Entities.Employees.Employee> ?? new List<VinamilkHRM.Domain.Entities.Employees.Employee>();
+    var appendices = ViewBag.Appendices as IReadOnlyList<VinamilkHRM.Application.DTOs.Salaries.ElectronicContractAppendixDto> ?? new List<VinamilkHRM.Application.DTOs.Salaries.ElectronicContractAppendixDto>();
+    int pendingDept = Model.Count(p => p.Status == VinamilkHRM.Domain.Enums.SalaryProposalStatus.PendingDepartmentHead);
+    int pendingHR = Model.Count(p => p.Status == VinamilkHRM.Domain.Enums.SalaryProposalStatus.PendingHRDirector);
+    int approvedCount = Model.Count(p => p.Status == VinamilkHRM.Domain.Enums.SalaryProposalStatus.Approved);
+    int ceoOverrides = appendices.Count(a => a.IsCeoOverride);
+}
+
+<!-- Alert thông báo -->
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show shadow-sm mb-4" role="alert">
+        <i class="bi bi-shield-check me-2 fs-5 align-middle"></i>
+        <strong>Thành công!</strong> @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show shadow-sm mb-4" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2 fs-5 align-middle"></i>
+        <strong>Lỗi:</strong> @TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="fw-bold mb-1" style="color: #0047BA;">
+            <i class="bi bi-graph-up-arrow me-2"></i>Quy Trình Nâng Lương & Giám Đốc Đặc Cách (Fast-Track)
+        </h2>
+        <p class="text-muted mb-0">Hỗ trợ 2 luồng: Thẩm định C&B đa cấp thường lệ & Quyền Executive Override tối cao của Tổng Giám Đốc (CEO).</p>
+    </div>
+    <div class="d-flex gap-2">
+        <!-- Nút mở modal Đề xuất phòng ban -->
+        <button type="button" class="btn btn-outline-primary btn-sm px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#createProposalModal">
+            <i class="bi bi-plus-circle me-1"></i> Lập Tờ Trình Nâng Lương
+        </button>
+
+        <!-- Nút CEO ĐẶC CÁCH TRỰC TIẾP (Vàng / Tím sang trọng) -->
+        <button type="button" class="btn btn-warning btn-sm px-3 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#directCeoModal" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); color: #fff; border: none;">
+            <i class="bi bi-lightning-charge-fill me-1"></i> CEO ĐẶC CÁCH TĂNG LƯƠNG (Fast-Track)
+        </button>
+
+        <a asp-action="Appendices" class="btn btn-secondary btn-sm px-3">
+            <i class="bi bi-file-earmark-lock me-1"></i> Phụ Lục HĐ Điện Tử (@appendices.Count)
+        </a>
+    </div>
+</div>
+
+<!-- Thống kê quy trình -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card card-custom p-3 border-start border-4 border-info">
+            <div class="small text-muted mb-1">Chờ Trưởng Bộ Phận Thẩm Định</div>
+            <div class="fs-4 fw-bold text-info">@pendingDept <span class="fs-6 text-muted">hồ sơ</span></div>
+            <div class="small text-muted mt-1">Giai đoạn 1: Đánh giá nội bộ</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-custom p-3 border-start border-4 border-warning">
+            <div class="small text-muted mb-1">Chờ Giám Đốc Nhân Sự (C&B) Duyệt</div>
+            <div class="fs-4 fw-bold text-warning-emphasis">@pendingHR <span class="fs-6 text-muted">hồ sơ</span></div>
+            <div class="small text-muted mt-1">Giai đoạn 2: Thẩm định ngân quỹ</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-custom p-3 border-start border-4 border-success">
+            <div class="small text-muted mb-1">Đã Phê Duyệt & Sinh Phụ Lục</div>
+            <div class="fs-4 fw-bold text-success">@approvedCount <span class="fs-6 text-muted">quyết định</span></div>
+            <div class="small text-muted mt-1">Đã ký số điện tử</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-custom p-3 border-start border-4 border-danger">
+            <div class="small text-muted mb-1">CEO Fast-Track Executive Override</div>
+            <div class="fs-4 fw-bold text-danger">@ceoOverrides <span class="fs-6 text-muted">đặc cách</span></div>
+            <div class="small text-muted mt-1">Bảo mật cao (High Security Audit)</div>
+        </div>
+    </div>
+</div>
+
+<!-- Bảng Tờ trình đề xuất nâng bậc lương -->
+<div class="card card-custom mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0 text-dark">
+            <i class="bi bi-list-task me-2 text-primary"></i>Danh Sách Tờ Trình Đề Xuất Điều Chỉnh Lương
+        </h6>
+        <span class="small text-muted">CEO có quyền kích hoạt Fast-track Override trên bất kỳ đề xuất nào</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size: 13.5px;">
+            <thead class="table-light">
+                <tr>
+                    <th>Mã Đề Xuất</th>
+                    <th>Nhân sự thụ hưởng</th>
+                    <th>Đơn vị</th>
+                    <th class="text-end">Lương hiện tại</th>
+                    <th class="text-end">Lương đề xuất</th>
+                    <th class="text-center">Tăng (+%)</th>
+                    <th>Lý do / Căn cứ</th>
+                    <th>Hiệu lực</th>
+                    <th class="text-center">Trạng thái</th>
+                    <th class="text-center">Hành động Phê duyệt</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Count == 0)
+                {
+                    <tr>
+                        <td colspan="10" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            Chưa có tờ trình đề xuất tăng lương nào. Bấm <strong>"Lập Tờ Trình Nâng Lương"</strong> hoặc <strong>"CEO ĐẶC CÁCH"</strong> để khởi tạo.
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    @foreach (var p in Model)
+                    {
+                        <tr>
+                            <td class="fw-bold text-primary">#SAL-@p.Id</td>
+                            <td>
+                                <div class="fw-bold">@p.EmployeeName</div>
+                                <div class="text-muted small">@p.EmployeeCode</div>
+                            </td>
+                            <td>@p.UnitName</td>
+                            <td class="text-end">@p.CurrentSalary.ToString("N0")</td>
+                            <td class="text-end fw-bold text-success">@p.ProposedSalary.ToString("N0")</td>
+                            <td class="text-center">
+                                <span class="badge bg-success-subtle text-success fw-bold">+@p.IncreasePercentage%</span>
+                            </td>
+                            <td>
+                                <div style="max-width: 220px;" class="text-truncate" title="@p.Reason">@p.Reason</div>
+                                @if (!string.IsNullOrEmpty(p.HRDirectorNotes))
+                                {
+                                    <div class="small text-primary mt-1">@p.HRDirectorNotes</div>
+                                }
+                            </td>
+                            <td>@p.EffectiveDate.ToString("dd/MM/yyyy")</td>
+                            <td class="text-center">
+                                @if (p.Status == VinamilkHRM.Domain.Enums.SalaryProposalStatus.PendingDepartmentHead)
+                                {
+                                    <span class="badge bg-info-subtle text-info fw-bold">Chờ Trưởng BP</span>
+                                }
+                                else if (p.Status == VinamilkHRM.Domain.Enums.SalaryProposalStatus.PendingHRDirector)
+                                {
+                                    <span class="badge bg-warning-subtle text-warning-emphasis fw-bold">Chờ GĐ Nhân sự</span>
+                                }
+                                else if (p.Status == VinamilkHRM.Domain.Enums.SalaryProposalStatus.Approved)
+                                {
+                                    <span class="badge bg-success fw-bold">Đã Phê Duyệt</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-danger fw-bold">Từ Chối</span>
+                                }
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm">
+                                    @if (p.Status == VinamilkHRM.Domain.Enums.SalaryProposalStatus.PendingDepartmentHead)
+                                    {
+                                        <!-- Nút Trưởng bộ phận duyệt -->
+                                        <form method="post" asp-action="ApproveDepartment" class="d-inline">
+                                            <input type="hidden" name="ProposalId" value="@p.Id" />
+                                            <input type="hidden" name="ReviewerId" value="2" />
+                                            <input type="hidden" name="Notes" value="Trưởng BP đồng ý đề xuất." />
+                                            <button type="submit" class="btn btn-outline-info" title="Trưởng BP duyệt">
+                                                <i class="bi bi-check-lg"></i> Duyệt BP
+                                            </button>
+                                        </form>
+                                    }
+
+                                    @if (p.Status == VinamilkHRM.Domain.Enums.SalaryProposalStatus.PendingHRDirector)
+                                    {
+                                        <!-- Nút Giám đốc Nhân sự duyệt thường lệ -->
+                                        <form method="post" asp-action="ApproveHR" class="d-inline">
+                                            <input type="hidden" name="ProposalId" value="@p.Id" />
+                                            <input type="hidden" name="ReviewerId" value="1" />
+                                            <input type="hidden" name="Notes" value="GĐ Nhân sự C&B phê duyệt định ngạch." />
+                                            <button type="submit" class="btn btn-outline-success" title="GĐ Nhân sự duyệt">
+                                                <i class="bi bi-check2-circle"></i> Duyệt HR
+                                            </button>
+                                        </form>
+                                    }
+
+                                    @if (p.Status != VinamilkHRM.Domain.Enums.SalaryProposalStatus.Approved && p.Status != VinamilkHRM.Domain.Enums.SalaryProposalStatus.Rejected)
+                                    {
+                                        <!-- Nút CEO FAST-TRACK OVERRIDE -->
+                                        <button type="button" class="btn btn-warning text-dark fw-bold" title="CEO Đặc cách tăng lương ngay" data-bs-toggle="modal" data-bs-target="#overrideModal-@p.Id">
+                                            <i class="bi bi-lightning-fill"></i> CEO Override
+                                        </button>
+                                    }
+                                </div>
+
+                                <!-- Modal CEO Override cho từng đề xuất -->
+                                <div class="modal fade" id="overrideModal-@p.Id" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog modal-dialog-centered">
+                                        <div class="modal-content">
+                                            <form method="post" asp-action="FastTrackOverride">
+                                                <div class="modal-header bg-warning text-dark">
+                                                    <h6 class="modal-title fw-bold">
+                                                        <i class="bi bi-shield-lock-fill me-2"></i>CEO Fast-Track Executive Override (#SAL-@p.Id)
+                                                    </h6>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <div class="modal-body text-start">
+                                                    <input type="hidden" name="ProposalId" value="@p.Id" />
+                                                    <input type="hidden" name="CeoEmployeeId" value="1" />
+                                                    <div class="alert alert-warning small mb-3">
+                                                        <strong>Cảnh báo bảo mật:</strong> Quyền CEO Fast-track Override sẽ <strong>bỏ qua toàn bộ thẩm định C&B</strong>, cập nhật mức lương mới <strong>@p.ProposedSalary.ToString("N0") đ</strong> vào hồ sơ nhân viên <strong>@p.EmployeeName</strong>, tự động sinh Phụ lục Hợp đồng điện tử kèm chữ ký số và lưu AuditLog tối mật!
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label fw-bold small">Căn cứ / Lý do đặc cách của Tổng Giám Đốc:</label>
+                                                        <textarea name="Justification" class="form-control" rows="3" required placeholder="Nêu rõ lý do đặc cách (vd: Nhân tài chủ chốt Kaizen, Cống hiến xuất sắc vượt KPI,...)"></textarea>
+                                                    </div>
+                                                    <div class="mb-3">
+                                                        <label class="form-label fw-bold small">Mã Quyết định Đặc cách:</label>
+                                                        <input type="text" name="OverrideCode" class="form-control" value="CEO-QD-@DateTime.UtcNow.ToString("yyyyMMdd")-@p.Id" required />
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Hủy bỏ</button>
+                                                    <button type="submit" class="btn btn-warning btn-sm fw-bold">
+                                                        <i class="bi bi-key-fill me-1"></i> Ký Số & Kích Hoạt Đặc Cách Ngay
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL 1: Lập tờ trình đề xuất tăng lương phòng ban (Thường lệ) -->
+<div class="modal fade" id="createProposalModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" asp-action="SubmitProposal">
+                <div class="modal-header bg-primary text-white">
+                    <h6 class="modal-title fw-bold">
+                        <i class="bi bi-file-earmark-plus me-2"></i>Lập Tờ Trình Đề Xuất Tăng Lương Thường Lệ
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="ProposedById" value="1" />
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Chọn Nhân sự đề xuất:</label>
+                        <select name="EmployeeId" class="form-select" required>
+                            @foreach (var emp in employees)
+                            {
+                                <option value="@emp.Id">@emp.EmployeeCode - @emp.FullName (Hiện tại: @emp.BaseSalary.ToString("N0") đ)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Mức Lương Mới (VNĐ):</label>
+                            <input type="number" name="ProposedSalary" class="form-control" placeholder="vd: 25000000" min="5000000" step="500000" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Phụ Cấp Mới (VNĐ):</label>
+                            <input type="number" name="ProposedAllowance" class="form-control" value="2500000" min="0" step="100000" required />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Ngày bắt đầu có hiệu lực:</label>
+                        <input type="date" name="EffectiveDate" class="form-control" value="@DateTime.UtcNow.AddMonths(1).ToString("yyyy-MM-01")" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Lý do đề xuất / Thành tích công tác:</label>
+                        <textarea name="Reason" class="form-control" rows="3" required placeholder="Hoàn thành xuất sắc nhiệm vụ SLA, đạt chứng chỉ chuyên môn..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold">
+                        <i class="bi bi-send-fill me-1"></i> Gửi Tờ Trình Lên Cấp Trên
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL 2: Giám đốc ĐẶC CÁCH Trực Tiếp (CEO Direct Override) -->
+<div class="modal fade" id="directCeoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-warning border-3">
+            <form method="post" asp-action="DirectCeoOverride">
+                <div class="modal-header text-white" style="background: linear-gradient(135deg, #b45309 0%, #78350f 100%);">
+                    <h6 class="modal-title fw-bold">
+                        <i class="bi bi-shield-fill-exclamation me-2"></i>Quyết Định Giám Đốc ĐẶC CÁCH Nâng Lương Trực Tiếp
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="CeoEmployeeId" value="1" />
+                    <div class="alert alert-warning small mb-3">
+                        <i class="bi bi-shield-lock me-1"></i> <strong>Quyền hạn tối cao Ban Điều Hành (CEO):</strong> Kích hoạt Fast-track áp dụng tăng lương trực tiếp ngay mà không cần thông qua bước lập tờ trình hay thẩm định C&B. Hệ thống sẽ sinh Phụ lục hợp đồng có hiệu lực tức thời.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Chọn Nhân sự đặc cách:</label>
+                        <select name="EmployeeId" class="form-select" required>
+                            @foreach (var emp in employees)
+                            {
+                                <option value="@emp.Id">@emp.EmployeeCode - @emp.FullName (Hiện tại: @emp.BaseSalary.ToString("N0") đ)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Mức Lương Mới Đặc Cách (VNĐ):</label>
+                            <input type="number" name="NewSalary" class="form-control" placeholder="vd: 35000000" min="5000000" step="1000000" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Phụ Cấp Mới (VNĐ):</label>
+                            <input type="number" name="NewAllowance" class="form-control" value="3000000" min="0" step="500000" required />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Số Hiệu Quyết Định Lãnh Đạo:</label>
+                        <input type="text" name="OverrideCode" class="form-control" value="CEO-SPECIAL-@DateTime.UtcNow.ToString("yyyyMMdd")" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Căn cứ đặc cách:</label>
+                        <textarea name="Justification" class="form-control" rows="3" required placeholder="Căn cứ thành tích đặc biệt đóng góp chiến lược cho Tập đoàn Vinamilk..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Hủy bỏ</button>
+                    <button type="submit" class="btn btn-warning text-dark fw-bold">
+                        <i class="bi bi-lightning-charge-fill me-1"></i> Ban Hành Quyết Định & Áp Dụng Ngay
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

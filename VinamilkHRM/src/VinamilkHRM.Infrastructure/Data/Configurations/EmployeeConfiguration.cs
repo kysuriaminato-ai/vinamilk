@@ -30,13 +30,18 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 
         builder.Property(e => e.CitizenId)
             .IsRequired()
-            .HasMaxLength(20);
+            .HasMaxLength(250); // Mở rộng để chứa chuỗi mã hóa Data Protection
 
-        builder.HasIndex(e => e.CitizenId)
-            .IsUnique();
+        builder.Property(e => e.CitizenIdIssuePlace)
+            .HasMaxLength(150);
+
+        builder.Property(e => e.TaxCode)
+            .HasMaxLength(50);
 
         builder.Property(e => e.Email)
             .HasMaxLength(150);
+
+        builder.HasIndex(e => e.Email);
 
         builder.Property(e => e.PhoneNumber)
             .HasMaxLength(50);
@@ -44,17 +49,47 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(e => e.Address)
             .HasMaxLength(500);
 
+        builder.Property(e => e.BankAccountNumber)
+            .HasMaxLength(250); // Mở rộng để chứa chuỗi mã hóa Data Protection
+
+        builder.Property(e => e.BankName)
+            .HasMaxLength(150);
+
+        builder.Property(e => e.BankBranch)
+            .HasMaxLength(150);
+
+        builder.Property(e => e.EmergencyContactName)
+            .HasMaxLength(150);
+
+        builder.Property(e => e.EmergencyContactPhone)
+            .HasMaxLength(50);
+
+        builder.Property(e => e.EmergencyContactRelationship)
+            .HasMaxLength(50);
+
         builder.Property(e => e.BaseSalary)
-            .HasPrecision(18, 2);
+            .HasColumnType("decimal(18,0)");
 
         builder.Property(e => e.Allowance)
-            .HasPrecision(18, 2);
+            .HasColumnType("decimal(18,0)");
+
+        builder.Property(e => e.InsuranceSalary)
+            .HasColumnType("decimal(18,0)");
 
         builder.Property(e => e.AnnualLeaveBalance)
             .HasPrecision(5, 2);
 
         builder.Property(e => e.DiligenceScore)
             .HasPrecision(5, 2);
+
+        builder.Property(e => e.LegacyId)
+            .HasMaxLength(50);
+
+        builder.HasIndex(e => e.LegacyId);
+
+        builder.Property(e => e.SalaryStep)
+            .IsRequired()
+            .HasDefaultValue(1);
 
         builder.Property(e => e.CreatedBy)
             .IsRequired()
@@ -74,6 +109,47 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
             .WithMany(m => m.Subordinates)
             .HasForeignKey(e => e.ManagerId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Job & Grade
+        builder.HasOne(e => e.StandardJobTitle)
+            .WithMany()
+            .HasForeignKey(e => e.StandardJobTitleId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasIndex(e => e.StandardJobTitleId);
+
+        builder.HasOne(e => e.JobGrade)
+            .WithMany()
+            .HasForeignKey(e => e.JobGradeId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasIndex(e => e.JobGradeId);
+
+        // Collections
+        builder.HasMany(e => e.Dependents)
+            .WithOne(d => d.Employee)
+            .HasForeignKey(d => d.EmployeeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(e => e.Educations)
+            .WithOne(ed => ed.Employee)
+            .HasForeignKey(ed => ed.EmployeeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(e => e.Certificates)
+            .WithOne(c => c.Employee)
+            .HasForeignKey(c => c.EmployeeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(e => e.WorkHistories)
+            .WithOne(w => w.Employee)
+            .HasForeignKey(w => w.EmployeeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(e => e.Attachments)
+            .WithOne(a => a.Employee)
+            .HasForeignKey(a => a.EmployeeId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // TPH Discriminator Mapping
         builder.HasDiscriminator<EmployeeType>("EmployeeType")

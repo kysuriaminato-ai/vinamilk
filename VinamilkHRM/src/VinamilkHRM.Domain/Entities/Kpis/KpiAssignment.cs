@@ -142,8 +142,8 @@ public class KpiAssignment : BaseAuditableEntity
         decimal preliminaryScore = Math.Max(0.0m, BaseScore + SlaBonusPenaltyScore);
         SelfEvaluationScore = preliminaryScore;
 
-        // Chuyển sang trạng thái chờ Lãnh đạo duyệt (PendingApproval)
-        Status = KpiStatus.PendingApproval;
+        // Chuyển sang trạng thái chờ Lãnh đạo duyệt (Submitted)
+        Status = KpiStatus.Submitted;
     }
 
     /// <summary>
@@ -152,7 +152,7 @@ public class KpiAssignment : BaseAuditableEntity
     /// </summary>
     public void LeaderApproveKpi(int leaderId, decimal scoreAdjustment, string feedback)
     {
-        if (Status != KpiStatus.PendingApproval && Status != KpiStatus.Submitted)
+        if (Status != KpiStatus.Submitted)
             throw new DomainException("Chỉ tiêu chưa được nhân viên nộp kết quả hoặc đã được chốt trước đó.", "ERR_KPI_NOT_PENDING_APPROVAL");
 
         if (leaderId <= 0)
@@ -177,7 +177,7 @@ public class KpiAssignment : BaseAuditableEntity
     /// </summary>
     public void RejectByLeader(int leaderId, string rejectionReason)
     {
-        if (Status != KpiStatus.PendingApproval && Status != KpiStatus.Submitted)
+        if (Status != KpiStatus.Submitted)
             throw new DomainException("Chỉ tiêu hiện không ở trạng thái chờ duyệt.", "ERR_KPI_NOT_SUBMITTED");
 
         if (string.IsNullOrWhiteSpace(rejectionReason))

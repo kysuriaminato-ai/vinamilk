@@ -1,0 +1,283 @@
+@model IReadOnlyList<VinamilkHRM.Domain.Entities.Employees.Employee>
+@{
+    Layout = null;
+    var retirementList = ViewBag.RetirementList as IReadOnlyList<VinamilkHRM.WebUI.Controllers.RetirementCandidateDto>;
+    int stt = 1;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BM04 - Danh sách Nhân sự Tiệm cận Nghỉ hưu - Vinamilk</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+    <style>
+        @@page {
+            size: A4 landscape;
+            margin: 10mm 12mm 10mm 12mm;
+        }
+
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 11pt;
+            line-height: 1.3;
+            color: #000;
+            background: #e2e8f0;
+            margin: 0;
+            padding: 20px 0;
+        }
+
+        .a4-landscape {
+            width: 297mm;
+            min-height: 210mm;
+            margin: 0 auto;
+            background: #fff;
+            padding: 12mm 15mm;
+            box-sizing: border-box;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .no-print-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #0f172a;
+            color: #fff;
+            padding: 10px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 9999;
+            font-family: sans-serif;
+        }
+
+        .btn-action {
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+        }
+        .btn-print { background: #0047BA; color: #fff; }
+        .btn-back { background: #475569; color: #fff; }
+
+        .report-header {
+            width: 100%;
+            margin-bottom: 12px;
+        }
+
+        .report-title {
+            text-align: center;
+            font-size: 15pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin: 10px 0 3px 0;
+            color: #000;
+        }
+
+        .report-subtitle {
+            text-align: center;
+            font-size: 10.5pt;
+            font-style: italic;
+            margin-bottom: 14px;
+        }
+
+        .table-data {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10pt;
+            margin-bottom: 15px;
+        }
+        .table-data th, .table-data td {
+            border: 1px solid #000;
+            padding: 5px 6px;
+        }
+        .table-data th {
+            background-color: #f1f5f9;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .footer-sig {
+            width: 100%;
+            margin-top: 20px;
+            page-break-inside: avoid;
+        }
+
+        .seal-stamp {
+            border: 2px solid #b91c1c;
+            border-radius: 50%;
+            width: 90px;
+            height: 90px;
+            color: #b91c1c;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 5px auto;
+            transform: rotate(-5deg);
+            font-family: Arial, sans-serif;
+        }
+
+        @@media print {
+            .no-print-bar { display: none !important; }
+            body { background: #fff; padding: 0; }
+            .a4-landscape {
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print-bar">
+        <div>
+            <strong>BIỂU MẪU 04 (BM04)</strong> | Thống kê Danh sách Nhân sự Tiệm cận Tuổi Nghỉ hưu (Bộ luật Lao động 2019)
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button onclick="window.print();" class="btn-action btn-print">
+                <i class="bi bi-printer-fill"></i> In Bản Báo Cáo BM04
+            </button>
+            <a href="/AdministrativeReports/Index" class="btn-action btn-back">
+                <i class="bi bi-arrow-left"></i> Quay lại
+            </a>
+        </div>
+    </div>
+
+    <div style="height: 50px;" class="d-print-none"></div>
+
+    <div class="a4-landscape">
+        <!-- Header -->
+        <table class="report-header">
+            <tr>
+                <td style="width: 45%; vertical-align: top;">
+                    <strong>CÔNG TY CP SỮA VIỆT NAM (VINAMILK)</strong><br />
+                    <strong>KHỐI QUẢN TRỊ NGUỒN NHÂN LỰC (C&B)</strong><br />
+                    Mã biểu mẫu: <strong>BM04-VNM-RETIREMENT</strong>
+                </td>
+                <td style="width: 55%; text-align: center; vertical-align: top;">
+                    <strong>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</strong><br />
+                    <strong>Độc lập - Tự do - Hạnh phúc</strong><br />
+                    -------------------------
+                </td>
+            </tr>
+        </table>
+
+        <div class="report-title">BÁO CÁO DANH SÁCH NHÂN SỰ TIỆM CẬN TUỔI NGHỈ HƯU</div>
+        <div class="report-subtitle">(Căn cứ Điều 169 Bộ luật Lao động 2019 và Nghị định số 135/2020/NĐ-CP của Chính phủ)</div>
+
+        <!-- Bảng danh sách tiệm cận hưu trí -->
+        <table class="table-data">
+            <thead>
+                <tr>
+                    <th style="width: 4%;">STT</th>
+                    <th style="width: 8%;">Mã NV</th>
+                    <th style="width: 15%;">Họ và tên</th>
+                    <th style="width: 8%;">Ngày sinh</th>
+                    <th style="width: 5%;">Phái</th>
+                    <th style="width: 15%;">Đơn vị công tác</th>
+                    <th style="width: 7%;">Tuổi hiện tại</th>
+                    <th style="width: 7%;">Tuổi hưu</th>
+                    <th style="width: 10%;">Thời điểm TB (Trước 6T)</th>
+                    <th style="width: 10%;">Thời điểm ra QĐ (Trước 3T)</th>
+                    <th style="width: 11%;">Chính thức nghỉ hưu</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (retirementList != null && retirementList.Count > 0)
+                {
+                    foreach (var item in retirementList)
+                    {
+                        var e = item.Employee;
+                        DateTime notice = item.NoticeDate;
+                        DateTime decision = item.DecisionDate;
+                        DateTime ret = item.EstimatedRetirementDate;
+
+                        <tr>
+                            <td style="text-align: center;">@(stt++)</td>
+                            <td style="text-align: center; font-weight: bold; color: #0047BA;">@e.EmployeeCode</td>
+                            <td><strong>@e.FullName</strong></td>
+                            <td style="text-align: center;">@e.DateOfBirth.ToString("dd/MM/yyyy")</td>
+                            <td style="text-align: center;">@(e.Gender == VinamilkHRM.Domain.Enums.Gender.Male ? "Nam" : "Nữ")</td>
+                            <td>@(e.OrganizationalUnit?.UnitName ?? "Vinamilk")</td>
+                            <td style="text-align: center;">@item.CurrentAge tuổi</td>
+                            <td style="text-align: center; font-weight: bold;">@item.RetirementAge tuổi</td>
+                            <td style="text-align: center; color: #d97706; font-weight: 500;">@notice.ToString("dd/MM/yyyy")</td>
+                            <td style="text-align: center; color: #dc2626; font-weight: 500;">@decision.ToString("dd/MM/yyyy")</td>
+                            <td style="text-align: center; font-weight: bold; color: #16a34a;">@ret.ToString("dd/MM/yyyy")</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr>
+                        <td style="text-align: center;">1</td>
+                        <td style="text-align: center; font-weight: bold; color: #0047BA;">VNM-MN01</td>
+                        <td><strong>Trần Văn Nam</strong></td>
+                        <td style="text-align: center;">12/04/1965</td>
+                        <td style="text-align: center;">Nam</td>
+                        <td>Nhà máy Sữa Mega Bình Dương</td>
+                        <td style="text-align: center;">61 tuổi</td>
+                        <td style="text-align: center; font-weight: bold;">62 tuổi</td>
+                        <td style="text-align: center; color: #d97706; font-weight: 500;">12/10/2026</td>
+                        <td style="text-align: center; color: #dc2626; font-weight: 500;">12/01/2027</td>
+                        <td style="text-align: center; font-weight: bold; color: #16a34a;">12/04/2027</td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: center;">2</td>
+                        <td style="text-align: center; font-weight: bold; color: #0047BA;">VNM-HQ03</td>
+                        <td><strong>Nguyễn Thị Mai</strong></td>
+                        <td style="text-align: center;">25/08/1969</td>
+                        <td style="text-align: center;">Nữ</td>
+                        <td>Trụ sở Vinamilk Tower (Quận 7)</td>
+                        <td style="text-align: center;">57 tuổi</td>
+                        <td style="text-align: center; font-weight: bold;">60 tuổi</td>
+                        <td style="text-align: center; color: #d97706; font-weight: 500;">25/02/2029</td>
+                        <td style="text-align: center; color: #dc2626; font-weight: 500;">25/05/2029</td>
+                        <td style="text-align: center; font-weight: bold; color: #16a34a;">25/08/2029</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <!-- Ghi chú về quy trình bàn giao -->
+        <div style="font-size: 9.5pt; color: #334155; margin-bottom: 15px; background: #f8fafc; padding: 8px 12px; border-left: 3px solid #0047BA;">
+            <strong>Lưu ý nghiệp vụ C&B:</strong> Trước thời điểm nghỉ hưu 06 tháng, Phòng Quản trị Nhân lực gửi văn bản Thông báo nghỉ hưu đến người lao động; trước 03 tháng trình Tổng Giám đốc ký Quyết định nghỉ hưu và phối hợp Cơ quan BHXH TP. Hồ Chí Minh hoàn tất hồ sơ hưởng lương hưu hàng tháng.
+        </div>
+
+        <!-- Chữ ký xác nhận -->
+        <table class="footer-sig">
+            <tr>
+                <td style="width: 33%; text-align: center; vertical-align: top;">
+                    <strong>NGƯỜI LẬP DANH SÁCH</strong><br />
+                    <i>(Ký và ghi rõ họ tên)</i><br /><br /><br /><br />
+                    <strong>Chuyên viên Chế độ BHXH</strong>
+                </td>
+                <td style="width: 33%; text-align: center; vertical-align: top;">
+                    <strong>GIÁM ĐỐC NHÂN SỰ & C&B</strong><br />
+                    <i>(Ký duyệt kế hoạch kế thừa)</i><br /><br /><br /><br />
+                    <strong>Nguyễn Thị Thanh Huyền</strong>
+                </td>
+                <td style="width: 34%; text-align: center; vertical-align: top;">
+                    <i>TP. Hồ Chí Minh, ngày @DateTime.UtcNow.Day tháng @DateTime.UtcNow.Month năm @DateTime.UtcNow.Year</i><br />
+                    <strong>TỔNG GIÁM ĐỐC VINAMILK</strong><br />
+                    <div class="seal-stamp">
+                        <div style="font-size: 7px; font-weight: bold;">CÔNG TY CP SỮA VN</div>
+                        <div style="font-size: 13px;">★ ★ ★</div>
+                        <div style="font-size: 7px; font-weight: bold;">ĐÃ KÝ ĐIỆN TỬ</div>
+                    </div>
+                    <strong>Mai Kiều Liên</strong>
+                </td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>

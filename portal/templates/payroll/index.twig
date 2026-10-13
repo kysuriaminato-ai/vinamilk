@@ -1,0 +1,106 @@
+{% extends "layouts/base.twig" %}
+{% block title %}Kỳ Lương & Phiếu Lương — Vinamilk HRM{% endblock %}
+{% block breadcrumb %}Quản Lý Bảng Lương & Chi Trả{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 24px;">
+
+  <!-- Header Banner -->
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+    <div>
+      <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--vnm-text-main);">Bảng Lương Tháng 09/2026 (Kỳ Đã Khóa)</h1>
+      <p style="font-size: 0.875rem; color: var(--vnm-text-muted);">
+        Tổng số bản ghi: <strong>{{ payroll.total | number_format(0, ',', '.') }} dòng</strong> (Xử lý mượt mà qua Server-side Pagination & HTMX)
+      </p>
+    </div>
+    <div style="display: flex; gap: 12px;">
+      <button class="btn btn-outline">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Xuất File Ngân Hàng (BIDV/Vietcombank)
+      </button>
+      <button class="btn btn-primary">
+        Tính Lương Kỳ Mới (Tháng 10)
+      </button>
+    </div>
+  </div>
+
+  <!-- Payroll Data Table with Server-side Pagination -->
+  <div class="vnm-card" style="padding: 0; overflow: hidden;">
+    <div class="vnm-table-container table-scrollable" id="payroll-table-container">
+      <table class="vnm-table">
+        <thead>
+          <tr>
+            <th>Mã NV</th>
+            <th>Họ và Tên</th>
+            <th>Đơn Vị Trực Thuộc</th>
+            <th>Ngạch Bậc</th>
+            <th class="col-numeric">Công Thực Tế</th>
+            <th class="col-numeric">Lương Vị Trí (P1)</th>
+            <th class="col-numeric">Tổng Thu Nhập (Gross)</th>
+            <th class="col-numeric">Thực Lĩnh (Net)</th>
+            <th style="text-align: center;">Thao Tác</th>
+          </tr>
+        </thead>
+        <tbody id="payroll-rows-body">
+          {% for row in payroll.items %}
+            <tr>
+              <td><strong>{{ row.employeeCode }}</strong></td>
+              <td>{{ row.fullName }}</td>
+              <td>{{ row.unit }}</td>
+              <td><span class="vnm-badge badge-submitted">{{ row.jobGrade }}</span></td>
+              <td class="col-numeric">{{ row.workDays }} / 26</td>
+              <td class="col-numeric">{{ row.p1Salary | format_currency }}</td>
+              <td class="col-numeric">{{ row.grossSalary | format_currency }}</td>
+              <td class="col-numeric" style="font-weight: 700; color: var(--vnm-primary);">{{ row.netSalary | format_currency }}</td>
+              <td style="text-align: center;">
+                <button type="button" class="btn btn-outline" style="padding: 4px 8px; font-size: 0.75rem;" @click="$dispatch('open-payslip', { name: '{{ row.fullName }}', code: '{{ row.employeeCode }}', net: '{{ row.netSalary | format_currency }}', trace: '{{ row.formulaTrace }}' })">
+                  Xem Giải Trình
+                </button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination Footer -->
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-top: 1px solid var(--vnm-border); background: var(--vnm-surface);">
+      <div style="font-size: 0.8125rem; color: var(--vnm-text-muted);">
+        Hiển thị trang <strong>{{ payroll.page }}</strong> / <strong>{{ payroll.totalPages }}</strong> ({{ payroll.total | number_format(0, ',', '.') }} dòng dữ liệu)
+      </div>
+      <div style="display: flex; gap: 8px;">
+        {% if payroll.page > 1 %}
+          <a href="/payroll?page={{ payroll.page - 1 }}" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.8125rem;">← Trang Trước</a>
+        {% endif %}
+        {% if payroll.page < payroll.totalPages %}
+          <a href="/payroll?page={{ payroll.page + 1 }}" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.8125rem;">Trang Sau →</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Payslip Formula Trace Modal -->
+  <div x-data="{ open: false, payslip: {} }" @open-payslip.window="open = true; payslip = $event.detail" x-show="open" class="vnm-drawer-backdrop" style="display: none;">
+    <div class="vnm-modal" @click.outside="open = false" style="max-width: 600px; padding: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div>
+          <h3 style="font-size: 1.125rem; font-weight: 700; color: var(--vnm-text-main);">Phiếu Lương Chi Tiết & Giải Trình Công Thức</h3>
+          <p style="font-size: 0.8125rem; color: var(--vnm-text-muted);" x-text="payslip.name + ' (' + payslip.code + ')'"></p>
+        </div>
+        <button type="button" @click="open = false" style="background: none; border: none; font-size: 1.25rem; cursor: pointer;">✕</button>
+      </div>
+
+      <div style="background: var(--vnm-bg); padding: 16px; border-radius: var(--vnm-radius-md); border: 1px solid var(--vnm-border); margin-bottom: 16px;">
+        <div style="font-size: 0.8125rem; font-weight: 600; color: var(--vnm-text-muted); margin-bottom: 6px;">CÔNG THỨC TRUY VẾT MINH BẠCH (FORMULA TRACE):</div>
+        <div style="font-family: var(--vnm-font-mono); font-size: 0.875rem; color: var(--vnm-primary); word-break: break-all;" x-text="payslip.trace"></div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--vnm-border); padding-top: 16px;">
+        <span style="font-weight: 600;">Thực Lĩnh Chuyển Khoản:</span>
+        <span style="font-size: 1.25rem; font-weight: 700; color: var(--vnm-primary);" x-text="payslip.net"></span>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
