@@ -1,10 +1,11 @@
-using Hangfire;
+﻿using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using VinamilkHRM.Application.Common.Interfaces;
+using VinamilkHRM.Domain.Entities.Statutory;
 using VinamilkHRM.Domain.Interfaces.Printing;
 using VinamilkHRM.Domain.Interfaces.Reporting;
 using VinamilkHRM.Domain.Interfaces.Repositories;
@@ -22,6 +23,10 @@ public static class DependencyInjection
     {
         string connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? "Server=(localdb)\\mssqllocaldb;Database=VinamilkHRMDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True";
+
+        // Bộ đệm & Bảo vệ dữ liệu nhạy cảm
+        services.AddMemoryCache();
+        services.AddDataProtection();
 
         // Đăng ký SaveChangesInterceptor kiểm toán
         services.AddScoped<AuditableEntityInterceptor>();
@@ -69,6 +74,10 @@ public static class DependencyInjection
         services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationPolicyProvider, Security.PermissionPolicyProvider>();
         services.AddScoped<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, Security.PermissionAuthorizationHandler>();
 
+        // Đăng ký dịch vụ mã hóa trường nhạy cảm & nạp tham số pháp lý
+        services.AddScoped<IFieldEncryptionService, FieldEncryptionService>();
+        services.AddScoped<IStatutoryParameterProvider, StatutoryParameterProvider>();
+
         // Đăng ký Unit of Work và Repositories
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
@@ -85,10 +94,15 @@ public static class DependencyInjection
         services.AddScoped<VinamilkHRM.Infrastructure.Services.Printing.RetailStorePayslipPrinter>();
         services.AddScoped<IPayslipPrinterFactory, VinamilkHRM.Infrastructure.Services.Printing.PayslipPrinterFactory>();
         services.AddScoped<IPayslipPrinter, PayslipPrinter>();
+        services.AddScoped<VinamilkHRM.Infrastructure.Services.Printing.QuestPdfPayslipGenerator>();
+        services.AddScoped<VinamilkHRM.Application.Interfaces.IPayrollExportService, PayrollExportService>();
         services.AddScoped<IReportExporter, ReportExporter>();
 
         // Đăng ký Quản lý Phân vùng Đa điểm (Regional Scoping & Multi-Unit)
         services.AddScoped<VinamilkHRM.Domain.Interfaces.IRegionScopeService, VinamilkHRM.Infrastructure.Services.RegionScopeService>();
+
+        // Session 11 P1-2 Smtp Email Sender
+        services.AddTransient<VinamilkHRM.Domain.Interfaces.Notifications.IEmailSender, VinamilkHRM.Infrastructure.Services.Notifications.SmtpEmailSender>();
 
         // Cấu hình Hangfire lưu trên SQL Server
         services.AddHangfire(config => config
@@ -109,3 +123,4 @@ public static class DependencyInjection
         return services;
     }
 }
+

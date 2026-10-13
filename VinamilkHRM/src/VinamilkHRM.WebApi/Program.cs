@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Threading.RateLimiting;
 using Hangfire;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -99,6 +99,7 @@ builder.Services.AddHealthChecks()
 
 // 8. OpenAPI & Controllers
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -144,6 +145,7 @@ if (app.Environment.IsDevelopment() || args.Contains("--seed"))
 }
 
 app.MapControllers();
+app.MapHub<VinamilkHRM.WebApi.Hubs.NotificationHub>("/hubs/notifications");
 app.MapHealthChecks("/health");
 
 app.Run();

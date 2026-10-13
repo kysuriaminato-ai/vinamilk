@@ -41,6 +41,9 @@ public static class DependencyInjection
                 // Session 11 P1-1 Workflow Engine Service
         services.AddScoped<VinamilkHRM.Domain.Interfaces.Workflows.IWorkflowEngine, VinamilkHRM.Application.Workflows.WorkflowEngineService>();
 
+                // Session 11 P1-2 Notification Service
+        services.AddScoped<VinamilkHRM.Domain.Interfaces.Notifications.INotificationService, VinamilkHRM.Application.Notifications.NotificationService>();
+
         return services;
     }
 }

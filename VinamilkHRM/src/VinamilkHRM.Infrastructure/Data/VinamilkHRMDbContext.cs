@@ -16,6 +16,7 @@ using VinamilkHRM.Domain.Entities.Salaries;
 using VinamilkHRM.Domain.Entities.Shifts;
 using VinamilkHRM.Domain.Entities.Statutory;
 using VinamilkHRM.Domain.Entities.Workflows;
+using VinamilkHRM.Domain.Entities.Notifications;
 using VinamilkHRM.Infrastructure.Identity;
 
 namespace VinamilkHRM.Infrastructure.Data;
@@ -153,6 +154,12 @@ public class VinamilkHRMDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<WorkflowInstance> WorkflowInstances => Set<WorkflowInstance>();
     public DbSet<WorkflowStepInstance> WorkflowStepInstances => Set<WorkflowStepInstance>();
     public DbSet<ApprovalDelegation> ApprovalDelegations => Set<ApprovalDelegation>();
+
+    // Notification System DbSets (Session 11 P1-2)
+    public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
+    public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
+    public DbSet<InAppNotification> InAppNotifications => Set<InAppNotification>();
+    public DbSet<NotificationOutboxMessage> NotificationOutboxMessages => Set<NotificationOutboxMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

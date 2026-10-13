@@ -13,6 +13,7 @@ using VinamilkHRM.Domain.Entities.Salaries;
 using VinamilkHRM.Domain.Entities.Shifts;
 using VinamilkHRM.Domain.Entities.Statutory;
 using VinamilkHRM.Domain.Entities.Workflows;
+using VinamilkHRM.Domain.Entities.Notifications;
 
 namespace VinamilkHRM.Application.Common.Interfaces;
 
@@ -115,6 +116,12 @@ public interface IApplicationDbContext
     DbSet<WorkflowInstance> WorkflowInstances { get; }
     DbSet<WorkflowStepInstance> WorkflowStepInstances { get; }
     DbSet<ApprovalDelegation> ApprovalDelegations { get; }
+
+    // Notification System DbSets (Session 11 P1-2)
+    DbSet<NotificationTemplate> NotificationTemplates { get; }
+    DbSet<NotificationPreference> NotificationPreferences { get; }
+    DbSet<InAppNotification> InAppNotifications { get; }
+    DbSet<NotificationOutboxMessage> NotificationOutboxMessages { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
