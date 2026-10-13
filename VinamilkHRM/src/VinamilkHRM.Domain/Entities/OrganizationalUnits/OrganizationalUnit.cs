@@ -5,8 +5,8 @@ using VinamilkHRM.Domain.Enums;
 namespace VinamilkHRM.Domain.Entities.OrganizationalUnits;
 
 /// <summary>
-/// Lớp cơ sở trừu tượng đại diện cho một đơn vị tổ chức trong tập đoàn Vinamilk.
-/// Áp dụng tính Đóng gói (Encapsulation) qua private setters và phương thức nghiệp vụ.
+/// Lớp cơ sở đại diện cho một đơn vị tổ chức trong tập đoàn Vinamilk.
+/// Hỗ trợ cây phân cấp đa điểm qua Microsoft.EntityFrameworkCore.HierarchyId.
 /// </summary>
 public abstract class OrganizationalUnit : BaseAuditableEntity
 {
@@ -19,6 +19,12 @@ public abstract class OrganizationalUnit : BaseAuditableEntity
     public string TaxCode { get; protected set; } = string.Empty;
     public int RegionId { get; protected set; } = 3; // 1: Miền Bắc, 2: Miền Trung, 3: Miền Nam
     public string RegionName { get; protected set; } = "Miền Nam";
+
+    public string CostCenterCode { get; protected set; } = "CC_DEFAULT";
+    public WorkPattern WorkPattern { get; protected set; } = WorkPattern.OfficeWeek;
+    public MinimumWageRegion MinimumWageRegion { get; protected set; } = MinimumWageRegion.RegionI;
+    public int PlannedHeadcount { get; protected set; } = 0; // Định biên nhân sự
+    public string? LegacyId { get; protected set; }
 
     public int? ParentUnitId { get; protected set; }
     public virtual OrganizationalUnit? ParentUnit { get; protected set; }
@@ -42,6 +48,12 @@ public abstract class OrganizationalUnit : BaseAuditableEntity
     private readonly List<Employee> _employees = new();
     public virtual IReadOnlyCollection<Employee> Employees => _employees.AsReadOnly();
 
+    private readonly List<UnitManagerHistory> _unitManagerHistories = new();
+    public virtual IReadOnlyCollection<UnitManagerHistory> UnitManagerHistories => _unitManagerHistories.AsReadOnly();
+
+    private readonly List<UnitMinimumWageRegionHistory> _unitMinimumWageRegionHistories = new();
+    public virtual IReadOnlyCollection<UnitMinimumWageRegionHistory> UnitMinimumWageRegionHistories => _unitMinimumWageRegionHistories.AsReadOnly();
+
     protected OrganizationalUnit()
     {
     }
@@ -56,7 +68,12 @@ public abstract class OrganizationalUnit : BaseAuditableEntity
         string taxCode,
         int? parentUnitId = null,
         int regionId = 3,
-        string regionName = "Miền Nam")
+        string regionName = "Miền Nam",
+        string costCenterCode = "CC_DEFAULT",
+        WorkPattern workPattern = WorkPattern.OfficeWeek,
+        MinimumWageRegion minimumWageRegion = MinimumWageRegion.RegionI,
+        int plannedHeadcount = 0,
+        string? legacyId = null)
     {
         if (string.IsNullOrWhiteSpace(unitCode))
             throw new DomainException("Mã đơn vị tổ chức không được để trống.", "ERR_UNIT_CODE_EMPTY");
@@ -74,6 +91,11 @@ public abstract class OrganizationalUnit : BaseAuditableEntity
         ParentUnitId = parentUnitId;
         RegionId = regionId > 0 ? regionId : 3;
         RegionName = string.IsNullOrWhiteSpace(regionName) ? "Miền Nam" : regionName.Trim();
+        CostCenterCode = string.IsNullOrWhiteSpace(costCenterCode) ? "CC_DEFAULT" : costCenterCode.Trim().ToUpperInvariant();
+        WorkPattern = workPattern;
+        MinimumWageRegion = minimumWageRegion;
+        PlannedHeadcount = plannedHeadcount >= 0 ? plannedHeadcount : 0;
+        LegacyId = legacyId?.Trim();
     }
 
     public void SetRegion(int regionId, string regionName)
@@ -85,7 +107,7 @@ public abstract class OrganizationalUnit : BaseAuditableEntity
         RegionName = string.IsNullOrWhiteSpace(regionName) ? "Miền Nam" : regionName.Trim();
     }
 
-    public void UpdateGeneralInfo(string unitName, string address, string phoneNumber, string email, string taxCode)
+    public void UpdateGeneralInfo(string unitName, string address, string phoneNumber, string email, string taxCode, string? costCenterCode = null, WorkPattern? workPattern = null, int? plannedHeadcount = null)
     {
         if (string.IsNullOrWhiteSpace(unitName))
             throw new DomainException("Tên đơn vị tổ chức không được để trống.", "ERR_UNIT_NAME_EMPTY");
@@ -95,18 +117,38 @@ public abstract class OrganizationalUnit : BaseAuditableEntity
         PhoneNumber = phoneNumber?.Trim() ?? string.Empty;
         Email = email?.Trim() ?? string.Empty;
         TaxCode = taxCode?.Trim() ?? string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(costCenterCode))
+            CostCenterCode = costCenterCode.Trim().ToUpperInvariant();
+
+        if (workPattern.HasValue)
+            WorkPattern = workPattern.Value;
+
+        if (plannedHeadcount.HasValue && plannedHeadcount.Value >= 0)
+            PlannedHeadcount = plannedHeadcount.Value;
     }
 
-    public void AssignManager(int managerEmployeeId)
+    public void AssignManager(int managerEmployeeId, string? appointmentDecisionNumber = null, string? note = null, DateOnly? fromDate = null)
     {
         if (managerEmployeeId <= 0)
             throw new DomainException("Mã định danh người quản lý không hợp lệ.", "ERR_INVALID_MANAGER_ID");
 
+        var effectiveFrom = fromDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // Đóng nhiệm kỳ trước nếu có
+        var activeHistory = _unitManagerHistories.FirstOrDefault(h => h.ToDate == null);
+        activeHistory?.EndTerm(effectiveFrom);
+
         ManagerEmployeeId = managerEmployeeId;
+        _unitManagerHistories.Add(new UnitManagerHistory(Id, managerEmployeeId, effectiveFrom, null, appointmentDecisionNumber, note));
     }
 
-    public void RemoveManager()
+    public void RemoveManager(DateOnly? toDate = null)
     {
+        var effectiveTo = toDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var activeHistory = _unitManagerHistories.FirstOrDefault(h => h.ToDate == null);
+        activeHistory?.EndTerm(effectiveTo);
+
         ManagerEmployeeId = null;
     }
 
@@ -116,5 +158,38 @@ public abstract class OrganizationalUnit : BaseAuditableEntity
             throw new DomainException("Đơn vị không thể trực thuộc chính nó.", "ERR_CIRCULAR_UNIT_REFERENCE");
 
         ParentUnitId = parentUnitId;
+    }
+
+    public void MoveTo(int? newParentUnitId, Microsoft.EntityFrameworkCore.HierarchyId? newPath)
+    {
+        if (newParentUnitId.HasValue && newParentUnitId.Value == Id && Id > 0)
+            throw new DomainException("Đơn vị không thể chuyển trực thuộc chính nó.", "ERR_CIRCULAR_UNIT_REFERENCE");
+
+        ParentUnitId = newParentUnitId;
+        Path = newPath;
+    }
+
+    public void ChangeMinimumWageRegion(MinimumWageRegion newRegion, DateOnly effectiveFrom, string? reason = null, string? legalReference = null)
+    {
+        var activeRegion = _unitMinimumWageRegionHistories.FirstOrDefault(r => r.EffectiveTo == null);
+        activeRegion?.CloseEffectivity(effectiveFrom.AddDays(-1));
+
+        MinimumWageRegion = newRegion;
+        _unitMinimumWageRegionHistories.Add(new UnitMinimumWageRegionHistory(Id, newRegion, effectiveFrom, null, reason, legalReference));
+    }
+
+    public MinimumWageRegion GetMinimumWageRegionOn(DateOnly onDate)
+    {
+        var matched = _unitMinimumWageRegionHistories
+            .Where(r => r.EffectiveFrom <= onDate && (r.EffectiveTo == null || r.EffectiveTo >= onDate))
+            .OrderByDescending(r => r.EffectiveFrom)
+            .FirstOrDefault();
+
+        return matched?.MinimumWageRegion ?? MinimumWageRegion;
+    }
+
+    public void SetLegacyId(string legacyId)
+    {
+        LegacyId = legacyId?.Trim();
     }
 }

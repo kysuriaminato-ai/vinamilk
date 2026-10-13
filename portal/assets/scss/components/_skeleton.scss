@@ -1,0 +1,44 @@
+.vnm-skeleton {
+  background: linear-gradient(90deg, var(--vnm-border) 25%, var(--vnm-surface-hover) 50%, var(--vnm-border) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--vnm-radius-sm);
+
+  &.skeleton-text { height: 16px; margin-bottom: 8px; }
+  &.skeleton-circle { border-radius: 50%; }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.vnm-empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  .empty-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 16px;
+    color: var(--vnm-text-muted);
+  }
+
+  .empty-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--vnm-text-main);
+    margin-bottom: 8px;
+  }
+
+  .empty-desc {
+    color: var(--vnm-text-muted);
+    font-size: 0.875rem;
+    max-width: 360px;
+    margin-bottom: 20px;
+  }
+}

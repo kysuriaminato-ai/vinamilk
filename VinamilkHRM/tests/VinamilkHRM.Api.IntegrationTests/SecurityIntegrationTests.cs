@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using VinamilkHRM.Application.Common.Interfaces;
@@ -50,7 +51,7 @@ public class SecurityIntegrationTests : IClassFixture<CustomWebApplicationFactor
         {
             var db = scope.ServiceProvider.GetRequiredService<VinamilkHRMDbContext>();
 
-            var unit = db.OrganizationalUnits.FirstOrDefault(u => u.UnitCode == "HQ_TEST");
+            var unit = db.OrganizationalUnits.IgnoreQueryFilters().FirstOrDefault(u => u.UnitCode == "HQ_TEST");
             if (unit == null)
             {
                 unit = new HeadquartersUnit(
@@ -69,7 +70,7 @@ public class SecurityIntegrationTests : IClassFixture<CustomWebApplicationFactor
                 await db.SaveChangesAsync();
             }
 
-            var emp1 = db.Employees.FirstOrDefault(e => e.EmployeeCode == "VNM_EMP1");
+            var emp1 = db.Employees.IgnoreQueryFilters().FirstOrDefault(e => e.EmployeeCode == "VNM_EMP1");
             if (emp1 == null)
             {
                 emp1 = new OfficeEmployee(
@@ -95,7 +96,7 @@ public class SecurityIntegrationTests : IClassFixture<CustomWebApplicationFactor
                 await db.SaveChangesAsync();
             }
 
-            var emp2 = db.Employees.FirstOrDefault(e => e.EmployeeCode == "VNM_EMP2");
+            var emp2 = db.Employees.IgnoreQueryFilters().FirstOrDefault(e => e.EmployeeCode == "VNM_EMP2");
             if (emp2 == null)
             {
                 emp2 = new OfficeEmployee(
@@ -123,7 +124,7 @@ public class SecurityIntegrationTests : IClassFixture<CustomWebApplicationFactor
 
             emp1Id = emp1.Id;
 
-            var payslipOther = db.PaySlips.FirstOrDefault(p => p.EmployeeId == emp2.Id && p.PayrollPeriod == "2026-10");
+            var payslipOther = db.PaySlips.IgnoreQueryFilters().FirstOrDefault(p => p.EmployeeId == emp2.Id && p.PayrollPeriod == "2026-10");
             if (payslipOther == null)
             {
                 payslipOther = new PaySlip(
@@ -177,7 +178,7 @@ public class SecurityIntegrationTests : IClassFixture<CustomWebApplicationFactor
         {
             var db = scope.ServiceProvider.GetRequiredService<VinamilkHRMDbContext>();
 
-            var factoryA = db.FactoryUnits.FirstOrDefault(u => u.UnitCode == "FAC_TN_TEST");
+            var factoryA = db.FactoryUnits.IgnoreQueryFilters().FirstOrDefault(u => u.UnitCode == "FAC_TN_TEST");
             if (factoryA == null)
             {
                 factoryA = new FactoryUnit(
@@ -196,7 +197,7 @@ public class SecurityIntegrationTests : IClassFixture<CustomWebApplicationFactor
                 await db.SaveChangesAsync();
             }
 
-            var factoryB = db.FactoryUnits.FirstOrDefault(u => u.UnitCode == "FAC_TS_TEST");
+            var factoryB = db.FactoryUnits.IgnoreQueryFilters().FirstOrDefault(u => u.UnitCode == "FAC_TS_TEST");
             if (factoryB == null)
             {
                 factoryB = new FactoryUnit(
@@ -215,7 +216,7 @@ public class SecurityIntegrationTests : IClassFixture<CustomWebApplicationFactor
                 await db.SaveChangesAsync();
             }
 
-            var managerA = db.Employees.FirstOrDefault(e => e.EmployeeCode == "MGR_A_TEST");
+            var managerA = db.Employees.IgnoreQueryFilters().FirstOrDefault(e => e.EmployeeCode == "MGR_A_TEST");
             if (managerA == null)
             {
                 managerA = new FactoryWorker(
@@ -241,7 +242,7 @@ public class SecurityIntegrationTests : IClassFixture<CustomWebApplicationFactor
                 await db.SaveChangesAsync();
             }
 
-            var workerB = db.Employees.FirstOrDefault(e => e.EmployeeCode == "WRK_B_TEST");
+            var workerB = db.Employees.IgnoreQueryFilters().FirstOrDefault(e => e.EmployeeCode == "WRK_B_TEST");
             if (workerB == null)
             {
                 workerB = new FactoryWorker(
@@ -309,7 +310,7 @@ public class SecurityIntegrationTests : IClassFixture<CustomWebApplicationFactor
         db.AuditLogs.Add(auditEntry);
         await db.SaveChangesAsync();
 
-        var savedLog = db.AuditLogs.FirstOrDefault(a => a.EntityId == "123" && a.Action == "UPDATE" && a.PerformedBy == "AUDIT_USER_789");
+        var savedLog = db.AuditLogs.IgnoreQueryFilters().FirstOrDefault(a => a.EntityId == "123" && a.Action == "UPDATE" && a.PerformedBy == "AUDIT_USER_789");
 
         Assert.NotNull(savedLog);
         Assert.Equal("AUDIT_USER_789", savedLog.PerformedBy);

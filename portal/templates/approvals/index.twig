@@ -1,0 +1,86 @@
+{% extends "layouts/base.twig" %}
+{% block title %}Hộp Duyệt Chung — Vinamilk HRM{% endblock %}
+{% block breadcrumb %}Hộp Thư Phê Duyệt Tác Vụ{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 24px;" x-data="{ selectedAll: false, count: 0 }">
+
+  <!-- Header & Batch Actions -->
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+    <div>
+      <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--vnm-text-main);">Hộp Duyệt Chung</h1>
+      <p style="font-size: 0.875rem; color: var(--vnm-text-muted);">Gom toàn bộ yêu cầu: Nghỉ phép, Đổi ca, Tăng ca, Hiệu chuẩn KPI và Đề xuất lương</p>
+    </div>
+
+    <div style="display: flex; gap: 12px;">
+      <button class="btn btn-outline" style="color: var(--vnm-danger); border-color: var(--vnm-danger);">
+        Từ Chối Hàng Loạt
+      </button>
+      <button class="btn btn-primary">
+        Duyệt Nhanh Các Đơn Đã Chọn
+      </button>
+    </div>
+  </div>
+
+  <!-- Approvals Table -->
+  <div class="vnm-card" style="padding: 0;">
+    <div class="vnm-table-container">
+      <table class="vnm-table">
+        <thead>
+          <tr>
+            <th style="width: 40px; text-align: center;">
+              <input type="checkbox" x-model="selectedAll">
+            </th>
+            <th>Loại Tác Vụ</th>
+            <th>Người Đề Xuất</th>
+            <th>Đơn Vị</th>
+            <th>Nội Dung Yêu Cầu</th>
+            <th>Thời Gian Gửi</th>
+            <th>Trạng Thái</th>
+            <th style="text-align: center;">Hành Động</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="text-align: center;"><input type="checkbox" :checked="selectedAll"></td>
+            <td><span class="vnm-badge badge-submitted">Nghỉ Phép</span></td>
+            <td><strong>Đỗ Minh Trí</strong></td>
+            <td>Phòng Kinh Doanh</td>
+            <td>Nghỉ phép năm (2 ngày: 15/10 - 16/10)</td>
+            <td style="font-size: 0.8125rem; color: var(--vnm-text-muted);">13/10/2026 08:30</td>
+            <td><span class="vnm-badge badge-submitted">Chờ Duyệt</span></td>
+            <td style="text-align: center;">
+              <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;">Duyệt</button>
+            </td>
+          </tr>
+          <tr>
+            <td style="text-align: center;"><input type="checkbox" :checked="selectedAll"></td>
+            <td><span class="vnm-badge badge-locked">Đổi Ca</span></td>
+            <td><strong>Lê Thị Hương</strong></td>
+            <td>Nhà máy Sữa Dielac</td>
+            <td>Đổi Ca 1 sang Ca 2 ngày 14/10 (với NV Trần Văn Bình)</td>
+            <td style="font-size: 0.8125rem; color: var(--vnm-text-muted);">12/10/2026 17:15</td>
+            <td><span class="vnm-badge badge-submitted">Chờ Duyệt</span></td>
+            <td style="text-align: center;">
+              <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;">Duyệt</button>
+            </td>
+          </tr>
+          <tr>
+            <td style="text-align: center;"><input type="checkbox" :checked="selectedAll"></td>
+            <td><span class="vnm-badge badge-forecast">Đặc Cách Lương</span></td>
+            <td><strong>Vũ Đình Hưng</strong></td>
+            <td>Khối Nghiên Cứu R&D</td>
+            <td>Đề xuất tăng lương đặc cách +35% (Compa-Ratio 0.78 → 1.05)</td>
+            <td style="font-size: 0.8125rem; color: var(--vnm-text-muted);">11/10/2026 14:00</td>
+            <td><span class="vnm-badge badge-submitted">Chờ HĐQT Duyệt</span></td>
+            <td style="text-align: center;">
+              <button class="btn btn-primary" style="padding: 4px 8px; font-size: 0.75rem;">Xem Hồ Sơ</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

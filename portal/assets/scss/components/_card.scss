@@ -1,0 +1,45 @@
+.vnm-card {
+  background-color: var(--vnm-surface);
+  border: 1px solid var(--vnm-border);
+  border-radius: var(--vnm-radius-lg);
+  padding: var(--vnm-space-5);
+  box-shadow: var(--vnm-shadow-sm);
+}
+
+.kpi-card {
+  background-color: var(--vnm-surface);
+  border: 1px solid var(--vnm-border);
+  border-radius: var(--vnm-radius-lg);
+  padding: var(--vnm-space-5);
+  box-shadow: var(--vnm-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  .kpi-title {
+    font-size: 0.875rem;
+    color: var(--vnm-text-muted);
+    font-weight: 500;
+    margin-bottom: var(--vnm-space-2);
+  }
+
+  .kpi-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--vnm-text-main);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .kpi-trend {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    margin-top: var(--vnm-space-2);
+
+    &.positive { color: var(--vnm-success); }
+    &.negative { color: var(--vnm-danger); }
+    &.neutral { color: var(--vnm-text-muted); }
+  }
+}

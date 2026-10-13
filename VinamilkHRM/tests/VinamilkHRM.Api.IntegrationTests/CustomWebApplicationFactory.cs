@@ -36,10 +36,11 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 .AddInterceptors(interceptor);
             });
 
-            // Khởi tạo schema trên LocalDB (đúng chuẩn yêu cầu không có Docker thì dùng LocalDB)
+            // Khởi tạo schema mới nhất trên LocalDB
             var spBuild = services.BuildServiceProvider();
             using var scope = spBuild.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<VinamilkHRMDbContext>();
+            db.Database.EnsureDeleted();
             db.Database.EnsureCreated();
         });
 

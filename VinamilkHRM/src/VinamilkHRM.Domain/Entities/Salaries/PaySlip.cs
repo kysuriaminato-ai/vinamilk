@@ -1,15 +1,21 @@
+﻿using VinamilkHRM.Domain.Services.Payroll;
 using VinamilkHRM.Domain.Common;
 using VinamilkHRM.Domain.Entities.Employees;
+using VinamilkHRM.Domain.Entities.Statutory;
 using VinamilkHRM.Domain.Enums;
 
 namespace VinamilkHRM.Domain.Entities.Salaries;
 
 /// <summary>
 /// Đại diện cho Phiếu lương chi tiết hàng tháng của cán bộ nhân viên Vinamilk.
-/// Đảm bảo tính đóng gói logic tính toán BHXH, BHYT, BHTN, thuế TNCN và tiền thực lĩnh (Net Salary).
+/// Hỗ trợ tính toán bảo hiểm, giảm trừ gia cảnh và thuế TNCN nạp động từ tham số pháp lý.
 /// </summary>
 public class PaySlip : BaseAuditableEntity
 {
+    public int? PayrollRunId { get; private set; }
+    public virtual PayrollRun? PayrollRun { get; private set; }
+    public decimal EmployerCost { get; private set; }
+    public string? FormulaTraceJson { get; private set; }
     public int EmployeeId { get; private set; }
     public virtual Employee? Employee { get; private set; }
 
@@ -29,20 +35,22 @@ public class PaySlip : BaseAuditableEntity
     public decimal OtherBonuses { get; private set; }
 
     public decimal GrossSalary { get; private set; }
-    public decimal SocialInsuranceDeduction { get; private set; }       // 8% BHXH
-    public decimal HealthInsuranceDeduction { get; private set; }       // 1.5% BHYT
-    public decimal UnemploymentInsuranceDeduction { get; private set; } // 1% BHTN
+    public decimal SocialInsuranceDeduction { get; private set; }       // BHXH NLĐ
+    public decimal HealthInsuranceDeduction { get; private set; }       // BHYT NLĐ
+    public decimal UnemploymentInsuranceDeduction { get; private set; } // BHTN NLĐ
     public int DependentCount { get; private set; }                     // Số người phụ thuộc
-    public decimal PersonalDeduction { get; private set; }              // Giảm trừ bản thân (11tr)
-    public decimal DependentDeduction { get; private set; }             // Giảm trừ người phụ thuộc (4.4tr/người)
+    public decimal PersonalDeduction { get; private set; }              // Giảm trừ bản thân
+    public decimal DependentDeduction { get; private set; }             // Giảm trừ người phụ thuộc
     public decimal TaxableIncome { get; private set; }                  // Thu nhập tính thuế TNCN
-    public decimal PersonalIncomeTax { get; private set; }              // Thuế TNCN lũy tiến 7 bậc
+    public decimal PersonalIncomeTax { get; private set; }              // Thuế TNCN lũy tiến
     public decimal TotalDeductions { get; private set; }
     public decimal NetSalary { get; private set; }
 
     public PaySlipStatus Status { get; private set; } = PaySlipStatus.Draft;
     public DateTime? PaymentDate { get; private set; }
     public string? TransactionReference { get; private set; }
+    public bool IsImported { get; private set; } = false;
+    public int? LegacyId { get; private set; }
 
     protected PaySlip()
     {
@@ -65,7 +73,13 @@ public class PaySlip : BaseAuditableEntity
         decimal nightShiftPay = 0m,
         decimal hazardousAllowance = 0m,
         decimal salesCommission = 0m,
-        decimal lunchAllowance = 0m)
+        decimal lunchAllowance = 0m,
+        decimal? personalDeduction = null,
+        decimal? dependentDeductionPerPerson = null,
+        IReadOnlyList<TaxBracket>? taxBrackets = null,
+        decimal socialInsuranceRate = 0.08m,
+        decimal healthInsuranceRate = 0.015m,
+        decimal unemploymentInsuranceRate = 0.01m)
     {
         if (employeeId <= 0)
             throw new DomainException("Mã nhân viên phiếu lương không hợp lệ.", "ERR_PAY_EMP_INVALID");
@@ -92,54 +106,134 @@ public class PaySlip : BaseAuditableEntity
         KpiBonus = kpiBonus >= 0 ? kpiBonus : 0m;
         OtherBonuses = otherBonuses >= 0 ? otherBonuses : 0m;
         DependentCount = Math.Max(0, dependentCount);
+        IsImported = false;
 
-        CalculateNetSalary(insuranceSalary);
+        CalculateNetSalary(
+            insuranceSalary,
+            personalDeduction,
+            dependentDeductionPerPerson,
+            taxBrackets,
+            socialInsuranceRate,
+            healthInsuranceRate,
+            unemploymentInsuranceRate);
     }
 
     /// <summary>
-    /// Tính toán tổng thu nhập trước thuế (Gross), các khoản trích nộp theo lương theo Luật VN,
-    /// giảm trừ gia cảnh (bản thân 11tr, người phụ thuộc 4.4tr/người), biểu thuế TNCN lũy tiến 7 bậc, và lương Net.
+    /// Phương thức khởi tạo đặc biệt dành cho dữ liệu di sản chuyển đổi từ MySQL (bangluong).
+    /// Phiếu lương được đánh dấu IsImported = true, trạng thái Paid (chỉ đọc).
     /// </summary>
-    public void CalculateNetSalary(decimal insuranceSalary)
+    public static PaySlip CreateImported(
+        int employeeId,
+        string payrollPeriod,
+        decimal baseSalary,
+        decimal allowance,
+        decimal actualWorkDays,
+        decimal grossSalary,
+        decimal totalDeductions,
+        decimal netSalary,
+        int legacyId,
+        DateTime paymentDate,
+        string transactionRef = "MIGRATED_LEGACY")
     {
+        var slip = new PaySlip
+        {
+            EmployeeId = employeeId,
+            PayrollPeriod = payrollPeriod,
+            BaseSalary = baseSalary,
+            Allowance = allowance,
+            ActualWorkDays = actualWorkDays,
+            GrossSalary = grossSalary,
+            TotalDeductions = totalDeductions,
+            NetSalary = netSalary,
+            Status = PaySlipStatus.Paid,
+            IsImported = true,
+            LegacyId = legacyId,
+            PaymentDate = paymentDate,
+            TransactionReference = transactionRef
+        };
+        return slip;
+    }
+
+    /// <summary>
+    /// Tính toán thu nhập Gross, trích nộp bảo hiểm, giảm trừ gia cảnh, thuế TNCN và thực lĩnh Net.
+    /// Cho phép nạp động các tham số pháp lý theo ngày hiệu lực.
+    /// </summary>
+    public void CalculateNetSalary(
+        decimal insuranceSalary,
+        decimal? personalDeduction = null,
+        decimal? dependentDeductionPerPerson = null,
+        IReadOnlyList<TaxBracket>? taxBrackets = null,
+        decimal socialInsuranceRate = 0.08m,
+        decimal healthInsuranceRate = 0.015m,
+        decimal unemploymentInsuranceRate = 0.01m)
+    {
+        if (IsImported)
+            throw new DomainException("Phiếu lương di sản đã khóa không thể tính toán lại.", "ERR_PAY_IMPORTED_READONLY");
+
         decimal workRatio = StandardWorkDays > 0 ? Math.Min(1.5m, ActualWorkDays / StandardWorkDays) : 1m;
-        decimal earnedBaseSalary = Math.Round(BaseSalary * workRatio, 0);
+        decimal earnedBaseSalary = Math.Round(BaseSalary * workRatio, 0, MidpointRounding.AwayFromZero);
 
         GrossSalary = earnedBaseSalary + Allowance + LunchAllowance + OvertimePay + NightShiftPay + HazardousAllowance + SalesCommission + KpiBonus + OtherBonuses;
 
-        // Trích nộp BHXH (8%), BHYT (1.5%), BHTN (1%) trên lương đóng bảo hiểm
-        SocialInsuranceDeduction = Math.Round(insuranceSalary * 0.08m, 0);
-        HealthInsuranceDeduction = Math.Round(insuranceSalary * 0.015m, 0);
-        UnemploymentInsuranceDeduction = Math.Round(insuranceSalary * 0.01m, 0);
+        // Trích nộp bảo hiểm bắt buộc trên lương đóng bảo hiểm
+        SocialInsuranceDeduction = Math.Round(insuranceSalary * socialInsuranceRate, 0, MidpointRounding.AwayFromZero);
+        HealthInsuranceDeduction = Math.Round(insuranceSalary * healthInsuranceRate, 0, MidpointRounding.AwayFromZero);
+        UnemploymentInsuranceDeduction = Math.Round(insuranceSalary * unemploymentInsuranceRate, 0, MidpointRounding.AwayFromZero);
 
         decimal statutoryInsuranceTotal = SocialInsuranceDeduction + HealthInsuranceDeduction + UnemploymentInsuranceDeduction;
 
-        // Giảm trừ gia cảnh theo Luật Thuế TNCN Việt Nam:
-        // - Bản thân: 11,000,000 đ/tháng
-        // - Người phụ thuộc: 4,400,000 đ/người/tháng
-        PersonalDeduction = 11_000_000m;
-        DependentDeduction = DependentCount * 4_400_000m;
+        // Giảm trừ gia cảnh theo tham số pháp lý
+        PersonalDeduction = personalDeduction ?? 11_000_000m;
+        decimal depPerPerson = dependentDeductionPerPerson ?? 4_400_000m;
+        DependentDeduction = DependentCount * depPerPerson;
         decimal totalRelief = PersonalDeduction + DependentDeduction;
 
         TaxableIncome = Math.Max(0m, GrossSalary - statutoryInsuranceTotal - totalRelief);
 
-        // Biểu thuế lũy tiến từng phần 7 bậc (Luật Thuế TNCN VN)
-        PersonalIncomeTax = CalculateProgressiveTax(TaxableIncome);
+        // Tính thuế TNCN lũy tiến theo biểu thuế được truyền vào (hoặc mặc định)
+        PersonalIncomeTax = CalculateTax(TaxableIncome, taxBrackets);
 
         TotalDeductions = statutoryInsuranceTotal + PersonalIncomeTax;
         NetSalary = Math.Max(0m, GrossSalary - TotalDeductions);
     }
 
-    private static decimal CalculateProgressiveTax(decimal taxableIncome)
+    private static decimal CalculateTax(decimal taxableIncome, IReadOnlyList<TaxBracket>? taxBrackets)
     {
         if (taxableIncome <= 0) return 0m;
-        if (taxableIncome <= 5_000_000m) return Math.Round(taxableIncome * 0.05m, 0);
-        if (taxableIncome <= 10_000_000m) return Math.Round(250_000m + (taxableIncome - 5_000_000m) * 0.10m, 0);
-        if (taxableIncome <= 18_000_000m) return Math.Round(750_000m + (taxableIncome - 10_000_000m) * 0.15m, 0);
-        if (taxableIncome <= 32_000_000m) return Math.Round(1_950_000m + (taxableIncome - 18_000_000m) * 0.20m, 0);
-        if (taxableIncome <= 52_000_000m) return Math.Round(4_750_000m + (taxableIncome - 32_000_000m) * 0.25m, 0);
-        if (taxableIncome <= 80_000_000m) return Math.Round(9_750_000m + (taxableIncome - 52_000_000m) * 0.30m, 0);
-        return Math.Round(18_150_000m + (taxableIncome - 80_000_000m) * 0.35m, 0);
+
+        if (taxBrackets != null && taxBrackets.Count > 0)
+        {
+            decimal tax = 0m;
+            decimal previousUpper = 0m;
+
+            foreach (var bracket in taxBrackets.OrderBy(b => b.Order))
+            {
+                if (taxableIncome <= previousUpper) break;
+
+                decimal taxableInThisBracket = bracket.UpperBoundMonthly.HasValue
+                    ? Math.Min(taxableIncome, bracket.UpperBoundMonthly.Value) - previousUpper
+                    : taxableIncome - previousUpper;
+
+                if (taxableInThisBracket > 0)
+                {
+                    tax += Math.Round(taxableInThisBracket * bracket.Rate, 0, MidpointRounding.AwayFromZero);
+                }
+
+                if (!bracket.UpperBoundMonthly.HasValue) break;
+                previousUpper = bracket.UpperBoundMonthly.Value;
+            }
+
+            return Math.Round(tax, 0, MidpointRounding.AwayFromZero);
+        }
+
+        // Biểu thuế lũy tiến 7 bậc tiêu chuẩn trước 2026
+        if (taxableIncome <= 5_000_000m) return Math.Round(taxableIncome * 0.05m, 0, MidpointRounding.AwayFromZero);
+        if (taxableIncome <= 10_000_000m) return Math.Round(250_000m + (taxableIncome - 5_000_000m) * 0.10m, 0, MidpointRounding.AwayFromZero);
+        if (taxableIncome <= 18_000_000m) return Math.Round(750_000m + (taxableIncome - 10_000_000m) * 0.15m, 0, MidpointRounding.AwayFromZero);
+        if (taxableIncome <= 32_000_000m) return Math.Round(1_950_000m + (taxableIncome - 18_000_000m) * 0.20m, 0, MidpointRounding.AwayFromZero);
+        if (taxableIncome <= 52_000_000m) return Math.Round(4_750_000m + (taxableIncome - 32_000_000m) * 0.25m, 0, MidpointRounding.AwayFromZero);
+        if (taxableIncome <= 80_000_000m) return Math.Round(9_750_000m + (taxableIncome - 52_000_000m) * 0.30m, 0, MidpointRounding.AwayFromZero);
+        return Math.Round(18_150_000m + (taxableIncome - 80_000_000m) * 0.35m, 0, MidpointRounding.AwayFromZero);
     }
 
     public void Approve()
@@ -152,7 +246,7 @@ public class PaySlip : BaseAuditableEntity
 
     public void MarkAsPaid(string transactionReference, DateTime? paymentDate = null)
     {
-        if (Status != PaySlipStatus.Approved)
+        if (Status != PaySlipStatus.Approved && !IsImported)
             throw new DomainException("Chỉ phiếu lương đã được phê duyệt mới có thể chuyển trạng thái Đã thanh toán.", "ERR_PAY_NOT_APPROVED");
 
         if (string.IsNullOrWhiteSpace(transactionReference))
@@ -161,5 +255,58 @@ public class PaySlip : BaseAuditableEntity
         Status = PaySlipStatus.Paid;
         TransactionReference = transactionReference.Trim();
         PaymentDate = paymentDate ?? DateTime.UtcNow;
+    }
+
+    public void SetPayrollRun(int payrollRunId)
+    {
+        PayrollRunId = payrollRunId;
+    }
+
+    public void UpdateFromCalculation(PayrollResult result, int? payrollRunId = null)
+    {
+        if (Status >= PaySlipStatus.Approved)
+            throw new DomainException("Phiếu lương đã được duyệt hoặc chi trả, không thể cập nhật.", "ERR_PAY_PERIOD_LOCKED");
+
+        if (payrollRunId.HasValue) PayrollRunId = payrollRunId.Value;
+        StandardWorkDays = result.StandardWorkDays;
+        ActualWorkDays = result.ActualWorkDays;
+        GrossSalary = result.GrossSalary;
+        SocialInsuranceDeduction = result.EmployeeSocialInsurance;
+        HealthInsuranceDeduction = result.EmployeeHealthInsurance;
+        UnemploymentInsuranceDeduction = result.EmployeeUnemploymentInsurance;
+        PersonalDeduction = result.SelfRelief;
+        DependentDeduction = result.DependentRelief;
+        TaxableIncome = result.TaxAssessedIncome;
+        PersonalIncomeTax = result.PersonalIncomeTax;
+        TotalDeductions = result.TotalDeductions;
+        NetSalary = result.NetSalary;
+        EmployerCost = result.TotalEmployerCost;
+        FormulaTraceJson = System.Text.Json.JsonSerializer.Serialize(result.Lines);
+    }
+
+    public static PaySlip CreateFromCalculation(PayrollResult result, int? payrollRunId = null)
+    {
+        var slip = new PaySlip
+        {
+            EmployeeId = result.EmployeeId,
+            PayrollPeriod = result.PayrollPeriod,
+            PayrollRunId = payrollRunId,
+            StandardWorkDays = result.StandardWorkDays,
+            ActualWorkDays = result.ActualWorkDays,
+            GrossSalary = result.GrossSalary,
+            SocialInsuranceDeduction = result.EmployeeSocialInsurance,
+            HealthInsuranceDeduction = result.EmployeeHealthInsurance,
+            UnemploymentInsuranceDeduction = result.EmployeeUnemploymentInsurance,
+            PersonalDeduction = result.SelfRelief,
+            DependentDeduction = result.DependentRelief,
+            TaxableIncome = result.TaxAssessedIncome,
+            PersonalIncomeTax = result.PersonalIncomeTax,
+            TotalDeductions = result.TotalDeductions,
+            NetSalary = result.NetSalary,
+            EmployerCost = result.TotalEmployerCost,
+            FormulaTraceJson = System.Text.Json.JsonSerializer.Serialize(result.Lines),
+            Status = PaySlipStatus.Draft
+        };
+        return slip;
     }
 }

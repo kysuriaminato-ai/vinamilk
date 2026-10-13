@@ -11,13 +11,21 @@ public static class Permissions
     public const string NhansuEdit = "NHANSU.Edit";
     public const string NhansuDelete = "NHANSU.Delete";
     public const string NhansuExport = "NHANSU.Export";
+    public const string NhansuManage = "NHANSU.Edit";
+    public const string NhansuViewSensitive = "NHANSU.ViewSensitive"; // Quyền xem dữ liệu nhạy cảm chưa che (CCCD, Số tài khoản ngân hàng)
+
+    // Alias tiện dụng cho Tiền lương
+    public const string TienluongView = "LUONG.View";
+    public const string TienluongCalculate = "LUONG.Edit";
 
     // Phân hệ Chấm công & Ca kíp
     public const string ChamcongView = "CHAM_CONG.View";
     public const string ChamcongAdd = "CHAM_CONG.Add";
     public const string ChamcongEdit = "CHAM_CONG.Edit";
+    public const string ChamcongManage = "CHAM_CONG.Edit";
     public const string ChamcongApprove = "CHAM_CONG.Approve";
     public const string ChamcongExport = "CHAM_CONG.Export";
+    public const string ChamcongLock = "CHAM_CONG.Lock";
 
     // Phân hệ Tiền lương & Thuế 3P
     public const string LuongView = "LUONG.View";
@@ -62,7 +70,7 @@ public static class Permissions
 
     public static readonly IReadOnlyList<string> All = new[]
     {
-        NhansuView, NhansuAdd, NhansuEdit, NhansuDelete, NhansuExport,
+        NhansuView, NhansuAdd, NhansuEdit, NhansuDelete, NhansuExport, NhansuViewSensitive,
         ChamcongView, ChamcongAdd, ChamcongEdit, ChamcongApprove, ChamcongExport,
         LuongView, LuongAdd, LuongEdit, LuongApprove, LuongExport,
         KpiView, KpiEvaluate, KpiApprove,

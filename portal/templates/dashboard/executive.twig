@@ -1,0 +1,175 @@
+{% extends "layouts/base.twig" %}
+{% block title %}Dashboard Điều Hành Tập Đoàn — Vinamilk HRM{% endblock %}
+{% block breadcrumb %}Bảng Điều Hành Cấp Cao{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 24px;">
+
+  <!-- Header Banner -->
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+    <div>
+      <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--vnm-text-main);">Bảng Điều Hành Nhân Sự Toàn Tập Đoàn</h1>
+      <p style="font-size: 0.875rem; color: var(--vnm-text-muted);">Số liệu tổng hợp thời gian thực kết nối Kho dữ liệu báo cáo (Reporting Data Mart)</p>
+    </div>
+    <div style="display: flex; gap: 12px;">
+      <button class="btn btn-outline" onclick="window.print()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Xuất Báo Cáo
+      </button>
+      <a href="/analytics" class="btn btn-primary">
+        Xem Vị Thế Lương Thị Trường
+      </a>
+    </div>
+  </div>
+
+  <!-- KPI Cards Grid -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+    
+    <!-- Headcount Card -->
+    <div class="kpi-card hover-lift" x-data="kpiCounter({{ data.headcount }})">
+      <div class="kpi-title">Tổng Quy Mô Nhân Sự (Headcount)</div>
+      <div class="kpi-value"><span x-text="current.toLocaleString('vi-VN')"></span> <span style="font-size: 1rem; font-weight: 500; color: var(--vnm-text-muted);">CBNV</span></div>
+      <div class="kpi-trend positive">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+        <span>+125 CBNV so với đầu quý</span>
+      </div>
+    </div>
+
+    <!-- Monthly Turnover Rate Card (Criteria 1) -->
+    <div class="kpi-card hover-lift" x-data="kpiCounter({{ data.monthlyTurnoverRate }})">
+      <div class="kpi-title">Tỷ Lệ Nghỉ Việc Tháng Này</div>
+      <div class="kpi-value"><span x-text="current"></span>%</div>
+      <div class="kpi-trend positive" style="font-size: 0.75rem;">
+        <span>(Đầu kỳ: 200, Cuối: 196, Nghỉ: 6 → Chuẩn 3,03%)</span>
+      </div>
+    </div>
+
+    <!-- Rolling 12M Turnover Rate Card -->
+    <div class="kpi-card hover-lift" x-data="kpiCounter({{ data.turnoverRate12M }})">
+      <div class="kpi-title">Tỷ Lệ Nghỉ Việc 12 Tháng Trượt</div>
+      <div class="kpi-value"><span x-text="current"></span>%</div>
+      <div class="kpi-trend positive">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        <span>-0.32% so với cùng kỳ năm trước</span>
+      </div>
+    </div>
+
+    <!-- Labor Cost / Revenue -->
+    <div class="kpi-card hover-lift">
+      <div class="kpi-title">Tỷ Lệ Chi Phí Nhân Sự / Doanh Thu</div>
+      <div class="kpi-value">{{ data.costToRevenueRatio }}%</div>
+      <div class="kpi-trend neutral">
+        <span>Tổng quỹ: {{ data.totalLaborCost | format_currency }}</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Main Section: Forecasts & Volatile Units -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+    
+    <!-- 6-Month Time Series Forecast (ML.NET Model with Forecast Badge) -->
+    <div class="vnm-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div>
+          <h2 style="font-size: 1.125rem; font-weight: 700; color: var(--vnm-text-main);">Dự Báo Xu Hướng 6 Tháng Tới</h2>
+          <p style="font-size: 0.8125rem; color: var(--vnm-text-muted);">Mô hình chuỗi thời gian chu kỳ với khoảng tin cậy 95%</p>
+        </div>
+        <span class="vnm-badge badge-forecast">DỰ BÁO</span>
+      </div>
+
+      <div class="vnm-table-container">
+        <table class="vnm-table">
+          <thead>
+            <tr>
+              <th>Kỳ Dự Báo</th>
+              <th class="col-numeric">Quy Mô (Headcount)</th>
+              <th class="col-numeric">Tỷ Lệ Nghỉ (%)</th>
+              <th class="col-numeric">Quỹ Lương Dự Kiến</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in data.forecasts %}
+              <tr>
+                <td><strong>{{ f.month }}</strong> <span class="vnm-badge badge-forecast" style="font-size: 0.65rem; padding: 1px 4px;">DỰ BÁO</span></td>
+                <td class="col-numeric">{{ f.headcount | number_format(0, ',', '.') }}</td>
+                <td class="col-numeric">{{ f.turnoverRate | format_percent(2) }}</td>
+                <td class="col-numeric">{{ f.laborCost | format_currency }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Top 5 Volatile Units -->
+    <div class="vnm-card">
+      <div style="margin-bottom: 16px;">
+        <h2 style="font-size: 1.125rem; font-weight: 700; color: var(--vnm-text-main);">Top 5 Đơn Vị Biến Động Nhân Sự Cao Nhất</h2>
+        <p style="font-size: 0.8125rem; color: var(--vnm-text-muted);">Theo dõi sát sao đơn vị có tỷ lệ thôi việc hoặc chuyển công tác tăng cao</p>
+      </div>
+
+      <div class="vnm-table-container">
+        <table class="vnm-table">
+          <thead>
+            <tr>
+              <th>Tên Đơn Vị</th>
+              <th class="col-numeric">Quy Mô</th>
+              <th class="col-numeric">Số Người Nghỉ</th>
+              <th class="col-numeric">Tỷ Lệ Nghỉ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in data.topVolatileUnits %}
+              <tr>
+                <td><strong>{{ u.name }}</strong></td>
+                <td class="col-numeric">{{ u.headcount }}</td>
+                <td class="col-numeric" style="color: var(--vnm-danger); font-weight: 600;">{{ u.exits }}</td>
+                <td class="col-numeric"><span class="vnm-badge badge-rejected">{{ u.turnoverRate }}%</span></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- KPI Distribution A-E Section -->
+  <div class="vnm-card">
+    <div style="margin-bottom: 16px;">
+      <h2 style="font-size: 1.125rem; font-weight: 700; color: var(--vnm-text-main);">Phân Bố Xếp Loại KPI Toàn Tập Đoàn (Phiên 5 & 8)</h2>
+      <p style="font-size: 0.8125rem; color: var(--vnm-text-muted);">Hiệu chuẩn phân phối theo đường cong chuẩn (Normal Distribution Target Curve)</p>
+    </div>
+
+    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+      <div style="flex: 1; min-width: 120px; padding: 16px; border-radius: var(--vnm-radius-md); background: #E0F2FE; text-align: center;">
+        <div style="font-size: 0.8125rem; font-weight: 600; color: #0369A1;">Hạng A (Xuất Sắc)</div>
+        <div style="font-size: 1.5rem; font-weight: 700; color: #0369A1; margin-top: 4px;">{{ data.kpiDistribution.gradeA }}%</div>
+        <div style="font-size: 0.75rem; color: #0369A1; margin-top: 2px;">Mục tiêu ≤ 20%</div>
+      </div>
+      <div style="flex: 1; min-width: 120px; padding: 16px; border-radius: var(--vnm-radius-md); background: #D1FAE5; text-align: center;">
+        <div style="font-size: 0.8125rem; font-weight: 600; color: #047857;">Hạng B (Tốt)</div>
+        <div style="font-size: 1.5rem; font-weight: 700; color: #047857; margin-top: 4px;">{{ data.kpiDistribution.gradeB }}%</div>
+        <div style="font-size: 0.75rem; color: #047857; margin-top: 2px;">Mục tiêu 50-60%</div>
+      </div>
+      <div style="flex: 1; min-width: 120px; padding: 16px; border-radius: var(--vnm-radius-md); background: #FEF3C7; text-align: center;">
+        <div style="font-size: 0.8125rem; font-weight: 600; color: #92400E;">Hạng C (Đạt)</div>
+        <div style="font-size: 1.5rem; font-weight: 700; color: #92400E; margin-top: 4px;">{{ data.kpiDistribution.gradeC }}%</div>
+        <div style="font-size: 0.75rem; color: #92400E; margin-top: 2px;">Mục tiêu 20-25%</div>
+      </div>
+      <div style="flex: 1; min-width: 120px; padding: 16px; border-radius: var(--vnm-radius-md); background: #FEE2E2; text-align: center;">
+        <div style="font-size: 0.8125rem; font-weight: 600; color: #B91C1C;">Hạng D (Cần Cải Thiện)</div>
+        <div style="font-size: 1.5rem; font-weight: 700; color: #B91C1C; margin-top: 4px;">{{ data.kpiDistribution.gradeD }}%</div>
+        <div style="font-size: 0.75rem; color: #B91C1C; margin-top: 2px;">Mục tiêu ≤ 5%</div>
+      </div>
+      <div style="flex: 1; min-width: 120px; padding: 16px; border-radius: var(--vnm-radius-md); background: #F1F5F9; text-align: center;">
+        <div style="font-size: 0.8125rem; font-weight: 600; color: #475569;">Hạng E (Không Đạt)</div>
+        <div style="font-size: 1.5rem; font-weight: 700; color: #475569; margin-top: 4px;">{{ data.kpiDistribution.gradeE }}%</div>
+        <div style="font-size: 0.75rem; color: #475569; margin-top: 2px;">Mục tiêu ≤ 2%</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

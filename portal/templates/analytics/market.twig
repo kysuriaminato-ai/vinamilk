@@ -1,0 +1,95 @@
+{% extends "layouts/base.twig" %}
+{% block title %}Vị Thế Thị Trường & Biến Động — Vinamilk HRM{% endblock %}
+{% block breadcrumb %}Phân Tích Vị Thế Thị Trường & Lạm Phát{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 24px;">
+
+  <!-- Header -->
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+    <div>
+      <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--vnm-text-main);">Bảng Vị Thế Lương Thị Trường & Tác Động Vĩ Mô</h1>
+      <p style="font-size: 0.875rem; color: var(--vnm-text-muted);">
+        Đối chuẩn với dữ liệu khảo sát Mercer / Talentnet & Chỉ số lạm phát CPI Cục Thống kê công bố
+      </p>
+    </div>
+    <span class="vnm-badge badge-sample-data">DỮ LIỆU MẪU ĐỐI CHUẨN</span>
+  </div>
+
+  <!-- Real Wage vs CPI Card (Criteria 2) -->
+  <div class="vnm-card" style="background: linear-gradient(135deg, rgba(0, 51, 160, 0.05), rgba(2, 132, 199, 0.05)); border-left: 4px solid var(--vnm-primary);">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+      <div>
+        <h3 style="font-size: 1.125rem; font-weight: 700; color: var(--vnm-primary); margin-bottom: 4px;">
+          TĂNG LƯƠNG THỰC TẾ SO VỚI LẠM PHÁT (CÔNG THỨC FISHER)
+        </h3>
+        <p style="font-size: 0.875rem; color: var(--vnm-text-main);">
+          Tăng lương danh nghĩa: <strong>{{ payStance.nominalIncrease | format_percent(2) }}</strong> | Lạm phát CPI 12 tháng: <strong>{{ payStance.cpiRate | format_percent(2) }}</strong>
+        </p>
+      </div>
+
+      <div style="text-align: right;">
+        <div style="font-size: 0.8125rem; color: var(--vnm-text-muted); font-weight: 500;">Tăng Trưởng Lương Thực:</div>
+        <div style="font-size: 2rem; font-weight: 700; color: var(--vnm-success);">
+          +{{ payStance.realWageIncrease | format_percent(2) }}
+        </div>
+        <div style="font-size: 0.75rem; color: var(--vnm-text-muted);">((1 + 0.06) / (1 + 0.035) - 1) = 2,42% (Tiêu chuẩn Fisher)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pay Stance Comparison Table (Criteria 3) -->
+  <div class="vnm-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+      <div>
+        <h2 style="font-size: 1.125rem; font-weight: 700; color: var(--vnm-text-main);">Bảng So Sánh Mức Giữa Khung (Internal Mid) vs Thị Trường (P50)</h2>
+        <p style="font-size: 0.8125rem; color: var(--vnm-text-muted);">
+          Gắn cờ cảnh báo màu đỏ khi khung lương nội bộ thấp hơn thị trường quá 10% (&lt; -10%)
+        </p>
+      </div>
+    </div>
+
+    <div class="vnm-table-container">
+      <table class="vnm-table">
+        <thead>
+          <tr>
+            <th>Nhóm Vị Trí (Job Family)</th>
+            <th>Ngạch (Grade)</th>
+            <th>Vùng Lương</th>
+            <th class="col-numeric">Mức Giữa Khung (Internal Mid)</th>
+            <th class="col-numeric">Thị Trường P50 (Market Mid)</th>
+            <th class="col-numeric">Chênh Lệch (%)</th>
+            <th style="text-align: center;">Cảnh Báo & Cờ</th>
+            <th>Đề Xuất Hành Động</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in payStance.items %}
+            <tr style="{% if item.isFlagged %}background-color: rgba(239, 68, 68, 0.04);{% endif %}">
+              <td><strong>{{ item.jobFamily }}</strong></td>
+              <td><span class="vnm-badge badge-submitted">{{ item.grade }}</span></td>
+              <td>{{ item.region }}</td>
+              <td class="col-numeric">{{ item.internalMid | format_currency }}</td>
+              <td class="col-numeric">{{ item.marketP50 | format_currency }}</td>
+              <td class="col-numeric" style="font-weight: 700; {% if item.variancePercent < -10 %}color: var(--vnm-danger);{% else %}color: var(--vnm-success);{% endif %}">
+                {{ item.variancePercent | format_percent(1) }}
+              </td>
+              <td style="text-align: center;">
+                {% if item.isFlagged %}
+                  <span class="vnm-badge badge-rejected" style="font-weight: 700;">⚠️ CỜ CẢNH BÁO (&lt; -10%)</span>
+                {% else %}
+                  <span class="vnm-badge badge-approved">✓ CẠNH TRANH</span>
+                {% endif %}
+              </td>
+              <td style="font-size: 0.8125rem; font-weight: 500;">
+                {{ item.suggestedAdjustment }}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

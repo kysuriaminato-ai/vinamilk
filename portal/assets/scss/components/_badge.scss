@@ -1,0 +1,45 @@
+.vnm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--vnm-radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+
+  &.badge-draft {
+    background-color: var(--vnm-status-draft-bg);
+    color: var(--vnm-status-draft-text);
+  }
+  &.badge-submitted {
+    background-color: var(--vnm-status-submitted-bg);
+    color: var(--vnm-status-submitted-text);
+  }
+  &.badge-approved {
+    background-color: var(--vnm-status-approved-bg);
+    color: var(--vnm-status-approved-text);
+  }
+  &.badge-locked {
+    background-color: var(--vnm-status-locked-bg);
+    color: var(--vnm-status-locked-text);
+  }
+  &.badge-rejected {
+    background-color: var(--vnm-status-rejected-bg);
+    color: var(--vnm-status-rejected-text);
+  }
+
+  &.badge-forecast {
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    color: #FFFFFF;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  &.badge-sample-data {
+    background-color: #FEF3C7;
+    color: #92400E;
+    border: 1px dashed #F59E0B;
+    font-weight: 700;
+  }
+}

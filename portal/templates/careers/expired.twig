@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vị Trí Đã Đóng Nhận Hồ Sơ — Tuyển Dụng Vinamilk</title>
+  <meta name="robots" content="noindex, follow">
+  <link rel="stylesheet" href="{{ vite_asset('app.scss') }}">
+</head>
+<body style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--vnm-bg); padding: 20px;">
+  <div style="max-width: 600px; background: var(--vnm-surface); border: 1px solid var(--vnm-border); border-radius: 12px; padding: 40px; text-align: center;">
+    <div style="font-size: 3rem; margin-bottom: 12px;">⌛</div>
+    <span class="vnm-badge badge-rejected" style="margin-bottom: 12px;">HTTP 410 GONE · TIN ĐÃ HẾT HẠN</span>
+    <h1 style="font-size: 1.375rem; font-weight: 700; margin-bottom: 8px;">Vị Trí Này Đã Đóng Tuyển Dụng</h1>
+    <p style="color: var(--vnm-text-muted); font-size: 0.9375rem; margin-bottom: 24px;">
+      Vị trí <strong>{{ job.title }}</strong> (Mã: {{ job.jobCode }}) đã kết thúc thời hạn nhận hồ sơ ứng tuyển vào ngày {{ job.validThrough | format_date }}.
+    </p>
+
+    <div style="text-align: left; background: var(--vnm-bg); padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+      <h3 style="font-size: 0.875rem; font-weight: 700; margin-bottom: 8px;">CÁC VỊ TRÍ ĐANG TUYỂN DỤNG TƯƠNG TỰ:</h3>
+      <ul style="padding-left: 20px; font-size: 0.875rem;">
+        {% for s in similarJobs %}
+          <li style="margin-bottom: 6px;">
+            <a href="/tuyen-dung/{{ s.slug }}-{{ s.id }}" style="color: var(--vnm-primary); font-weight: 600;">{{ s.title }}</a>
+            <span style="color: var(--vnm-text-muted);">({{ s.city }})</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <a href="/tuyen-dung" class="btn btn-primary" style="padding: 10px 20px;">Xem Tất Cả Cơ Hội Nghề Nghiệp</a>
+  </div>
+</body>
+</html>

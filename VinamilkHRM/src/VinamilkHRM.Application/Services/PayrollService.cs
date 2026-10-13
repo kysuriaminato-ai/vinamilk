@@ -1,22 +1,31 @@
+﻿#pragma warning disable CS8602
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using VinamilkHRM.Application.Common.Interfaces;
 using VinamilkHRM.Application.DTOs.Salaries;
 using VinamilkHRM.Application.Interfaces;
 using VinamilkHRM.Domain.Common;
+using VinamilkHRM.Domain.Entities.Attendances;
 using VinamilkHRM.Domain.Entities.Employees;
+using VinamilkHRM.Domain.Entities.Kpis;
 using VinamilkHRM.Domain.Entities.Salaries;
+using VinamilkHRM.Domain.Entities.Statutory;
 using VinamilkHRM.Domain.Enums;
 using VinamilkHRM.Domain.Interfaces.Printing;
 using VinamilkHRM.Domain.Interfaces.Repositories;
+using VinamilkHRM.Domain.Services.Payroll;
 
 namespace VinamilkHRM.Application.Services;
 
 /// <summary>
-/// Động cơ tính lương và quản lý thu nhập nhân sự Vinamilk (Polymorphic Payroll Engine).
-/// Tuân thủ nghiêm ngặt Luật Lao động và Luật Thuế TNCN Việt Nam:
-/// - Giảm trừ gia cảnh bản thân (11 triệu/tháng) và người phụ thuộc (4.4 triệu/người/tháng).
-/// - Trích đóng BHXH (8%), BHYT (1.5%), BHTN (1%).
-/// - Biểu thuế TNCN lũy tiến từng phần 7 bậc (5% đến 35%).
-/// - Tích hợp hệ số KPI đã được Lãnh đạo phê duyệt từ Phiên 2.
-/// - Áp dụng tính đa hình cho Phiếu lương (Văn phòng, Nhà máy, Chuỗi cửa hàng bán lẻ).
+/// Động cơ tính lương và quản lý chu trình bảng lương Vinamilk (3P: Position, Person, Performance).
+/// Quy trình chuẩn: Draft -> Submitted (Kế toán) -> Approved (Kế toán trưởng & GĐNS) -> Locked -> Paid.
+/// RÀNG BUỘC PHÁP LÝ: Bất biến từ Approved trở đi. Bỏ hẳn mặc định 22 công, bắt buộc bảng công đã khóa.
 /// </summary>
 public class PayrollService : IPayrollService
 {
@@ -27,6 +36,8 @@ public class PayrollService : IPayrollService
     private readonly IKpiAssignmentRepository _kpiRepository;
     private readonly IPayslipPrinter _payslipPrinter;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IApplicationDbContext _context;
+    private readonly IStatutoryParameterProvider _statutoryProvider;
 
     public PayrollService(
         IPaySlipRepository paySlipRepository,
@@ -35,7 +46,9 @@ public class PayrollService : IPayrollService
         IAttendanceRepository attendanceRepository,
         IKpiAssignmentRepository kpiRepository,
         IPayslipPrinter payslipPrinter,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork,
+        IApplicationDbContext context,
+        IStatutoryParameterProvider statutoryProvider)
     {
         _paySlipRepository = paySlipRepository ?? throw new ArgumentNullException(nameof(paySlipRepository));
         _employeeRepository = employeeRepository ?? throw new ArgumentNullException(nameof(employeeRepository));
@@ -44,6 +57,8 @@ public class PayrollService : IPayrollService
         _kpiRepository = kpiRepository ?? throw new ArgumentNullException(nameof(kpiRepository));
         _payslipPrinter = payslipPrinter ?? throw new ArgumentNullException(nameof(payslipPrinter));
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _statutoryProvider = statutoryProvider ?? throw new ArgumentNullException(nameof(statutoryProvider));
     }
 
     public async Task<PaySlipDto?> GetPaySlipAsync(int employeeId, string period, CancellationToken cancellationToken = default)
@@ -63,116 +78,364 @@ public class PayrollService : IPayrollService
 
     public async Task<PaySlipDto> GenerateMonthlyPayslipAsync(int employeeId, string period, CancellationToken cancellationToken = default)
     {
+        // 1. Kiểm tra kỳ lương có bị khóa/duyệt không
+        var existingRun = await _context.PayrollRuns
+            .FirstOrDefaultAsync(r => r.Period == period, cancellationToken);
+        existingRun?.EnsureCanRecalculate();
+
         var employee = await _employeeRepository.GetWithDetailsAsync(employeeId, cancellationToken)
             ?? throw new DomainException($"Không tìm thấy nhân sự có Id={employeeId}.", "ERR_EMP_NOT_FOUND");
 
         var contract = await _contractRepository.GetActiveContractByEmployeeIdAsync(employeeId, cancellationToken);
-        decimal insuranceSalary = contract?.InsuranceSalary ?? (employee.InsuranceSalary > 0 ? employee.InsuranceSalary : employee.BaseSalary * 0.85m);
 
-        // Giả lập chu kỳ tính công trong tháng
+        // 2. Kiểm tra Bảng công đã khóa (Không có bảng công đã khóa -> ném ERR_PAY_NO_LOCKED_TIMESHEET)
+        var timesheetSummary = await _context.MonthlyTimesheetSummaries
+            .FirstOrDefaultAsync(s => s.EmployeeId == employeeId && s.Period == period, cancellationToken);
+
+        var timesheetPeriod = await _context.MonthlyTimesheetPeriods
+            .FirstOrDefaultAsync(p => p.Period == period && p.OrganizationalUnitId == employee.OrganizationalUnitId, cancellationToken);
+
+        bool isTimesheetLocked = timesheetPeriod?.Status == TimesheetPeriodStatus.Locked;
+        if (timesheetSummary == null || !isTimesheetLocked)
+        {
+            throw new DomainException("Không có bảng công đã khóa trong kỳ tính lương.", "ERR_PAY_NO_LOCKED_TIMESHEET");
+        }
+
+        // 3. Kết quả KPI đã khóa từ Phiên 5
+        var kpiResult = await _context.KpiResults
+            .FirstOrDefaultAsync(k => k.EmployeeId == employeeId && k.Period == period, cancellationToken);
+
+        // 4. Nạp tham số pháp lý động theo ngày cuối kỳ
         int year = int.Parse(period.Split('-')[0]);
         int month = int.Parse(period.Split('-')[1]);
-        DateTime startDate = new DateTime(year, month, 1);
-        DateTime endDate = startDate.AddMonths(1).AddDays(-1);
+        var periodEndDate = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
 
-        decimal totalWorkHours = await _attendanceRepository.GetTotalWorkHoursAsync(employeeId, startDate, endDate, cancellationToken);
-        decimal totalOvertimeHours = await _attendanceRepository.GetTotalOvertimeHoursAsync(employeeId, startDate, endDate, cancellationToken);
-        decimal actualWorkDays = Math.Round(totalWorkHours / 8m, 1);
-        if (actualWorkDays <= 0) actualWorkDays = 22m; // Mặc định đủ công chuẩn nếu quẹt thẻ chưa đẩy về
+        decimal baseSalary = await _statutoryProvider.GetAsync("BASE_SALARY", periodEndDate, cancellationToken);
+        decimal selfDeduction = await _statutoryProvider.GetAsync("PIT_SELF_DEDUCTION", periodEndDate, cancellationToken);
+        decimal dependentDeduction = await _statutoryProvider.GetAsync("PIT_DEPENDENT_DEDUCTION", periodEndDate, cancellationToken);
 
-        // 1. Áp dụng ĐA HÌNH tính lương làm thêm giờ: employee.CalculateOvertimePay
-        decimal overtimePay = employee.CalculateOvertimePay(totalOvertimeHours, isHoliday: false);
+        var region = employee.OrganizationalUnit?.MinimumWageRegion ?? MinimumWageRegion.RegionI;
+        var minWage = await _statutoryProvider.GetMinimumWageAsync(region, periodEndDate, cancellationToken);
+        var taxBrackets = await _statutoryProvider.GetTaxBracketsAsync("PIT_REGULAR", periodEndDate, cancellationToken);
 
-        // 2. Tích hợp điểm đánh giá KPI đã được Lãnh đạo phê duyệt từ Phiên 2
-        var kpis = await _kpiRepository.GetByEmployeeAndPeriodAsync(employeeId, period, cancellationToken);
-        var approvedKpis = kpis.Where(k => k.Status == KpiStatus.Approved && k.FinalScore.HasValue).ToList();
+        // 5. Chuẩn bị PayrollInput
+        decimal p1Base = contract?.BasicSalary ?? (employee.BaseSalary > 0 ? employee.BaseSalary : minWage.MonthlyAmount);
+        decimal fixedAllowances = employee.Allowance;
+        decimal insurableAllowances = employee.Allowance;
+        decimal taxExemptAllowances = employee is OfficeEmployee ? 730_000m : 0m;
+        decimal attendanceAllowance = employee is FactoryWorker ? 500_000m : 0m;
 
-        decimal avgKpiScore;
-        if (approvedKpis.Count > 0)
+        var input = new PayrollInput
         {
-            decimal totalWeight = approvedKpis.Sum(k => k.WeightPercentage);
-            avgKpiScore = totalWeight > 0
-                ? Math.Round(approvedKpis.Sum(k => k.FinalScore!.Value * (k.WeightPercentage / 100m)) / (totalWeight / 100m), 2)
-                : approvedKpis.Average(k => k.FinalScore!.Value);
+            EmployeeId = employee.Id,
+            EmployeeCode = employee.EmployeeCode,
+            FullName = employee.FullName,
+            PayrollPeriod = period,
+            PeriodEndDate = periodEndDate,
+            LeadershipLevel = employee.StandardJobTitle?.LeadershipLevel ?? LeadershipLevel.None,
+            Region = region,
+            IsUnionMember = true,
+            DependentCount = employee.DependentCount,
+            TimesheetSummary = timesheetSummary,
+            IsTimesheetLocked = true,
+            P1BaseSalary = p1Base,
+            FixedAllowances = fixedAllowances,
+            InsurableAllowances = insurableAllowances,
+            TaxExemptAllowances = taxExemptAllowances,
+            KpiResult = kpiResult,
+            AttendanceAllowance = attendanceAllowance,
+            BaseSalary = baseSalary,
+            RegionalMinimumWage = minWage.MonthlyAmount,
+            SelfDeduction = selfDeduction,
+            DependentDeductionPerPerson = dependentDeduction,
+            TaxBrackets = taxBrackets
+        };
+
+        // 6. Tính toán thuần Domain
+        var calcResult = PayrollCalculator.Calculate(input);
+
+        // 7. Cập nhật phiếu lương (Không xóa phiếu cũ gây mất liên kết audit)
+        var existingSlip = await _paySlipRepository.GetByEmployeeAndPeriodAsync(employeeId, period, cancellationToken);
+        if (existingSlip != null)
+        {
+            existingSlip.UpdateFromCalculation(calcResult, existingRun?.Id);
+            _paySlipRepository.Update(existingSlip);
         }
         else
         {
-            avgKpiScore = await _kpiRepository.CalculateAverageKpiScoreAsync(employeeId, period, cancellationToken);
-            if (avgKpiScore <= 0 && employee.IsActive)
+            existingSlip = new PaySlip(
+                employeeId: employee.Id,
+                payrollPeriod: period,
+                baseSalary: p1Base,
+                allowance: fixedAllowances,
+                actualWorkDays: timesheetSummary.ActualWorkDays,
+                overtimeHours: timesheetSummary.TotalOtHours,
+                overtimePay: calcResult.Lines.Where(l => l.Code.StartsWith("OT")).Sum(l => l.Amount),
+                kpiBonus: calcResult.Lines.FirstOrDefault(l => l.Code == "P3_HIEU_SUAT")?.Amount ?? 0m,
+                otherBonuses: attendanceAllowance,
+                insuranceSalary: calcResult.InsurableSalary,
+                standardWorkDays: timesheetSummary.StandardWorkDays,
+                dependentCount: employee.DependentCount,
+                nightShiftHours: timesheetSummary.NightHours,
+                nightShiftPay: calcResult.Lines.FirstOrDefault(l => l.Code == "PHU_CAP_CA_DEM")?.Amount ?? 0m,
+                hazardousAllowance: 0m,
+                salesCommission: 0m,
+                lunchAllowance: taxExemptAllowances,
+                personalDeduction: selfDeduction,
+                dependentDeductionPerPerson: dependentDeduction,
+                taxBrackets: taxBrackets);
+
+            existingSlip.UpdateFromCalculation(calcResult, existingRun?.Id);
+            await _paySlipRepository.AddAsync(existingSlip, cancellationToken);
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return MapToDto(existingSlip, employee);
+    }
+
+    public async Task<PayrollRunDto> CalculatePayrollRunAsync(string period, int? unitId = null, CancellationToken cancellationToken = default)
+    {
+        var run = await _context.PayrollRuns
+            .Include(r => r.PaySlips)
+            .FirstOrDefaultAsync(r => r.Period == period && r.OrganizationalUnitId == unitId, cancellationToken);
+
+        if (run != null)
+        {
+            run.EnsureCanRecalculate();
+        }
+        else
+        {
+            run = new PayrollRun(period, unitId);
+            _context.PayrollRuns.Add(run);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        // Lấy danh sách nhân sự cần tính lương
+        var empQuery = _context.Employees
+            .Include(e => e.StandardJobTitle)
+            .Include(e => e.OrganizationalUnit)
+            .Where(e => e.IsActive);
+
+        if (unitId.HasValue)
+        {
+            empQuery = empQuery.Where(e => e.OrganizationalUnitId == unitId.Value);
+        }
+
+        var employees = await empQuery.ToListAsync(cancellationToken);
+
+        int year = int.Parse(period.Split('-')[0]);
+        int month = int.Parse(period.Split('-')[1]);
+        var periodEndDate = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
+
+        decimal baseSalary = await _statutoryProvider.GetAsync("BASE_SALARY", periodEndDate, cancellationToken);
+        decimal selfDeduction = await _statutoryProvider.GetAsync("PIT_SELF_DEDUCTION", periodEndDate, cancellationToken);
+        decimal dependentDeduction = await _statutoryProvider.GetAsync("PIT_DEPENDENT_DEDUCTION", periodEndDate, cancellationToken);
+        var taxBrackets = await _statutoryProvider.GetTaxBracketsAsync("PIT_REGULAR", periodEndDate, cancellationToken);
+
+        var timesheets = await _context.MonthlyTimesheetSummaries
+            .Where(s => s.Period == period)
+            .ToDictionaryAsync(s => s.EmployeeId, cancellationToken);
+
+        var lockedPeriods = await _context.MonthlyTimesheetPeriods
+            .Where(p => p.Period == period && p.Status == TimesheetPeriodStatus.Locked)
+            .Select(p => p.OrganizationalUnitId)
+            .ToHashSetAsync(cancellationToken);
+
+        var kpiResults = await _context.KpiResults
+            .Where(k => k.Period == period)
+            .ToDictionaryAsync(k => k.EmployeeId, cancellationToken);
+
+        decimal totalGross = 0m;
+        decimal totalNet = 0m;
+        decimal totalEmployerCost = 0m;
+        decimal totalTax = 0m;
+        decimal totalEmpInsurance = 0m;
+        decimal totalErInsurance = 0m;
+        int processedCount = 0;
+
+        foreach (var emp in employees)
+        {
+            if (!timesheets.TryGetValue(emp.Id, out var ts) || !lockedPeriods.Contains(emp.OrganizationalUnitId))
             {
-                avgKpiScore = 90.0m; // Mặc định xếp loại Tốt cho kỳ mới nếu chưa chốt KPI
+                continue; // Bỏ qua nếu chưa có bảng công đã khóa
+            }
+
+            kpiResults.TryGetValue(emp.Id, out var kpi);
+            var region = emp.OrganizationalUnit?.MinimumWageRegion ?? MinimumWageRegion.RegionI;
+            var minWage = await _statutoryProvider.GetMinimumWageAsync(region, periodEndDate, cancellationToken);
+
+            var input = new PayrollInput
+            {
+                EmployeeId = emp.Id,
+                EmployeeCode = emp.EmployeeCode,
+                FullName = emp.FullName,
+                PayrollPeriod = period,
+                PeriodEndDate = periodEndDate,
+                LeadershipLevel = emp.StandardJobTitle?.LeadershipLevel ?? LeadershipLevel.None,
+                Region = region,
+                IsUnionMember = true,
+                DependentCount = emp.DependentCount,
+                TimesheetSummary = ts,
+                IsTimesheetLocked = true,
+                P1BaseSalary = emp.BaseSalary > 0 ? emp.BaseSalary : minWage.MonthlyAmount,
+                FixedAllowances = emp.Allowance,
+                InsurableAllowances = emp.Allowance,
+                KpiResult = kpi,
+                BaseSalary = baseSalary,
+                RegionalMinimumWage = minWage.MonthlyAmount,
+                SelfDeduction = selfDeduction,
+                DependentDeductionPerPerson = dependentDeduction,
+                TaxBrackets = taxBrackets
+            };
+
+            var calcResult = PayrollCalculator.Calculate(input);
+
+            var slip = await _context.PaySlips.FirstOrDefaultAsync(p => p.EmployeeId == emp.Id && p.PayrollPeriod == period, cancellationToken);
+            if (slip != null)
+            {
+                slip.UpdateFromCalculation(calcResult, run.Id);
+            }
+            else
+            {
+                slip = PaySlip.CreateFromCalculation(calcResult, run.Id);
+                _context.PaySlips.Add(slip);
+            }
+
+            totalGross += calcResult.GrossSalary;
+            totalNet += calcResult.NetSalary;
+            totalEmployerCost += calcResult.TotalEmployerCost;
+            totalTax += calcResult.PersonalIncomeTax;
+            totalEmpInsurance += calcResult.TotalEmployeeInsurance;
+            totalErInsurance += calcResult.TotalEmployerInsurance;
+            processedCount++;
+        }
+
+        run.UpdateTotals(totalGross, totalNet, totalEmployerCost, totalTax, totalEmpInsurance, totalErInsurance, processedCount);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return MapRunToDto(run);
+    }
+
+    public async Task<PayrollRunDto?> GetPayrollRunAsync(string period, int? unitId = null, CancellationToken cancellationToken = default)
+    {
+        var run = await _context.PayrollRuns
+            .Include(r => r.OrganizationalUnit)
+            .FirstOrDefaultAsync(r => r.Period == period && r.OrganizationalUnitId == unitId, cancellationToken);
+
+        return run == null ? null : MapRunToDto(run);
+    }
+
+    public async Task SubmitPayrollRunAsync(int runId, int accountantId, CancellationToken cancellationToken = default)
+    {
+        var run = await _context.PayrollRuns.FindAsync(new object[] { runId }, cancellationToken)
+            ?? throw new DomainException($"Không tìm thấy đợt tính lương Id={runId}.", "ERR_PAY_RUN_NOT_FOUND");
+
+        run.Submit(accountantId);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ApprovePayrollRunAsync(int runId, int chiefAccountantId, int hrDirectorId, CancellationToken cancellationToken = default)
+    {
+        var run = await _context.PayrollRuns.FindAsync(new object[] { runId }, cancellationToken)
+            ?? throw new DomainException($"Không tìm thấy đợt tính lương Id={runId}.", "ERR_PAY_RUN_NOT_FOUND");
+
+        run.Approve(chiefAccountantId, hrDirectorId);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task LockPayrollRunAsync(int runId, int hrId, CancellationToken cancellationToken = default)
+    {
+        var run = await _context.PayrollRuns.FindAsync(new object[] { runId }, cancellationToken)
+            ?? throw new DomainException($"Không tìm thấy đợt tính lương Id={runId}.", "ERR_PAY_RUN_NOT_FOUND");
+
+        run.Lock(hrId);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task MarkPayrollRunAsPaidAsync(int runId, int financeId, string paymentReference, CancellationToken cancellationToken = default)
+    {
+        var run = await _context.PayrollRuns
+            .Include(r => r.PaySlips)
+            .FirstOrDefaultAsync(r => r.Id == runId, cancellationToken)
+            ?? throw new DomainException($"Không tìm thấy đợt tính lương Id={runId}.", "ERR_PAY_RUN_NOT_FOUND");
+
+        run.MarkAsPaid(financeId, paymentReference);
+
+        foreach (var slip in run.PaySlips)
+        {
+            if (slip.Status == PaySlipStatus.Approved)
+            {
+                slip.MarkAsPaid(paymentReference);
             }
         }
 
-        // Tỷ lệ thưởng KPI theo SLA: Vượt SLA >=100 (20%), Đạt xuất sắc >=85 (15%), Đạt chuẩn >=70 (10%)
-        decimal kpiBonus = 0m;
-        if (avgKpiScore >= 100m)
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PayrollAnomalyDto>> CheckPayrollAnomaliesAsync(string period, CancellationToken cancellationToken = default)
+    {
+        var currentSlips = await _context.PaySlips
+            .Include(p => p.Employee)
+                .ThenInclude(e => e.OrganizationalUnit)
+            .Where(p => p.PayrollPeriod == period)
+            .ToListAsync(cancellationToken);
+
+        int year = int.Parse(period.Split('-')[0]);
+        int month = int.Parse(period.Split('-')[1]);
+        var prevDate = new DateTime(year, month, 1).AddMonths(-1);
+        string prevPeriod = $"{prevDate.Year:D4}-{prevDate.Month:D2}";
+
+        var prevSlips = await _context.PaySlips
+            .Where(p => p.PayrollPeriod == prevPeriod)
+            .ToDictionaryAsync(p => p.EmployeeId, cancellationToken);
+
+        var dateOnly = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
+        var anomalies = new List<PayrollAnomalyDto>();
+
+        foreach (var slip in currentSlips)
         {
-            kpiBonus = Math.Round(employee.BaseSalary * 0.20m * (avgKpiScore / 100m), 0);
-        }
-        else if (avgKpiScore >= 85m)
-        {
-            kpiBonus = Math.Round(employee.BaseSalary * 0.15m * (avgKpiScore / 100m), 0);
-        }
-        else if (avgKpiScore >= 70m)
-        {
-            kpiBonus = Math.Round(employee.BaseSalary * 0.10m * (avgKpiScore / 100m), 0);
+            var emp = slip.Employee;
+            if (emp == null) continue;
+
+            var region = emp.OrganizationalUnit?.MinimumWageRegion ?? MinimumWageRegion.RegionI;
+            var minWage = await _statutoryProvider.GetMinimumWageAsync(region, dateOnly, cancellationToken);
+
+            // Cảnh báo 1: Gross < Lương tối thiểu vùng
+            if (slip.GrossSalary < minWage.MonthlyAmount)
+            {
+                anomalies.Add(new PayrollAnomalyDto(
+                    emp.Id,
+                    emp.EmployeeCode,
+                    emp.FullName,
+                    "GROSS_BELOW_MIN_WAGE",
+                    slip.GrossSalary,
+                    minWage.MonthlyAmount,
+                    Math.Round((slip.GrossSalary - minWage.MonthlyAmount) / minWage.MonthlyAmount * 100m, 1),
+                    $"Thu nhập Gross ({slip.GrossSalary:N0} đ) thấp hơn Lương tối thiểu vùng ({minWage.MonthlyAmount:N0} đ)."));
+            }
+
+            // Cảnh báo 2: Net chênh lệch > 20% so với kỳ trước
+            if (prevSlips.TryGetValue(emp.Id, out var prevSlip) && prevSlip.NetSalary > 0)
+            {
+                decimal diff = Math.Abs(slip.NetSalary - prevSlip.NetSalary);
+                decimal diffPercent = (diff / prevSlip.NetSalary) * 100m;
+
+                if (diffPercent > 20m)
+                {
+                    anomalies.Add(new PayrollAnomalyDto(
+                        emp.Id,
+                        emp.EmployeeCode,
+                        emp.FullName,
+                        "NET_VARIATION_OVER_20",
+                        slip.NetSalary,
+                        prevSlip.NetSalary,
+                        Math.Round(diffPercent, 1),
+                        $"Thực lĩnh Net ({slip.NetSalary:N0} đ) biến động {diffPercent:F1}% so với kỳ trước ({prevSlip.NetSalary:N0} đ)."));
+                }
+            }
         }
 
-        // 3. Phụ cấp và đặc thù ĐA HÌNH theo từng khối
-        decimal lunchAllowance = 0m;
-        decimal nightShiftHours = 0m;
-        decimal nightShiftPay = 0m;
-        decimal hazardousAllowance = 0m;
-        decimal salesCommission = 0m;
-
-        if (employee is OfficeEmployee)
-        {
-            lunchAllowance = 730_000m; // Phụ cấp ăn trưa văn phòng
-        }
-        else if (employee is FactoryWorker factoryWorker)
-        {
-            nightShiftHours = 24m; // Định mức ca đêm tiêu chuẩn tháng (3 ca đêm x 8h)
-            decimal standardHourly = employee.BaseSalary / 176m;
-            nightShiftPay = Math.Round(nightShiftHours * standardHourly * 0.30m, 0); // Phụ cấp ca đêm +30% theo Luật LĐ
-            hazardousAllowance = factoryWorker.HazardousAllowanceRate > 0 ? factoryWorker.HazardousAllowanceRate : 1_200_000m;
-        }
-        else if (employee is StoreAssociate storeAssociate)
-        {
-            decimal bonusRate = storeAssociate.RetailSalesBonusRate > 0 ? storeAssociate.RetailSalesBonusRate : 0.025m;
-            salesCommission = Math.Round(bonusRate * 120_000_000m, 0); // Doanh số cửa hàng chuỗi đạt 120 triệu
-        }
-
-        var existing = await _paySlipRepository.GetByEmployeeAndPeriodAsync(employeeId, period, cancellationToken);
-        if (existing != null)
-        {
-            _paySlipRepository.Remove(existing);
-        }
-
-        // Khởi tạo Phiếu lương đầy đủ các chế độ giảm trừ gia cảnh & thuế TNCN lũy tiến 7 bậc
-        var payslip = new PaySlip(
-            employeeId: employee.Id,
-            payrollPeriod: period,
-            baseSalary: employee.BaseSalary,
-            allowance: employee.Allowance,
-            actualWorkDays: actualWorkDays,
-            overtimeHours: totalOvertimeHours,
-            overtimePay: overtimePay,
-            kpiBonus: kpiBonus,
-            otherBonuses: 500_000m, // Phúc lợi hiện vật Vinamilk (sữa tươi, sữa chua)
-            insuranceSalary: insuranceSalary,
-            standardWorkDays: 22m,
-            dependentCount: employee.DependentCount,
-            nightShiftHours: nightShiftHours,
-            nightShiftPay: nightShiftPay,
-            hazardousAllowance: hazardousAllowance,
-            salesCommission: salesCommission,
-            lunchAllowance: lunchAllowance);
-
-        await _paySlipRepository.AddAsync(payslip, cancellationToken);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-        return MapToDto(payslip, employee);
+        return anomalies;
     }
 
     public async Task ApprovePaySlipAsync(int payslipId, CancellationToken cancellationToken = default)
@@ -217,43 +480,60 @@ public class PayrollService : IPayrollService
         return _payslipPrinter.PrintPayslipToPdf(payslip, employee, employee.OrganizationalUnit!);
     }
 
-    private static PaySlipDto MapToDto(PaySlip p, Employee? emp = null)
-    {
-        var employee = emp ?? p.Employee;
-        return new PaySlipDto(
-            p.Id,
-            p.EmployeeId,
-            employee?.EmployeeCode ?? "N/A",
-            employee?.FullName ?? "N/A",
-            employee?.OrganizationalUnit?.UnitName ?? "Vinamilk",
-            employee?.EmployeeType.ToString() ?? "Office",
-            p.PayrollPeriod,
-            p.StandardWorkDays,
-            p.ActualWorkDays,
-            p.BaseSalary,
-            p.Allowance,
-            p.LunchAllowance,
-            p.OvertimeHours,
-            p.OvertimePay,
-            p.NightShiftHours,
-            p.NightShiftPay,
-            p.HazardousAllowance,
-            p.SalesCommission,
-            p.KpiBonus,
-            p.OtherBonuses,
-            p.GrossSalary,
-            p.SocialInsuranceDeduction,
-            p.HealthInsuranceDeduction,
-            p.UnemploymentInsuranceDeduction,
-            p.DependentCount,
-            p.PersonalDeduction,
-            p.DependentDeduction,
-            p.TaxableIncome,
-            p.PersonalIncomeTax,
-            p.TotalDeductions,
-            p.NetSalary,
-            p.Status,
-            p.PaymentDate,
-            p.TransactionReference);
-    }
+    private static PaySlipDto MapToDto(PaySlip p, Employee? emp) => new(
+        p.Id,
+        p.EmployeeId,
+        emp?.EmployeeCode ?? string.Empty,
+        emp?.FullName ?? string.Empty,
+        emp?.OrganizationalUnit?.UnitName ?? string.Empty,
+        emp?.EmployeeType.ToString() ?? "Office",
+        p.PayrollPeriod,
+        p.StandardWorkDays,
+        p.ActualWorkDays,
+        p.BaseSalary,
+        p.Allowance,
+        p.LunchAllowance,
+        p.OvertimeHours,
+        p.OvertimePay,
+        p.NightShiftHours,
+        p.NightShiftPay,
+        p.HazardousAllowance,
+        p.SalesCommission,
+        p.KpiBonus,
+        p.OtherBonuses,
+        p.GrossSalary,
+        p.SocialInsuranceDeduction,
+        p.HealthInsuranceDeduction,
+        p.UnemploymentInsuranceDeduction,
+        p.DependentCount,
+        p.PersonalDeduction,
+        p.DependentDeduction,
+        p.TaxableIncome,
+        p.PersonalIncomeTax,
+        p.TotalDeductions,
+        p.NetSalary,
+        p.Status,
+        p.PaymentDate,
+        p.TransactionReference);
+
+    private static PayrollRunDto MapRunToDto(PayrollRun r) => new(
+        r.Id,
+        r.Period,
+        r.OrganizationalUnitId,
+        r.OrganizationalUnit?.UnitName,
+        r.Status,
+        r.TotalGross,
+        r.TotalNet,
+        r.TotalEmployerCost,
+        r.TotalPersonalIncomeTax,
+        r.TotalEmployeeInsurance,
+        r.TotalEmployerInsurance,
+        r.EmployeeCount,
+        r.SubmittedAt,
+        r.ApprovedAccountantAt,
+        r.ApprovedDirectorAt,
+        r.LockedAt,
+        r.PaidAt,
+        r.PaymentReference);
 }
+

@@ -1,0 +1,119 @@
+{% extends "layouts/base.twig" %}
+{% block title %}Dashboard Đơn Vị — Vinamilk HRM{% endblock %}
+{% block breadcrumb %}Dashboard Quản Trị Đơn Vị{% endblock %}
+
+{% block content %}
+<div style="display: flex; flex-direction: column; gap: 24px;">
+
+  <!-- Scope Switching for Testing Privacy Threshold -->
+  <div class="vnm-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+    <div>
+      <h1 style="font-size: 1.375rem; font-weight: 700; color: var(--vnm-text-main);">{{ data.unitName }}</h1>
+      <p style="font-size: 0.875rem; color: var(--vnm-text-muted);">Báo cáo chỉ số hoạt động & Phân tích rủi ro nhân sự trực thuộc</p>
+    </div>
+
+    <!-- Unit Filter Switcher -->
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="font-size: 0.8125rem; font-weight: 600;">Xem đơn vị:</span>
+      <a href="/dashboard/unit?unitId=UNIT-CB-01" class="btn {% if not data.isPrivacyProtected %}btn-primary{% else %}btn-outline{% endif %}">
+        Phòng C&B (18 người)
+      </a>
+      <a href="/dashboard/unit?unitId=UNIT-MICRO-03" class="btn {% if data.isPrivacyProtected %}btn-primary{% else %}btn-outline{% endif %}">
+        Tổ Đề án Đặc biệt (3 người - Kiểm thử Riêng tư)
+      </a>
+    </div>
+  </div>
+
+  <!-- Privacy Protection Alert (Criteria 4) -->
+  {% if data.isPrivacyProtected %}
+    <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 16px; border-radius: var(--vnm-radius-md); display: flex; align-items: flex-start; gap: 12px;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <div>
+        <h4 style="font-weight: 700; color: #92400E; margin-bottom: 2px;">BẢO VỆ RIÊNG TƯ DỮ LIỆU LƯƠNG (PRIVACY THRESHOLD ACTIVE)</h4>
+        <p style="font-size: 0.875rem; color: #92400E;">
+          Đơn vị có quy mô <strong>{{ data.headcount }} người</strong> (&lt; 5 người ngưỡng tối thiểu theo luật định). Số liệu lương chi tiết được ẩn hoàn toàn để ngăn chặn suy đoán thu nhập cá nhân.
+        </p>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- KPI Cards -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px;">
+    <div class="kpi-card">
+      <div class="kpi-title">Quy Mô Nhân Lực</div>
+      <div class="kpi-value">{{ data.headcount }} <span style="font-size: 1rem; color: var(--vnm-text-muted);">CBNV</span></div>
+    </div>
+
+    <!-- Payroll Total Display (Returns 'không đủ cỡ mẫu' when headcount < 5) -->
+    <div class="kpi-card">
+      <div class="kpi-title">Quỹ Lương Đơn Vị</div>
+      <div class="kpi-value" style="{% if data.isPrivacyProtected %}font-size: 1.125rem; color: #D97706;{% endif %}">
+        {{ data.payrollTotalDisplay }}
+      </div>
+      <div class="kpi-trend neutral">
+        <span>{% if data.isPrivacyProtected %}Ẩn do cỡ mẫu &lt; 5 người{% else %}Kỳ lương tháng 09/2026{% endif %}</span>
+      </div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-title">Điểm KPI Bình Quân</div>
+      <div class="kpi-value">{{ data.averageKpi }}</div>
+      <div class="kpi-trend positive"><span>Xếp loại B (Tốt)</span></div>
+    </div>
+  </div>
+
+  <!-- High Attrition Risk Employees (Explainable Scoring Model) -->
+  <div class="vnm-card">
+    <div style="margin-bottom: 16px;">
+      <h2 style="font-size: 1.125rem; font-weight: 700; color: var(--vnm-text-main);">Danh Sách Nhân Sự Có Nguy Cơ Nghỉ Việc Cao</h2>
+      <p style="font-size: 0.8125rem; color: var(--vnm-text-muted);">
+        Mô hình suy diễn luật minh bạch (Compa-Ratio, thâm niên chưa tăng lương, giờ OT, vắng mặt, KPI). <em>Tuyệt đối không dùng các yếu tố nhân khẩu học.</em>
+      </p>
+    </div>
+
+    {% if data.highRiskEmployees is empty %}
+      <div class="vnm-empty-state">
+        <div class="empty-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <h4 class="empty-title">Không có nhân viên rủi ro cao</h4>
+        <p class="empty-desc">Toàn bộ nhân sự trong đơn vị đang có chỉ số giữ chân và mức độ gắn kết ổn định.</p>
+      </div>
+    {% else %}
+      <div class="vnm-table-container">
+        <table class="vnm-table">
+          <thead>
+            <tr>
+              <th>Mã NV</th>
+              <th>Họ và Tên</th>
+              <th>Vị Trí Công Tác</th>
+              <th class="col-numeric">Điểm Rủi Ro</th>
+              <th>Mức Rủi Ro</th>
+              <th>Các Yếu Tố Cấu Thành (Lý Do Minh Bạch)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for emp in data.highRiskEmployees %}
+              <tr>
+                <td><strong>{{ emp.code }}</strong></td>
+                <td>{{ emp.fullName }}</td>
+                <td>{{ emp.position }}</td>
+                <td class="col-numeric" style="font-weight: 700; color: var(--vnm-danger);">{{ emp.riskScore }} / 100</td>
+                <td><span class="vnm-badge badge-rejected">{{ emp.riskLevel }}</span></td>
+                <td>
+                  <ul style="padding-left: 18px; margin: 0; font-size: 0.8125rem;">
+                    {% for r in emp.reasons %}
+                      <li>{{ r }}</li>
+                    {% endfor %}
+                  </ul>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

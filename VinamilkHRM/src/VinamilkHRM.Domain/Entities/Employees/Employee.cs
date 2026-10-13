@@ -2,6 +2,7 @@ using VinamilkHRM.Domain.Common;
 using VinamilkHRM.Domain.Entities.Assets;
 using VinamilkHRM.Domain.Entities.Attendances;
 using VinamilkHRM.Domain.Entities.Contracts;
+using VinamilkHRM.Domain.Entities.Jobs;
 using VinamilkHRM.Domain.Entities.Kpis;
 using VinamilkHRM.Domain.Entities.LeaveRequests;
 using VinamilkHRM.Domain.Entities.OrganizationalUnits;
@@ -12,8 +13,8 @@ namespace VinamilkHRM.Domain.Entities.Employees;
 
 /// <summary>
 /// Lớp cơ sở trừu tượng đại diện cho một Cán bộ / Nhân viên trong tập đoàn Vinamilk.
-/// Áp dụng các nguyên lý OOP cốt lõi: Tính đóng gói (Encapsulation), Tính kế thừa (Inheritance),
-/// và Tính đa hình (Polymorphism) qua phương thức tính lương ngoài giờ CalculateOvertimePay.
+/// Hỗ trợ thông tin nhân thân, người phụ thuộc, tài khoản ngân hàng, học vấn, chứng chỉ,
+/// quá trình công tác, tài liệu đính kèm và mã hóa dữ liệu nhạy cảm.
 /// </summary>
 public abstract class Employee : BaseAuditableEntity
 {
@@ -21,7 +22,11 @@ public abstract class Employee : BaseAuditableEntity
     public string FirstName { get; protected set; } = string.Empty;
     public string LastName { get; protected set; } = string.Empty;
     public string FullName => $"{LastName} {FirstName}".Trim();
-    public string CitizenId { get; protected set; } = string.Empty;
+    public string CitizenId { get; protected set; } = string.Empty; // Mã hóa ASP.NET Data Protection / Always Encrypted
+    public DateOnly? CitizenIdIssueDate { get; protected set; }
+    public string? CitizenIdIssuePlace { get; protected set; }
+    public string? TaxCode { get; protected set; }                   // Mã số thuế cá nhân
+
     public DateTime DateOfBirth { get; protected set; }
     public Gender Gender { get; protected set; }
     public string Email { get; protected set; } = string.Empty;
@@ -30,6 +35,25 @@ public abstract class Employee : BaseAuditableEntity
     public DateTime HireDate { get; protected set; }
     public EmployeeType EmployeeType { get; protected set; }
     public bool IsActive { get; protected set; } = true;
+
+    // Tài khoản ngân hàng nhận lương (mã hóa cột BankAccountNumber)
+    public string? BankAccountNumber { get; protected set; }
+    public string? BankName { get; protected set; }
+    public string? BankBranch { get; protected set; }
+
+    // Người liên hệ khẩn cấp
+    public string? EmergencyContactName { get; protected set; }
+    public string? EmergencyContactPhone { get; protected set; }
+    public string? EmergencyContactRelationship { get; protected set; }
+
+    // Chức danh và ngạch bậc lương tiêu chuẩn
+    public int? StandardJobTitleId { get; protected set; }
+    public virtual JobTitle? StandardJobTitle { get; protected set; }
+
+    public int? JobGradeId { get; protected set; }
+    public virtual JobGrade? JobGrade { get; protected set; }
+
+    public int SalaryStep { get; protected set; } = 1;
 
     public int OrganizationalUnitId { get; protected set; }
     public virtual OrganizationalUnit? OrganizationalUnit { get; protected set; }
@@ -40,11 +64,16 @@ public abstract class Employee : BaseAuditableEntity
     public decimal BaseSalary { get; protected set; }
     public decimal Allowance { get; protected set; }
     public decimal InsuranceSalary { get; protected set; }            // Mức lương cơ sở trích nộp BHXH/BHYT/BHTN
-    public int DependentCount { get; protected set; } = 0;             // Số người phụ thuộc giảm trừ gia cảnh (4.4tr/người)
-    public decimal AnnualLeaveBalance { get; protected set; } = 12.0m; // Quỹ phép năm chuẩn theo Luật Lao động
-    public decimal DiligenceScore { get; protected set; } = 100.0m;   // Điểm chuyên cần (Sàn 0 - Trần 100)
+    public int DependentCount { get; protected set; } = 0;             // Số người phụ thuộc giảm trừ gia cảnh
+    public decimal AnnualLeaveBalance { get; protected set; } = 12.0m; // Quỹ phép năm chuẩn
+    public decimal DiligenceScore { get; protected set; } = 100.0m;   // Điểm chuyên cần (0 - 100)
+    public string? LegacyId { get; protected set; }
 
-    // Quan hệ điều hướng (Navigation properties)
+    // Chế độ thai sản và nuôi con nhỏ (Điều 137 BLLĐ 2019)
+    public DateOnly? ExpectedDueDate { get; protected set; }            // Ngày dự sinh (nữ mang thai)
+    public DateOnly? YoungestChildBirthDate { get; protected set; }     // Ngày sinh của con nhỏ nhất
+
+    // Navigation properties
     private readonly List<Employee> _subordinates = new();
     public virtual IReadOnlyCollection<Employee> Subordinates => _subordinates.AsReadOnly();
 
@@ -68,6 +97,21 @@ public abstract class Employee : BaseAuditableEntity
 
     private readonly List<CompanyAsset> _assignedAssets = new();
     public virtual IReadOnlyCollection<CompanyAsset> AssignedAssets => _assignedAssets.AsReadOnly();
+
+    private readonly List<Dependent> _dependents = new();
+    public virtual IReadOnlyCollection<Dependent> Dependents => _dependents.AsReadOnly();
+
+    private readonly List<EmployeeEducation> _educations = new();
+    public virtual IReadOnlyCollection<EmployeeEducation> Educations => _educations.AsReadOnly();
+
+    private readonly List<EmployeeCertificate> _certificates = new();
+    public virtual IReadOnlyCollection<EmployeeCertificate> Certificates => _certificates.AsReadOnly();
+
+    private readonly List<EmployeeWorkHistory> _workHistories = new();
+    public virtual IReadOnlyCollection<EmployeeWorkHistory> WorkHistories => _workHistories.AsReadOnly();
+
+    private readonly List<EmployeeAttachment> _attachments = new();
+    public virtual IReadOnlyCollection<EmployeeAttachment> Attachments => _attachments.AsReadOnly();
 
     protected Employee()
     {
@@ -140,9 +184,39 @@ public abstract class Employee : BaseAuditableEntity
             throw new DomainException("Mức phụ cấp không thể là số âm.", "ERR_EMP_ALLOWANCE_NEGATIVE");
     }
 
-    /// <summary>
-    /// Cập nhật số người phụ thuộc phục vụ tính giảm trừ gia cảnh thuế TNCN (4.4tr/người/tháng).
-    /// </summary>
+    public void UpdateBankInfo(string? bankAccountNumber, string? bankName, string? bankBranch)
+    {
+        BankAccountNumber = bankAccountNumber?.Trim();
+        BankName = bankName?.Trim();
+        BankBranch = bankBranch?.Trim();
+    }
+
+    public void UpdateEmergencyContact(string? name, string? phone, string? relationship)
+    {
+        EmergencyContactName = name?.Trim();
+        EmergencyContactPhone = phone?.Trim();
+        EmergencyContactRelationship = relationship?.Trim();
+    }
+
+    public void UpdateCitizenDetails(DateOnly? issueDate, string? issuePlace, string? taxCode)
+    {
+        CitizenIdIssueDate = issueDate;
+        CitizenIdIssuePlace = issuePlace?.Trim();
+        TaxCode = taxCode?.Trim();
+    }
+
+    public void AssignStandardJob(int? jobTitleId, int? jobGradeId, int salaryStep = 1)
+    {
+        StandardJobTitleId = jobTitleId;
+        JobGradeId = jobGradeId;
+        SalaryStep = Math.Max(1, salaryStep);
+    }
+
+    public void SetLegacyId(string? legacyId)
+    {
+        LegacyId = legacyId?.Trim();
+    }
+
     public void UpdateDependents(int count)
     {
         if (count < 0)
@@ -151,9 +225,37 @@ public abstract class Employee : BaseAuditableEntity
         DependentCount = count;
     }
 
-    /// <summary>
-    /// Cập nhật mức lương đóng bảo hiểm bắt buộc (BHXH, BHYT, BHTN).
-    /// </summary>
+    public void AddDependent(Dependent dependent)
+    {
+        ArgumentNullException.ThrowIfNull(dependent);
+        _dependents.Add(dependent);
+        DependentCount = _dependents.Count(d => d.IsActive);
+    }
+
+    public void AddEducation(EmployeeEducation education)
+    {
+        ArgumentNullException.ThrowIfNull(education);
+        _educations.Add(education);
+    }
+
+    public void AddCertificate(EmployeeCertificate certificate)
+    {
+        ArgumentNullException.ThrowIfNull(certificate);
+        _certificates.Add(certificate);
+    }
+
+    public void AddWorkHistory(EmployeeWorkHistory history)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        _workHistories.Add(history);
+    }
+
+    public void AddAttachment(EmployeeAttachment attachment)
+    {
+        ArgumentNullException.ThrowIfNull(attachment);
+        _attachments.Add(attachment);
+    }
+
     public void SetInsuranceSalary(decimal insuranceSalary)
     {
         if (insuranceSalary < 0)
@@ -162,10 +264,40 @@ public abstract class Employee : BaseAuditableEntity
         InsuranceSalary = insuranceSalary;
     }
 
+    public void SetMaternalStatus(DateOnly? expectedDueDate, DateOnly? youngestChildBirthDate)
+    {
+        ExpectedDueDate = expectedDueDate;
+        YoungestChildBirthDate = youngestChildBirthDate;
+    }
+
     /// <summary>
-    /// Nghiệp vụ điều chỉnh hoặc nâng bậc lương cho nhân viên kèm theo lưu vết lý do.
-    /// Tự động cập nhật mức lương đóng bảo hiểm theo tỷ lệ chuẩn nếu không chỉ định riêng.
+    /// Kiểm tra người lao động có thuộc diện miễn làm việc ban đêm và làm thêm giờ theo Điều 137 BLLĐ 2019
+    /// (Nữ mang thai từ tháng thứ 7 hoặc đang nuôi con dưới 12 tháng).
     /// </summary>
+    public bool IsExemptFromNightAndOt(DateOnly onDate)
+    {
+        if (Gender != Gender.Female)
+            return false;
+
+        // 1. Nữ mang thai từ tháng thứ 7 (khoảng 3 tháng trước ngày dự sinh)
+        if (ExpectedDueDate.HasValue)
+        {
+            var seventhMonthStart = ExpectedDueDate.Value.AddMonths(-3);
+            if (onDate >= seventhMonthStart && onDate <= ExpectedDueDate.Value)
+                return true;
+        }
+
+        // 2. Nữ nuôi con dưới 12 tháng tuổi
+        if (YoungestChildBirthDate.HasValue)
+        {
+            var childOneYearOld = YoungestChildBirthDate.Value.AddYears(1);
+            if (onDate >= YoungestChildBirthDate.Value && onDate <= childOneYearOld)
+                return true;
+        }
+
+        return false;
+    }
+
     public void PromoteSalary(decimal newBaseSalary, decimal newAllowance, string reason, decimal? newInsuranceSalary = null)
     {
         if (!IsActive)
@@ -185,9 +317,6 @@ public abstract class Employee : BaseAuditableEntity
         InsuranceSalary = newInsuranceSalary ?? Math.Round(newBaseSalary * 0.85m, 0);
     }
 
-    /// <summary>
-    /// Cập nhật thông tin liên lạc cá nhân.
-    /// </summary>
     public void UpdateContactInfo(string email, string phoneNumber, string address)
     {
         if (string.IsNullOrWhiteSpace(email))
@@ -198,9 +327,6 @@ public abstract class Employee : BaseAuditableEntity
         Address = address?.Trim() ?? string.Empty;
     }
 
-    /// <summary>
-    /// Điều chuyển nhân sự sang đơn vị tổ chức mới trong nội bộ tập đoàn Vinamilk.
-    /// </summary>
     public void TransferUnit(int newOrganizationalUnitId, string reason)
     {
         if (newOrganizationalUnitId <= 0)
@@ -238,9 +364,6 @@ public abstract class Employee : BaseAuditableEntity
         IsActive = true;
     }
 
-    /// <summary>
-    /// Tự động trừ Quỹ phép năm khi nhân viên được duyệt nghỉ phép năm.
-    /// </summary>
     public void DeductAnnualLeave(decimal days)
     {
         if (days <= 0)
@@ -252,9 +375,6 @@ public abstract class Employee : BaseAuditableEntity
         AnnualLeaveBalance -= days;
     }
 
-    /// <summary>
-    /// Cộng thêm ngày phép năm (vd: thâm niên hoặc hoàn trả đơn hủy).
-    /// </summary>
     public void AddAnnualLeave(decimal days)
     {
         if (days <= 0)
@@ -263,28 +383,17 @@ public abstract class Employee : BaseAuditableEntity
         AnnualLeaveBalance += days;
     }
 
-    /// <summary>
-    /// Trừ điểm chuyên cần khi nhân viên vi phạm chấm công / nghỉ không phép.
-    /// </summary>
     public void DeductDiligenceScore(decimal points)
     {
         if (points <= 0) return;
         DiligenceScore = Math.Max(0m, DiligenceScore - points);
     }
 
-    /// <summary>
-    /// Đặt lại điểm chuyên cần đầu chu kỳ đánh giá (mặc định 100 điểm).
-    /// </summary>
     public void ResetDiligenceScore()
     {
         DiligenceScore = 100.0m;
     }
 
-    /// <summary>
-    /// Tính mức lương làm thêm giờ (Overtime Pay) theo chế độ tiêu chuẩn Vinamilk.
-    /// Áp dụng tính ĐA HÌNH (Polymorphism): Các lớp dẫn xuất sẽ override để áp dụng hệ số đặc thù.
-    /// Định mức: 22 ngày công/tháng, 8 giờ/ngày = 176 giờ chuẩn.
-    /// </summary>
     public virtual decimal CalculateOvertimePay(decimal hours, bool isHoliday)
     {
         if (hours <= 0)
@@ -292,7 +401,7 @@ public abstract class Employee : BaseAuditableEntity
 
         const decimal standardMonthlyHours = 176m;
         decimal hourlyRate = BaseSalary / standardMonthlyHours;
-        decimal multiplier = isHoliday ? 3.0m : 1.5m; // Ngày lễ 300%, ngày thường 150%
+        decimal multiplier = isHoliday ? 3.0m : 1.5m;
 
         return Math.Round(hours * hourlyRate * multiplier, 0, MidpointRounding.AwayFromZero);
     }

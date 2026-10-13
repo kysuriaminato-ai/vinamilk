@@ -1,0 +1,21 @@
+:root {
+  --vnm-font-sans: 'Be Vietnam Pro', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --vnm-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+body {
+  font-family: var(--vnm-font-sans);
+  color: var(--vnm-text-main);
+  background-color: var(--vnm-bg);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.currency-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}

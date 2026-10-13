@@ -1,0 +1,46 @@
+.vnm-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  padding-left: 24px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 8px;
+    width: 2px;
+    background-color: var(--vnm-border);
+  }
+
+  .timeline-item {
+    position: relative;
+
+    .timeline-dot {
+      position: absolute;
+      left: -20px;
+      top: 4px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: var(--vnm-primary);
+      box-shadow: 0 0 0 3px var(--vnm-surface);
+    }
+
+    .timeline-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--vnm-text-main);
+    }
+
+    .timeline-body {
+      font-size: 0.8125rem;
+      color: var(--vnm-text-muted);
+      margin-top: 2px;
+    }
+  }
+}

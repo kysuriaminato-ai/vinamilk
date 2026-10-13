@@ -1,0 +1,22 @@
+User-agent: *
+Disallow: /dashboard/
+Disallow: /payroll/
+Disallow: /employees/
+Disallow: /org/
+Disallow: /attendance/
+Disallow: /approvals/
+Disallow: /kpi/
+Disallow: /salary-review/
+Disallow: /analytics/
+Disallow: /settings/
+Disallow: /self-service/
+Disallow: /api/
+Disallow: /login
+Disallow: /logout
+
+Allow: /tuyen-dung/
+Allow: /tuyen-dung$
+Allow: /dist/
+Allow: /assets/
+
+Sitemap: https://hrm.vinamilk.com.vn/sitemap.xml

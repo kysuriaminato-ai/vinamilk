@@ -1,0 +1,98 @@
+:root {
+  /* Vinamilk Primary Brand */
+  --vnm-primary: #0033A0;
+  --vnm-primary-dark: #00227A;
+  --vnm-primary-light: #E6F0FA;
+  --vnm-primary-subtle: #F0F6FF;
+  --vnm-primary-contrast: #FFFFFF;
+
+  /* Surfaces & Backgrounds */
+  --vnm-bg: #F8F9FA;
+  --vnm-surface: #FFFFFF;
+  --vnm-surface-hover: #F1F5F9;
+  --vnm-border: #E2E8F0;
+  --vnm-border-strong: #CBD5E1;
+
+  /* Typography */
+  --vnm-text-main: #1E293B;
+  --vnm-text-muted: #64748B;
+  --vnm-text-inverse: #FFFFFF;
+
+  /* Semantic Feedback */
+  --vnm-success: #10B981;
+  --vnm-success-bg: #D1FAE5;
+  --vnm-success-text: #065F46;
+
+  --vnm-warning: #F59E0B;
+  --vnm-warning-bg: #FEF3C7;
+  --vnm-warning-text: #92400E;
+
+  --vnm-danger: #EF4444;
+  --vnm-danger-bg: #FEE2E2;
+  --vnm-danger-text: #991B1B;
+
+  --vnm-info: #0284C7;
+  --vnm-info-bg: #E0F2FE;
+  --vnm-info-text: #075985;
+
+  /* Status Badges */
+  --vnm-status-draft-bg: #F1F5F9;
+  --vnm-status-draft-text: #475569;
+
+  --vnm-status-submitted-bg: #E0F2FE;
+  --vnm-status-submitted-text: #0369A1;
+
+  --vnm-status-approved-bg: #D1FAE5;
+  --vnm-status-approved-text: #047857;
+
+  --vnm-status-locked-bg: #EDE9FE;
+  --vnm-status-locked-text: #6D28D9;
+
+  --vnm-status-rejected-bg: #FEE2E2;
+  --vnm-status-rejected-text: #B91C1C;
+}
+
+[data-theme="dark"] {
+  --vnm-primary: #3B82F6;
+  --vnm-primary-dark: #2563EB;
+  --vnm-primary-light: #1E3A8A;
+  --vnm-primary-subtle: #172554;
+  --vnm-primary-contrast: #FFFFFF;
+
+  --vnm-bg: #0F172A;
+  --vnm-surface: #1E293B;
+  --vnm-surface-hover: #334155;
+  --vnm-border: #334155;
+  --vnm-border-strong: #475569;
+
+  --vnm-text-main: #F8FAFC;
+  --vnm-text-muted: #94A3B8;
+  --vnm-text-inverse: #0F172A;
+
+  --vnm-success-bg: #064E3B;
+  --vnm-success-text: #A7F3D0;
+
+  --vnm-warning-bg: #78350F;
+  --vnm-warning-text: #FDE68A;
+
+  --vnm-danger-bg: #7F1D1D;
+  --vnm-danger-text: #FECACA;
+
+  --vnm-info-bg: #0C4A6E;
+  --vnm-info-text: #BAE6FD;
+
+  --vnm-status-draft-bg: #334155;
+  --vnm-status-draft-text: #CBD5E1;
+
+  --vnm-status-submitted-bg: #0C4A6E;
+  --vnm-status-submitted-text: #BAE6FD;
+
+  --vnm-status-approved-bg: #064E3B;
+  --vnm-status-approved-text: #A7F3D0;
+
+  --vnm-status-locked-bg: #581C87;
+  --vnm-status-locked-text: #E9D5FF;
+
+  --vnm-status-rejected-bg: #7F1D1D;
+  --vnm-status-rejected-text: #FECACA;
+}

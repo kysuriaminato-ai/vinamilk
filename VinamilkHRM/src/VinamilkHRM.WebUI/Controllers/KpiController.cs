@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using VinamilkHRM.Application.DTOs.Kpis;
 using VinamilkHRM.Application.Interfaces;
 using VinamilkHRM.Domain.Common;
@@ -28,7 +28,7 @@ public class KpiController : Controller
         var employees = await _employeeService.GetAllEmployeesAsync();
         ViewBag.Employees = employees;
 
-        var kanbanBoard = await _kpiService.GetKanbanBoardAsync(selectedPeriod, unitId);
+        var kanbanBoard = await _kpiService.GetLegacyKanbanBoardAsync(selectedPeriod, unitId);
         return View(kanbanBoard);
     }
 
@@ -37,7 +37,7 @@ public class KpiController : Controller
     public async Task<IActionResult> GetKanbanData(string? period, int? unitId)
     {
         string selectedPeriod = string.IsNullOrWhiteSpace(period) ? "2025-Q1" : period.Trim();
-        var kanbanBoard = await _kpiService.GetKanbanBoardAsync(selectedPeriod, unitId);
+        var kanbanBoard = await _kpiService.GetLegacyKanbanBoardAsync(selectedPeriod, unitId);
         return Json(new { success = true, data = kanbanBoard });
     }
 

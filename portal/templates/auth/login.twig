@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>Đăng nhập — Cổng Quản Trị Nhân Lực Vinamilk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ vite_asset('app.scss') }}">
+</head>
+<body style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #00227A 0%, #0033A0 50%, #0284C7 100%); padding: 20px;">
+  <div class="vnm-card" style="width: 100%; max-width: 440px; padding: 40px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25);">
+    <div style="text-align: center; margin-bottom: 28px;">
+      <div style="width: 56px; height: 56px; background-color: var(--vnm-primary); color: white; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.75rem; margin-bottom: 12px;">V</div>
+      <h1 style="font-size: 1.375rem; font-weight: 700; color: var(--vnm-text-main); margin-bottom: 4px;">CỔNG QUẢN TRỊ VINAMILK</h1>
+      <p style="font-size: 0.875rem; color: var(--vnm-text-muted);">Đăng nhập tài khoản hệ thống thông tin nhân sự</p>
+    </div>
+
+    {% if error %}
+      <div style="background-color: var(--vnm-danger-bg); color: var(--vnm-danger-text); padding: 12px; border-radius: var(--vnm-radius-md); font-size: 0.875rem; margin-bottom: 20px;">
+        {{ error }}
+      </div>
+    {% endif %}
+
+    <form action="/login" method="POST" style="display: flex; flex-direction: column; gap: 16px;">
+      {{ csrf_field() }}
+      <div>
+        <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 6px;">Tên đăng nhập</label>
+        <input type="text" name="username" value="admin" required style="width: 100%; padding: 10px 14px; border: 1px solid var(--vnm-border); border-radius: var(--vnm-radius-md); font-size: 0.9375rem; outline: none; background: var(--vnm-surface); color: var(--vnm-text-main);">
+      </div>
+
+      <div>
+        <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 6px;">Mật khẩu</label>
+        <input type="password" name="password" value="Vinamilk@2026" required style="width: 100%; padding: 10px 14px; border: 1px solid var(--vnm-border); border-radius: var(--vnm-radius-md); font-size: 0.9375rem; outline: none; background: var(--vnm-surface); color: var(--vnm-text-main);">
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8125rem;">
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" name="remember" checked> Ghi nhớ đăng nhập
+        </label>
+        <a href="#" style="color: var(--vnm-primary); font-weight: 500;">Quên mật khẩu?</a>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="padding: 12px; font-weight: 600; margin-top: 8px;">
+        Đăng Nhập Hệ Thống
+      </button>
+    </form>
+
+    <div style="margin-top: 24px; text-align: center; border-top: 1px solid var(--vnm-border); padding-top: 16px; font-size: 0.75rem; color: var(--vnm-text-muted);">
+      Hệ thống bảo vệ bởi xác thực đa yếu tố 2FA & Chính sách bảo mật Vinamilk © 2026
+    </div>
+  </div>
+</body>
+</html>

@@ -25,6 +25,9 @@ public class Attendance : BaseAuditableEntity
     public AttendanceStatus Status { get; private set; } = AttendanceStatus.AbsentUnexcused;
     public string? Note { get; private set; }
 
+    public bool IsImported { get; private set; } = false;
+    public int? LegacyId { get; private set; }
+
     protected Attendance()
     {
     }
@@ -43,6 +46,31 @@ public class Attendance : BaseAuditableEntity
         WorkHours = 0m;
         OvertimeHours = 0m;
         Status = AttendanceStatus.AbsentUnexcused;
+        IsImported = false;
+    }
+
+    public static Attendance CreateImported(
+        int employeeId,
+        int shiftId,
+        DateTime attendanceDate,
+        decimal workHours,
+        decimal overtimeHours,
+        AttendanceStatus status,
+        int legacyId,
+        string? note = null)
+    {
+        return new Attendance
+        {
+            EmployeeId = employeeId,
+            ShiftId = shiftId,
+            AttendanceDate = attendanceDate.Date,
+            WorkHours = workHours,
+            OvertimeHours = overtimeHours,
+            Status = status,
+            IsImported = true,
+            LegacyId = legacyId,
+            Note = note ?? "[Dữ liệu di sản MySQL chamcong]"
+        };
     }
 
     /// <summary>

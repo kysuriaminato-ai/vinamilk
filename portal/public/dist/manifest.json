@@ -1,0 +1,13 @@
+{
+  "js/app.js": {
+    "file": "js/app-CX-IHB39.js",
+    "name": "app",
+    "src": "js/app.js",
+    "isEntry": true
+  },
+  "scss/app.scss": {
+    "file": "css/styles-D0fcl2Dm.css",
+    "src": "scss/app.scss",
+    "isEntry": true
+  }
+}

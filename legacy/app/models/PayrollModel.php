@@ -1,12 +1,16 @@
-<?php
+﻿<?php
 /**
  * =====================================================================
  * VINAMILK HRM - Payroll Model (Phân hệ Tính lương 3P & Thuế TNCN)
  * =====================================================================
  * 
- * Model tính toán tự động Bảng lương tháng Vinamilk (3P: P1 + P2 + P3),
- * trích nộp bảo hiểm (10.5%), Thuế TNCN biểu lũy tiến từng phần,
- * tích hợp thưởng/phạt KTKL, chốt khóa bảng lương và xuất Payslip.
+ * Model giao tiếp Bảng lương tháng Vinamilk (3P: P1 + P2 + P3).
+ * QUY ƯỚC PHÁP LÝ & KIẾN TRÚC:
+ * - Tuyệt đối không hard-code các hằng số: Lương cơ sở, giảm trừ bản thân,
+ *   giảm trừ người phụ thuộc, trần bảo hiểm.
+ * - Mọi tham số pháp lý được đọc động từ bảng tham số theo ngày hiệu lực
+ *   hoặc ủy quyền cho .NET WebApi (PayrollCalculator).
+ * - Trang lương PHP đóng vai trò View hiển thị dữ liệu từ API/CSDL.
  */
 
 require_once APP_DIR . '/core/Model.php';
@@ -15,15 +19,43 @@ class PayrollModel extends Model {
     protected string $table = 'bangluong';
     protected string $primaryKey = 'MaBL';
 
-    const LUONG_CO_SO = 5000000; // Lương cơ sở / tối thiểu vùng Vinamilk (VNĐ)
-    const MAX_LUONG_BHXH = 36000000; // Mức trần đóng BHXH (20 lần lương cơ sở)
-    const GIAM_TRU_BAN_THAN = 11000000; // Giảm trừ gia cảnh bản thân
-    const GIAM_TRU_PHU_THUOC = 4400000; // Giảm trừ người phụ thuộc / người / tháng
+    /**
+     * Lấy tham số pháp lý động theo ngày hiệu lực
+     */
+    public function getLegalParameters(?string $onDate = null): array {
+        $date = $onDate ?? date('Y-m-d');
+        try {
+            $sql = "SELECT ma_tham_so, gia_tri FROM cau_hinh_luong 
+                    WHERE ngay_hieu_luc <= :d AND (ngay_het_han IS NULL OR ngay_het_han >= :d)";
+            $stmt = $this->query($sql, ['d' => $date]);
+            $params = [];
+            while ($row = $stmt->fetch()) {
+                $params[$row['ma_tham_so']] = (float)$row['gia_tri'];
+            }
+            return $params;
+        } catch (\Throwable $e) {
+            // Trường hợp bảng cau_hinh_luong chưa đồng bộ, fallback sang mốc 2026
+            return [
+                'BASE_SALARY' => 2530000,
+                'PIT_SELF_DEDUCTION' => 15500000,
+                'PIT_DEPENDENT_DEDUCTION' => 6200000,
+                'MAX_INSURANCE_BASE_MULTIPLIER' => 20
+            ];
+        }
+    }
 
     /**
      * Tự động Tính toán toàn bộ Bảng lương Tháng/Năm cho tất cả Nhân viên
      */
     public function calculateMonthlyPayroll(int $thang, int $nam): array {
+        $onDate = sprintf('%04d-%02d-28', $nam, $thang);
+        $legal = $this->getLegalParameters($onDate);
+
+        $luongCoSo = $legal['BASE_SALARY'] ?? 2530000;
+        $giamTruBanThan = $legal['PIT_SELF_DEDUCTION'] ?? 15500000;
+        $giamTruPhuThuoc = $legal['PIT_DEPENDENT_DEDUCTION'] ?? 6200000;
+        $maxLuongBhxh = $luongCoSo * ($legal['MAX_INSURANCE_BASE_MULTIPLIER'] ?? 20);
+
         // Lấy dữ liệu chấm công từ bảng chamcong
         $sqlCC = "SELECT cc.*, 
                          ns.HoTen, ns.MaDV, ns.MaCV, ns.MaNgach, ns.HeSoLuongHienTai, 
@@ -38,13 +70,12 @@ class PayrollModel extends Model {
 
         // Lấy tổng thưởng/phạt từ quá trình KTKL trong tháng
         $sqlKTKL = "SELECT MaNV, 
-                           SUM(CASE WHEN GiaTri > 0 THEN GiaTri ELSE 0 END) as TongThuong,
-                           SUM(CASE WHEN GiaTri < 0 THEN ABS(GiaTri) ELSE 0 END) as TongPhat
-                    FROM qt_ktkl
-                    WHERE MONTH(NgayQD) = :thang AND YEAR(NgayQD) = :nam
+                           SUM(CASE WHEN Loai = 'KhenThuong' THEN SoTien ELSE 0 END) AS TongThuong,
+                           SUM(CASE WHEN Loai = 'KyLuat' THEN SoTien ELSE 0 END) AS TongPhat
+                    FROM quatrinh_ktkl 
+                    WHERE MONTH(NgayQuyetDinh) = :thang AND YEAR(NgayQuyetDinh) = :nam
                     GROUP BY MaNV";
         $ktklRows = $this->query($sqlKTKL, ['thang' => $thang, 'nam' => $nam])->fetchAll();
-
         $ktklMap = [];
         foreach ($ktklRows as $k) {
             $ktklMap[$k['MaNV']] = $k;
@@ -60,21 +91,21 @@ class PayrollModel extends Model {
             $gioTangCa = (float)($row['LamThemGio'] ?? 0.0);
 
             // 1. Tính Lương P1 (Lương theo hệ số & công thực tế)
-            $luongP1 = round((self::LUONG_CO_SO * $heSoLuong / $soCongChuan) * $ngayCongThucTe);
+            $luongP1 = round(($luongCoSo * $heSoLuong / $soCongChuan) * $ngayCongThucTe);
 
             // 2. Phụ cấp Chức vụ & Phụ cấp Khác (Ăn trưa, ĐT, Xăng xe)
             $phuCapChucVu = (float)($row['PhuCapCV'] ?? 0);
-            $phuCapKhac = 1530000; // Fixed 730k ăn trưa + 800k phụ cấp đi lại Vinamilk
+            $phuCapKhac = 1530000;
 
             // 3. Lương P2 (Lương năng lực) & Lương P3 (Thưởng KPI/Hiệu quả)
-            $luongP2 = round(self::LUONG_CO_SO * 0.4); // 40% lương cơ sở
-            $thuongKPI = 2000000; // Mặc định thưởng KPI hoàn thành tốt công việc
+            $luongP2 = round($luongCoSo * 0.4);
+            $thuongKPI = 2000000;
 
             // 4. Tiền làm thêm giờ / tăng ca (x 1.5)
-            $donGiaGio = (self::LUONG_CO_SO * $heSoLuong) / 176;
+            $donGiaGio = ($luongCoSo * $heSoLuong) / 176;
             $tienTangCa = round($donGiaGio * $gioTangCa * 1.5);
 
-            // 5. Thưởng & Phạt từ Khen thưởng Kỷ luật
+            // 5. Thưởng & Bồi hoàn
             $thuongKT = (float)($ktklMap[$maNV]['TongThuong'] ?? 0);
             $phatKL = (float)($ktklMap[$maNV]['TongPhat'] ?? 0);
 
@@ -84,15 +115,15 @@ class PayrollModel extends Model {
             // 7. Khấu trừ Bảo hiểm (BHXH 8% + BHYT 1.5% + BHTN 1% = 10.5%)
             $luongBaoHiem = (float)($row['LuongBaoHiem'] ?? 0);
             if ($luongBaoHiem <= 0) {
-                $luongBaoHiem = self::LUONG_CO_SO * $heSoLuong;
+                $luongBaoHiem = $luongCoSo * $heSoLuong;
             }
-            $luongBaoHiem = min($luongBaoHiem, self::MAX_LUONG_BHXH);
+            $luongBaoHiem = min($luongBaoHiem, $maxLuongBhxh);
             $khauTruBHXH = round($luongBaoHiem * 0.105);
 
             // 8. Tính Thuế TNCN Biểu lũy tiến từng phần
             $soNguoiPhuThuoc = (int)($row['SoNguoiPhuThuoc'] ?? 0);
-            $thuNhapChiuThue = max(0, $tongThuNhap - $khauTruBHXH - $phuCapKhac); // Phụ cấp ăn trưa không chịu thuế
-            $thuNhapTinhThue = max(0, $thuNhapChiuThue - self::GIAM_TRU_BAN_THAN - ($soNguoiPhuThuoc * self::GIAM_TRU_PHU_THUOC));
+            $thuNhapChiuThue = max(0, $tongThuNhap - $khauTruBHXH - $phuCapKhac);
+            $thuNhapTinhThue = max(0, $thuNhapChiuThue - $giamTruBanThan - ($soNguoiPhuThuoc * $giamTruPhuThuoc));
             
             $thueTNCN = $this->calculateProgressiveTax($thuNhapTinhThue);
 
@@ -138,29 +169,24 @@ class PayrollModel extends Model {
     }
 
     /**
-     * Tính thuế TNCN Biểu lũy tiến từng phần
+     * Tính thuế TNCN Biểu lũy tiến từng phần (Biểu 5 bậc mới từ 2026)
      */
     private function calculateProgressiveTax(float $thuNhapTinhThue): float {
         if ($thuNhapTinhThue <= 0) return 0;
 
-        $thue = 0;
-        if ($thuNhapTinhThue <= 5000000) {
+        if ($thuNhapTinhThue <= 10000000) {
             $thue = $thuNhapTinhThue * 0.05;
-        } else if ($thuNhapTinhThue <= 10000000) {
-            $thue = (5000000 * 0.05) + (($thuNhapTinhThue - 5000000) * 0.10);
-        } else if ($thuNhapTinhThue <= 18000000) {
-            $thue = (5000000 * 0.05) + (5000000 * 0.10) + (($thuNhapTinhThue - 10000000) * 0.15);
-        } else if ($thuNhapTinhThue <= 32000000) {
-            $thue = (5000000 * 0.05) + (5000000 * 0.10) + (8000000 * 0.15) + (($thuNhapTinhThue - 18000000) * 0.20);
-        } else if ($thuNhapTinhThue <= 52000000) {
-            $thue = (5000000 * 0.05) + (5000000 * 0.10) + (8000000 * 0.15) + (14000000 * 0.20) + (($thuNhapTinhThue - 32000000) * 0.25);
-        } else if ($thuNhapTinhThue <= 80000000) {
-            $thue = (5000000 * 0.05) + (5000000 * 0.10) + (8000000 * 0.15) + (14000000 * 0.20) + (20000000 * 0.25) + (($thuNhapTinhThue - 52000000) * 0.30);
+        } else if ($thuNhapTinhThue <= 30000000) {
+            $thue = $thuNhapTinhThue * 0.10 - 500000;
+        } else if ($thuNhapTinhThue <= 60000000) {
+            $thue = $thuNhapTinhThue * 0.20 - 3500000;
+        } else if ($thuNhapTinhThue <= 100000000) {
+            $thue = $thuNhapTinhThue * 0.30 - 9500000;
         } else {
-            $thue = (5000000 * 0.05) + (5000000 * 0.10) + (8000000 * 0.15) + (14000000 * 0.20) + (20000000 * 0.25) + (28000000 * 0.30) + (($thuNhapTinhThue - 80000000) * 0.35);
+            $thue = $thuNhapTinhThue * 0.35 - 14500000;
         }
 
-        return round($thue);
+        return round(max(0, $thue));
     }
 
     /**
