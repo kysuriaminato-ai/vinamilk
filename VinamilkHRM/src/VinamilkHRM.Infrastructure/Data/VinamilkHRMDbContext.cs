@@ -17,6 +17,7 @@ using VinamilkHRM.Domain.Entities.Shifts;
 using VinamilkHRM.Domain.Entities.Statutory;
 using VinamilkHRM.Domain.Entities.Workflows;
 using VinamilkHRM.Domain.Entities.Notifications;
+using VinamilkHRM.Domain.Entities.OnboardingOffboarding;
 using VinamilkHRM.Infrastructure.Identity;
 
 namespace VinamilkHRM.Infrastructure.Data;
@@ -160,6 +161,13 @@ public class VinamilkHRMDbContext : IdentityDbContext<ApplicationUser, Applicati
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
     public DbSet<InAppNotification> InAppNotifications => Set<InAppNotification>();
     public DbSet<NotificationOutboxMessage> NotificationOutboxMessages => Set<NotificationOutboxMessage>();
+
+    // Onboarding / Offboarding DbSets (Session 11 P1-4)
+    public DbSet<ChecklistTemplate> ChecklistTemplates => Set<ChecklistTemplate>();
+    public DbSet<ChecklistTemplateItem> ChecklistTemplateItems => Set<ChecklistTemplateItem>();
+    public DbSet<EmployeeChecklistTask> EmployeeChecklistTasks => Set<EmployeeChecklistTask>();
+    public DbSet<SocialInsuranceDeclaration> SocialInsuranceDeclarations => Set<SocialInsuranceDeclaration>();
+    public DbSet<FinalSettlement> FinalSettlements => Set<FinalSettlement>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

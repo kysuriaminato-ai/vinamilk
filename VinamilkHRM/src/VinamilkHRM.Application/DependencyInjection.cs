@@ -48,6 +48,9 @@ public static class DependencyInjection
         services.AddScoped<VinamilkHRM.Application.Contracts.IContractDocumentGenerator, VinamilkHRM.Application.Contracts.DocxContractDocumentGenerator>();
         services.AddScoped<VinamilkHRM.Application.Contracts.IContractManagementService, VinamilkHRM.Application.Contracts.ContractManagementService>();
 
+                // Session 11 P1-4 Onboarding / Offboarding Service
+        services.AddScoped<VinamilkHRM.Application.OnboardingOffboarding.IOnboardingOffboardingService, VinamilkHRM.Application.OnboardingOffboarding.OnboardingOffboardingService>();
+
         return services;
     }
 }

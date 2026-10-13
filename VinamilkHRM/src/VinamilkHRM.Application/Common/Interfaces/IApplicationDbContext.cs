@@ -14,6 +14,7 @@ using VinamilkHRM.Domain.Entities.Shifts;
 using VinamilkHRM.Domain.Entities.Statutory;
 using VinamilkHRM.Domain.Entities.Workflows;
 using VinamilkHRM.Domain.Entities.Notifications;
+using VinamilkHRM.Domain.Entities.OnboardingOffboarding;
 
 namespace VinamilkHRM.Application.Common.Interfaces;
 
@@ -122,6 +123,13 @@ public interface IApplicationDbContext
     DbSet<NotificationPreference> NotificationPreferences { get; }
     DbSet<InAppNotification> InAppNotifications { get; }
     DbSet<NotificationOutboxMessage> NotificationOutboxMessages { get; }
+
+    // Onboarding / Offboarding DbSets (Session 11 P1-4)
+    DbSet<ChecklistTemplate> ChecklistTemplates { get; }
+    DbSet<ChecklistTemplateItem> ChecklistTemplateItems { get; }
+    DbSet<EmployeeChecklistTask> EmployeeChecklistTasks { get; }
+    DbSet<SocialInsuranceDeclaration> SocialInsuranceDeclarations { get; }
+    DbSet<FinalSettlement> FinalSettlements { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
