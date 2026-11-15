@@ -69,7 +69,10 @@ builder.Services
             },
             OnRedirectToAccessDenied = ctx =>
             {
-                if (ctx.Request.Path.StartsWithSegments("/api"))
+                bool wantsJson = ctx.Request.Path.StartsWithSegments("/api")
+                    || ctx.Request.Headers.Accept.Any(a => a?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true)
+                    || string.Equals(ctx.Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase);
+                if (wantsJson)
                 {
                     ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
                     return Task.CompletedTask;

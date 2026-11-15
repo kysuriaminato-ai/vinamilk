@@ -78,11 +78,19 @@ public sealed class GetDetailedUnitPayrollReportQueryHandler
     : IRequestHandler<GetDetailedUnitPayrollReportQuery, DetailedUnitPayrollReportDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
 
-    public GetDetailedUnitPayrollReportQueryHandler(IApplicationDbContext context) => _context = context;
+    public GetDetailedUnitPayrollReportQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService? currentUser = null)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
 
     public async Task<DetailedUnitPayrollReportDto> Handle(GetDetailedUnitPayrollReportQuery request, CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
         var period = await _context.PayrollPeriods.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == request.PayrollPeriodId, cancellationToken)
             ?? throw new KeyNotFoundException($"Không tìm thấy kỳ lương #{request.PayrollPeriodId}.");
@@ -92,6 +100,15 @@ public sealed class GetDetailedUnitPayrollReportQueryHandler
             .Include(r => r.OrganizationUnit)
             .Include(r => r.Position)
             .Where(r => r.PayrollPeriodId == period.Id);
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            query = query.Where(r =>
+                allowedUnitIds.Contains(r.OrganizationUnitId) ||
+                (selfEmpId.HasValue && r.EmployeeId == selfEmpId.Value));
+        }
 
         if (request.OrganizationUnitId.HasValue && request.OrganizationUnitId.Value > 0)
             query = query.Where(r => r.OrganizationUnitId == request.OrganizationUnitId.Value);

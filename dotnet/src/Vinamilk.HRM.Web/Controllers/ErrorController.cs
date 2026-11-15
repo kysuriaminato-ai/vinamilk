@@ -31,6 +31,7 @@ public class ErrorController : Controller
         };
 
         ViewData["Title"] = $"Lỗi {statusCode}";
+        Response.StatusCode = statusCode;
         return View("ErrorStatus");
     }
 

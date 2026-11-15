@@ -26,16 +26,31 @@ public sealed record GetBm01EmployeeMasterReportQuery(int? UnitId = null, string
 public class GetBm01EmployeeMasterReportQueryHandler : IRequestHandler<GetBm01EmployeeMasterReportQuery, List<Bm01EmployeeRowDto>>
 {
     private readonly IApplicationDbContext _context;
-    public GetBm01EmployeeMasterReportQueryHandler(IApplicationDbContext context) => _context = context;
+    private readonly ICurrentUserService? _currentUser;
+
+    public GetBm01EmployeeMasterReportQueryHandler(IApplicationDbContext context, ICurrentUserService? currentUser = null)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
 
     public async Task<List<Bm01EmployeeRowDto>> Handle(GetBm01EmployeeMasterReportQuery request, CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
+
         var query = _context.Employees
             .AsNoTracking()
             .Include(e => e.OrganizationUnit)
             .Include(e => e.Position)
             .Include(e => e.EducationLevel)
             .AsQueryable();
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            query = query.Where(e => allowedUnitIds.Contains(e.OrganizationUnitId) || (selfEmpId.HasValue && e.Id == selfEmpId.Value));
+        }
 
         if (request.UnitId.HasValue && request.UnitId > 0)
             query = query.Where(e => e.OrganizationUnitId == request.UnitId.Value);
@@ -80,10 +95,18 @@ public sealed record GetBm02MovementReportQuery(int? Year = null, int? Month = n
 public class GetBm02MovementReportQueryHandler : IRequestHandler<GetBm02MovementReportQuery, List<Bm02MovementRowDto>>
 {
     private readonly IApplicationDbContext _context;
-    public GetBm02MovementReportQueryHandler(IApplicationDbContext context) => _context = context;
+    private readonly ICurrentUserService? _currentUser;
+
+    public GetBm02MovementReportQueryHandler(IApplicationDbContext context, ICurrentUserService? currentUser = null)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
 
     public async Task<List<Bm02MovementRowDto>> Handle(GetBm02MovementReportQuery request, CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
+
         var query = _context.PersonnelTransfers
             .AsNoTracking()
             .Include(t => t.Employee)
@@ -92,6 +115,16 @@ public class GetBm02MovementReportQueryHandler : IRequestHandler<GetBm02Movement
             .Include(t => t.FromPosition)
             .Include(t => t.ToPosition)
             .AsQueryable();
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            query = query.Where(t =>
+                allowedUnitIds.Contains(t.FromUnitId) ||
+                allowedUnitIds.Contains(t.ToUnitId) ||
+                (selfEmpId.HasValue && t.EmployeeId == selfEmpId.Value));
+        }
 
         if (request.Year.HasValue && request.Year > 0)
             query = query.Where(t => t.EffectiveDate.Year == request.Year.Value);
@@ -137,15 +170,32 @@ public sealed record GetBm03RewardDisciplineReportQuery(int? Year = null, string
 public class GetBm03RewardDisciplineReportQueryHandler : IRequestHandler<GetBm03RewardDisciplineReportQuery, List<Bm03RewardDisciplineRowDto>>
 {
     private readonly IApplicationDbContext _context;
-    public GetBm03RewardDisciplineReportQueryHandler(IApplicationDbContext context) => _context = context;
+    private readonly ICurrentUserService? _currentUser;
+
+    public GetBm03RewardDisciplineReportQueryHandler(IApplicationDbContext context, ICurrentUserService? currentUser = null)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
 
     public async Task<List<Bm03RewardDisciplineRowDto>> Handle(GetBm03RewardDisciplineReportQuery request, CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
+
         var query = _context.RewardDisciplines
             .AsNoTracking()
             .Include(r => r.Employee).ThenInclude(e => e.OrganizationUnit)
             .Include(r => r.Category)
             .AsQueryable();
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            query = query.Where(r =>
+                allowedUnitIds.Contains(r.Employee.OrganizationUnitId) ||
+                (selfEmpId.HasValue && r.EmployeeId == selfEmpId.Value));
+        }
 
         if (request.Year.HasValue && request.Year > 0)
             query = query.Where(r => r.EffectiveDate.Year == request.Year.Value);
@@ -186,10 +236,17 @@ public sealed record GetBm04PayrollSummaryReportQuery(int? Year = null, int? Mon
 public class GetBm04PayrollSummaryReportQueryHandler : IRequestHandler<GetBm04PayrollSummaryReportQuery, List<Bm04PayrollSummaryRowDto>>
 {
     private readonly IApplicationDbContext _context;
-    public GetBm04PayrollSummaryReportQueryHandler(IApplicationDbContext context) => _context = context;
+    private readonly ICurrentUserService? _currentUser;
+
+    public GetBm04PayrollSummaryReportQueryHandler(IApplicationDbContext context, ICurrentUserService? currentUser = null)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
 
     public async Task<List<Bm04PayrollSummaryRowDto>> Handle(GetBm04PayrollSummaryReportQuery request, CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
         var year = request.Year ?? DateTime.Today.Year;
         var month = request.Month ?? DateTime.Today.Month;
 
@@ -207,11 +264,22 @@ public class GetBm04PayrollSummaryReportQueryHandler : IRequestHandler<GetBm04Pa
         if (period is null)
             return new List<Bm04PayrollSummaryRowDto>();
 
-        var rows = await _context.PayrollRecords
+        var rowsQuery = _context.PayrollRecords
             .AsNoTracking()
             .Where(r => r.PayrollPeriodId == period.Id)
             .Include(r => r.OrganizationUnit)
-            .ToListAsync(cancellationToken);
+            .AsQueryable();
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            rowsQuery = rowsQuery.Where(r =>
+                allowedUnitIds.Contains(r.OrganizationUnitId) ||
+                (selfEmpId.HasValue && r.EmployeeId == selfEmpId.Value));
+        }
+
+        var rows = await rowsQuery.ToListAsync(cancellationToken);
 
         return rows
             .GroupBy(r => new { r.OrganizationUnit.UnitCode, r.OrganizationUnit.UnitName })
@@ -273,10 +341,17 @@ public static class DynamicReportCatalog
 public class RunDynamicReportQueryHandler : IRequestHandler<RunDynamicReportQuery, DynamicReportResultDto>
 {
     private readonly IApplicationDbContext _context;
-    public RunDynamicReportQueryHandler(IApplicationDbContext context) => _context = context;
+    private readonly ICurrentUserService? _currentUser;
+
+    public RunDynamicReportQueryHandler(IApplicationDbContext context, ICurrentUserService? currentUser = null)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
 
     public async Task<DynamicReportResultDto> Handle(RunDynamicReportQuery request, CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
         var selectedKeys = request.SelectedColumns is { Count: > 0 }
             ? request.SelectedColumns.Distinct().ToList()
             : ["EmployeeCode", "FullName", "UnitName", "PositionName", "WorkStatus", "BaseSalary"];
@@ -294,6 +369,15 @@ public class RunDynamicReportQueryHandler : IRequestHandler<RunDynamicReportQuer
             .Include(e => e.Position)
             .Include(e => e.EducationLevel)
             .AsQueryable();
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            query = query.Where(e =>
+                allowedUnitIds.Contains(e.OrganizationUnitId) ||
+                (selfEmpId.HasValue && e.Id == selfEmpId.Value));
+        }
 
         if (request.UnitId.HasValue && request.UnitId > 0)
             query = query.Where(e => e.OrganizationUnitId == request.UnitId.Value);

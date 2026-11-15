@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Vinamilk.HRM.Application.Talent;
@@ -6,7 +6,7 @@ using Vinamilk.HRM.Infrastructure.Services;
 
 namespace Vinamilk.HRM.Web.Controllers;
 
-[Authorize]
+[Authorize(Policy = "Rewards.View")]
 public class RewardsController : Controller
 {
     private readonly ISender _sender;

@@ -91,7 +91,7 @@ public class PayrollController : Controller
     }
 
     [HttpPost("Submit")]
-    [Authorize(Policy = "Payroll.Calculate")]
+    [Authorize(Policy = "Payroll.Submit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Submit(int payrollPeriodId, string? comment = null, CancellationToken cancellationToken = default)
     {
@@ -1055,7 +1055,7 @@ public class PayrollController : Controller
     }
 
     [HttpPost("SaveAccountingAccountConfig")]
-    [Authorize(Policy = "Payroll.Parameters")]
+    [Authorize(Policy = "Payroll.Approve")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveAccountingAccountConfig(
         int id,
@@ -1081,7 +1081,7 @@ public class PayrollController : Controller
     }
 
     [HttpPost("SaveSocialInsuranceTemplate")]
-    [Authorize(Policy = "Payroll.Parameters")]
+    [Authorize(Policy = "Payroll.Approve")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveSocialInsuranceTemplate(
         int id,

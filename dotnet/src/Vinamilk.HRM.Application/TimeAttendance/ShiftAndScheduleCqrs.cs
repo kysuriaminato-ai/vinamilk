@@ -400,14 +400,19 @@ public record GetShiftAndScheduleOverviewQuery(
 public class GetShiftAndScheduleOverviewQueryHandler : IRequestHandler<GetShiftAndScheduleOverviewQuery, ShiftAndScheduleOverviewDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
 
-    public GetShiftAndScheduleOverviewQueryHandler(IApplicationDbContext context)
+    public GetShiftAndScheduleOverviewQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService? currentUser = null)
     {
         _context = context;
+        _currentUser = currentUser;
     }
 
     public async Task<ShiftAndScheduleOverviewDto> Handle(GetShiftAndScheduleOverviewQuery request, CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
         var today = DateOnly.FromDateTime(DateTime.Today);
         int diffToMonday = ((int)today.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
         var weekStart = request.WeekStart ?? today.AddDays(-diffToMonday);
@@ -484,17 +489,27 @@ public class GetShiftAndScheduleOverviewQueryHandler : IRequestHandler<GetShiftA
             .GroupBy(h => h.HolidayDate)
             .ToDictionary(g => g.Key, g => g.First().HolidayName);
 
-        var units = await _context.OrganizationUnits
-            .AsNoTracking()
-            .OrderBy(u => u.SortOrder)
-            .Select(u => new Workflows.SimpleLookupDto(u.Id, u.UnitCode, u.UnitName))
-            .ToListAsync(cancellationToken);
-
+        var unitsQuery = _context.OrganizationUnits.AsNoTracking().AsQueryable();
         var empQuery = _context.Employees
             .AsNoTracking()
             .Include(e => e.OrganizationUnit)
             .Include(e => e.Position)
             .Where(e => e.WorkStatus == "Official" || e.WorkStatus == "Probation");
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            unitsQuery = unitsQuery.Where(u => allowedUnitIds.Contains(u.Id));
+            empQuery = empQuery.Where(e =>
+                allowedUnitIds.Contains(e.OrganizationUnitId) ||
+                (selfEmpId.HasValue && e.Id == selfEmpId.Value));
+        }
+
+        var units = await unitsQuery
+            .OrderBy(u => u.SortOrder)
+            .Select(u => new Workflows.SimpleLookupDto(u.Id, u.UnitCode, u.UnitName))
+            .ToListAsync(cancellationToken);
 
         if (request.UnitId.HasValue && request.UnitId.Value > 0)
         {

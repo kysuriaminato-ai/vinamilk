@@ -2,19 +2,22 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Vinamilk.HRM.Application.Common.Interfaces;
+using Vinamilk.HRM.Application.Common.Security;
 
 namespace Vinamilk.HRM.Web.Controllers.Api;
 
 [ApiController]
-[Authorize]
+[Authorize(Policy = "Dashboard.View")]
 [Route("api/v1/system")]
 public class SystemStatusApiController : ControllerBase
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUser;
 
-    public SystemStatusApiController(IApplicationDbContext context)
+    public SystemStatusApiController(IApplicationDbContext context, ICurrentUserService currentUser)
     {
         _context = context;
+        _currentUser = currentUser;
     }
 
     [HttpGet("status")]
@@ -40,6 +43,7 @@ public class SystemStatusApiController : ControllerBase
     }
 
     [HttpGet("search")]
+    [Authorize(Policy = "Employees.View")]
     public async Task<IActionResult> GlobalSearch([FromQuery] string? q, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(q))
@@ -48,12 +52,22 @@ public class SystemStatusApiController : ControllerBase
         }
 
         var term = q.Trim();
+        var scope = await DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
 
-        var employees = await _context.Employees
+        var empQuery = _context.Employees
             .AsNoTracking()
             .Include(e => e.OrganizationUnit)
             .Include(e => e.Position)
-            .Where(e => e.EmployeeCode.Contains(term) || e.FullName.Contains(term) || (e.WorkEmail != null && e.WorkEmail.Contains(term)))
+            .Where(e => e.EmployeeCode.Contains(term) || e.FullName.Contains(term) || (e.WorkEmail != null && e.WorkEmail.Contains(term)));
+
+        if (!scope.IsUnrestricted)
+        {
+            empQuery = empQuery.Where(e =>
+                scope.AllowedUnitIdList.Contains(e.OrganizationUnitId)
+                || (scope.CurrentEmployeeId.HasValue && e.Id == scope.CurrentEmployeeId.Value));
+        }
+
+        var employees = await empQuery
             .OrderBy(e => e.EmployeeCode)
             .Take(8)
             .Select(e => new
@@ -66,9 +80,16 @@ public class SystemStatusApiController : ControllerBase
             })
             .ToListAsync(cancellationToken);
 
-        var units = await _context.OrganizationUnits
+        var unitQuery = _context.OrganizationUnits
             .AsNoTracking()
-            .Where(u => u.UnitCode.Contains(term) || u.UnitName.Contains(term))
+            .Where(u => u.UnitCode.Contains(term) || u.UnitName.Contains(term));
+
+        if (!scope.IsUnrestricted)
+        {
+            unitQuery = unitQuery.Where(u => scope.AllowedUnitIdList.Contains(u.Id));
+        }
+
+        var units = await unitQuery
             .OrderBy(u => u.UnitCode)
             .Take(6)
             .Select(u => new

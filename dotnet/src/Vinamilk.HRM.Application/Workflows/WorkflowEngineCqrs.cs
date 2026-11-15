@@ -534,6 +534,8 @@ public class GetWorkflowCenterQueryHandler : IRequestHandler<GetWorkflowCenterQu
                 s.SlaHours)).ToList()
         )).ToList();
 
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
+
         var instancesQuery = _context.WorkflowInstances
             .AsNoTracking()
             .Include(i => i.WorkflowDefinition)
@@ -544,6 +546,15 @@ public class GetWorkflowCenterQueryHandler : IRequestHandler<GetWorkflowCenterQu
                 .ThenInclude(l => l.ApproverUser)
                     .ThenInclude(u => u.Employee)
             .AsQueryable();
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            instancesQuery = instancesQuery.Where(i =>
+                (i.InitiatorEmployee != null && allowedUnitIds.Contains(i.InitiatorEmployee.OrganizationUnitId)) ||
+                (selfEmpId.HasValue && i.InitiatorEmployeeId == selfEmpId.Value));
+        }
 
         if (!string.IsNullOrWhiteSpace(request.EntityTypeFilter))
             instancesQuery = instancesQuery.Where(i => i.EntityType == request.EntityTypeFilter);

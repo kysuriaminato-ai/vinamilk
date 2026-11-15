@@ -51,5 +51,23 @@ public sealed class CurrentUserService : ICurrentUserService
             return true;
         return user.HasClaim("Permission", permissionCode);
     }
+
+    public IReadOnlyList<string> RoleCodes
+    {
+        get
+        {
+            var user = _httpContextAccessor.HttpContext?.User;
+            if (user is null)
+                return Array.Empty<string>();
+            return user.Claims
+                .Where(c => c.Type == ClaimTypes.Role)
+                .Select(c => c.Value)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+    }
+
+    public string? ScopeLevelClaim =>
+        _httpContextAccessor.HttpContext?.User?.FindFirstValue("DataScope");
 }
 

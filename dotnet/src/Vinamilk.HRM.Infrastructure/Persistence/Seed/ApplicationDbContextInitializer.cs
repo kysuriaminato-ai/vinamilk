@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Vinamilk.HRM.Application.Common.Interfaces;
+using Vinamilk.HRM.Application.Common.Security;
 using Vinamilk.HRM.Application.Payroll;
 using Vinamilk.HRM.Application.TimeAttendance;
 using Vinamilk.HRM.Domain.Entities.Core;
@@ -85,88 +86,48 @@ public sealed class ApplicationDbContextInitializer
 
     private async Task TrySeedAsync(CancellationToken cancellationToken)
     {
-        // 1. Seed Roles & Permissions (6 Roles chuẩn theo yêu cầu)
+        // 1. Seed Roles & Permissions (6 Roles chuẩn theo ma trận tường minh RbacPolicyMatrix)
         if (!await _context.Roles.AnyAsync(cancellationToken))
         {
-            var roles = new List<Role>
-            {
-                new() { RoleCode = "SUPER_ADMIN", RoleName = "SuperAdmin", Description = "Quản trị viên hệ thống tối cao", DefaultDataScope = "All", IsSystemRole = true },
-                new() { RoleCode = "HR_MANAGER", RoleName = "HR Manager", Description = "Giám đốc / Trưởng phòng Nhân sự", DefaultDataScope = "All", IsSystemRole = true },
-                new() { RoleCode = "HR_STAFF", RoleName = "HR Staff", Description = "Chuyên viên Nhân sự (Hồ sơ, Tuyển dụng, C&B)", DefaultDataScope = "All", IsSystemRole = true },
-                new() { RoleCode = "LINE_MANAGER", RoleName = "Line Manager", Description = "Trưởng đơn vị / Quản lý trực tiếp", DefaultDataScope = "UnitTree", IsSystemRole = true },
-                new() { RoleCode = "EMPLOYEE", RoleName = "Employee", Description = "Nhân viên (Cổng thông tin tự phục vụ ESS)", DefaultDataScope = "SelfOnly", IsSystemRole = true },
-                new() { RoleCode = "ACCOUNTANT", RoleName = "Accountant", Description = "Kế toán Tiền lương, BHXH & Thuế TNCN", DefaultDataScope = "All", IsSystemRole = true }
-            };
+            var roles = RbacPolicyMatrix.RoleDefinitions
+                .Select(r => new Role
+                {
+                    RoleCode = r.RoleCode,
+                    RoleName = r.RoleName,
+                    Description = r.Description,
+                    DefaultDataScope = r.DefaultDataScope,
+                    IsSystemRole = true
+                })
+                .ToList();
             await _context.Roles.AddRangeAsync(roles, cancellationToken);
 
-            var modules = new (string Code, string Name, string[] Actions)[]
-            {
-                ("Dashboard", "Bảng điều khiển", new[] { "View" }),
-                ("Employees", "Quản lý Hồ sơ Nhân sự", new[] { "View", "Create", "Edit", "Delete", "Export" }),
-                ("Departments", "Cơ cấu Tổ chức & Đơn vị", new[] { "View", "Create", "Edit", "Delete" }),
-                ("Contracts", "Hợp đồng Lao động", new[] { "View", "Create", "Edit", "Approve", "Export" }),
-                ("Attendance", "Chấm công & Ca làm việc", new[] { "View", "Create", "Edit", "Approve", "Lock", "Export" }),
-                ("Leave", "Nghỉ phép & Quỹ phép", new[] { "View", "Create", "Approve" }),
-                ("Payroll", "Tiền lương 3P, BHXH & Thuế", new[] { "View", "Calculate", "Approve", "Lock", "Unlock", "Export" }),
-                ("Recruitment", "Tuyển dụng (ATS)", new[] { "View", "Create", "Edit", "Approve" }),
-                ("Onboarding", "Onboarding & Tài sản", new[] { "View", "Create", "Edit" }),
-                ("Training", "Đào tạo & Phát triển", new[] { "View", "Create", "Edit" }),
-                ("Kpi", "Đánh giá KPI / OKR", new[] { "View", "Create", "Evaluate", "Approve" }),
-                ("Transfers", "Điều chuyển & Bổ nhiệm", new[] { "View", "Create", "Approve" }),
-                ("Rewards", "Khen thưởng & Kỷ luật", new[] { "View", "Create", "Approve" }),
-                ("Reports", "Báo cáo Thống kê BM01-BM04", new[] { "View", "Export" }),
-                ("Analytics", "Phân tích Nhân sự & AI Expert", new[] { "View" }),
-                ("System", "Quản trị Hệ thống & Phân quyền", new[] { "View", "Manage" })
-            };
-
-            var permissions = new List<Permission>();
-            var sortOrder = 1;
-            foreach (var mod in modules)
-            {
-                foreach (var act in mod.Actions)
+            var permissions = RbacPolicyMatrix.BuildPermissionCatalog()
+                .Select(p => new Permission
                 {
-                    permissions.Add(new Permission
-                    {
-                        PermissionCode = $"{mod.Code}.{act}",
-                        ModuleName = mod.Code,
-                        ActionName = act,
-                        DisplayName = $"{mod.Name} - {act}",
-                        SortOrder = sortOrder++
-                    });
-                }
-            }
+                    PermissionCode = p.PermissionCode,
+                    ModuleName = p.ModuleName,
+                    ActionName = p.ActionName,
+                    DisplayName = p.DisplayName,
+                    SortOrder = p.SortOrder
+                })
+                .ToList();
             await _context.Permissions.AddRangeAsync(permissions, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
 
-            // Gán RolePermissions
+            var permByCode = permissions.ToDictionary(p => p.PermissionCode, StringComparer.OrdinalIgnoreCase);
+            var roleByCode = roles.ToDictionary(r => r.RoleCode, StringComparer.OrdinalIgnoreCase);
+
             var rolePermissions = new List<RolePermission>();
-            var superAdminRole = roles.First(r => r.RoleCode == "SUPER_ADMIN");
-            var hrManagerRole = roles.First(r => r.RoleCode == "HR_MANAGER");
-            var hrStaffRole = roles.First(r => r.RoleCode == "HR_STAFF");
-            var lineManagerRole = roles.First(r => r.RoleCode == "LINE_MANAGER");
-            var accountantRole = roles.First(r => r.RoleCode == "ACCOUNTANT");
-            var employeeRole = roles.First(r => r.RoleCode == "EMPLOYEE");
-
-            foreach (var perm in permissions)
+            foreach (var roleDef in RbacPolicyMatrix.RoleDefinitions)
             {
-                rolePermissions.Add(new RolePermission { RoleId = superAdminRole.Id, PermissionId = perm.Id });
-
-                if (perm.ModuleName != "System" && perm.PermissionCode != "Payroll.Unlock")
-                    rolePermissions.Add(new RolePermission { RoleId = hrManagerRole.Id, PermissionId = perm.Id });
-
-                if (perm.ModuleName is "Dashboard" or "Employees" or "Departments" or "Contracts" or "Attendance" or "Leave" or "Recruitment" or "Onboarding" or "Training"
-                    && perm.ActionName is "View" or "Create" or "Edit" or "Export")
-                    rolePermissions.Add(new RolePermission { RoleId = hrStaffRole.Id, PermissionId = perm.Id });
-
-                if (perm.ActionName == "View" || (perm.ModuleName is "Attendance" or "Leave" or "Kpi" && perm.ActionName is "Approve" or "Evaluate"))
-                    rolePermissions.Add(new RolePermission { RoleId = lineManagerRole.Id, PermissionId = perm.Id });
-
-                if ((perm.ModuleName is "Dashboard" or "Payroll" or "Reports" && perm.PermissionCode != "Payroll.Unlock")
-                    || (perm.ModuleName is "Employees" or "Attendance" && perm.ActionName == "View"))
-                    rolePermissions.Add(new RolePermission { RoleId = accountantRole.Id, PermissionId = perm.Id });
-
-                if (perm.ModuleName is "Dashboard" or "Leave" || (perm.ModuleName is "Employees" or "Attendance" or "Payroll" or "Training" or "Kpi" && perm.ActionName == "View"))
-                    rolePermissions.Add(new RolePermission { RoleId = employeeRole.Id, PermissionId = perm.Id });
+                var role = roleByCode[roleDef.RoleCode];
+                foreach (var code in roleDef.PermissionCodes.Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    if (permByCode.TryGetValue(code, out var perm))
+                    {
+                        rolePermissions.Add(new RolePermission { RoleId = role.Id, PermissionId = perm.Id });
+                    }
+                }
             }
             await _context.RolePermissions.AddRangeAsync(rolePermissions, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
@@ -837,6 +798,161 @@ public sealed class ApplicationDbContextInitializer
 
         // Idempotent cleanup legacy TAX_SELF_DEDUCTION & đồng bộ PAY-2026-08 theo tham số hiệu lực 31/08/2026 (LCS 2,53M / 15,5M / 6,2M / 5 bậc)
         await EnsureSamplePayroll202608RepairedAsync(cancellationToken);
+
+        // Idempotent đồng bộ ma trận RBAC nếu DB còn dấu vết phân quyền cũ (EMPLOYEE/LINE_MANAGER xem Payroll, HR_STAFF thiếu Payroll.Submit...)
+        await EnsureRbacMatrixSynchronizedAsync(forceSync: false, cancellationToken);
+    }
+
+    public async Task EnsureRbacMatrixSynchronizedAsync(bool forceSync = false, CancellationToken cancellationToken = default)
+    {
+        var catalog = RbacPolicyMatrix.BuildPermissionCatalog();
+        var existingPermissions = await _context.Permissions.ToListAsync(cancellationToken);
+        var existingPermCodes = existingPermissions
+            .Select(p => p.PermissionCode)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        bool addedPerm = false;
+        foreach (var def in catalog)
+        {
+            if (!existingPermCodes.Contains(def.PermissionCode))
+            {
+                await _context.Permissions.AddAsync(new Permission
+                {
+                    PermissionCode = def.PermissionCode,
+                    ModuleName = def.ModuleName,
+                    ActionName = def.ActionName,
+                    DisplayName = def.DisplayName,
+                    SortOrder = def.SortOrder
+                }, cancellationToken);
+                addedPerm = true;
+            }
+        }
+
+        if (addedPerm)
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+            existingPermissions = await _context.Permissions.ToListAsync(cancellationToken);
+        }
+
+        var permByCode = existingPermissions.ToDictionary(p => p.PermissionCode, StringComparer.OrdinalIgnoreCase);
+        var roles = await _context.Roles.ToListAsync(cancellationToken);
+        var roleByCode = roles.ToDictionary(r => r.RoleCode, StringComparer.OrdinalIgnoreCase);
+
+        var allRolePerms = await _context.RolePermissions
+            .Include(rp => rp.Permission)
+            .Include(rp => rp.Role)
+            .ToListAsync(cancellationToken);
+
+        bool hasLegacyAnomaly = forceSync;
+        if (!hasLegacyAnomaly)
+        {
+            var permsByRoleCode = allRolePerms
+                .GroupBy(rp => rp.Role.RoleCode, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Select(x => x.Permission.PermissionCode).ToHashSet(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var roleDef in RbacPolicyMatrix.RoleDefinitions)
+            {
+                if (!roleByCode.TryGetValue(roleDef.RoleCode, out var dbRole))
+                {
+                    hasLegacyAnomaly = true;
+                    break;
+                }
+
+                if (!string.Equals(dbRole.DefaultDataScope, roleDef.DefaultDataScope, StringComparison.OrdinalIgnoreCase))
+                {
+                    hasLegacyAnomaly = true;
+                    break;
+                }
+
+                var actualSet = permsByRoleCode.TryGetValue(roleDef.RoleCode, out var s)
+                    ? s
+                    : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var expectedSet = roleDef.PermissionCodes.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                if (!actualSet.SetEquals(expectedSet))
+                {
+                    hasLegacyAnomaly = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasLegacyAnomaly)
+            return;
+
+        int removedCount = 0;
+        int addedCount = 0;
+        var affectedRoles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var roleDef in RbacPolicyMatrix.RoleDefinitions)
+        {
+            if (!roleByCode.TryGetValue(roleDef.RoleCode, out var role))
+            {
+                role = new Role
+                {
+                    RoleCode = roleDef.RoleCode,
+                    RoleName = roleDef.RoleName,
+                    Description = roleDef.Description,
+                    DefaultDataScope = roleDef.DefaultDataScope,
+                    IsSystemRole = true
+                };
+                await _context.Roles.AddAsync(role, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+                roleByCode[role.RoleCode] = role;
+                affectedRoles.Add(role.RoleCode);
+            }
+            else if (!string.Equals(role.DefaultDataScope, roleDef.DefaultDataScope, StringComparison.OrdinalIgnoreCase))
+            {
+                role.DefaultDataScope = roleDef.DefaultDataScope;
+                affectedRoles.Add(role.RoleCode);
+            }
+
+            var expectedCodes = roleDef.PermissionCodes.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var currentForRole = allRolePerms.Where(rp => rp.RoleId == role.Id).ToList();
+
+            foreach (var extra in currentForRole.Where(rp => !expectedCodes.Contains(rp.Permission.PermissionCode)))
+            {
+                _context.RolePermissions.Remove(extra);
+                removedCount++;
+                affectedRoles.Add(role.RoleCode);
+            }
+
+            var currentCodes = currentForRole.Select(rp => rp.Permission.PermissionCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var code in expectedCodes)
+            {
+                if (!currentCodes.Contains(code) && permByCode.TryGetValue(code, out var perm))
+                {
+                    await _context.RolePermissions.AddAsync(new RolePermission
+                    {
+                        RoleId = role.Id,
+                        PermissionId = perm.Id
+                    }, cancellationToken);
+                    addedCount++;
+                    affectedRoles.Add(role.RoleCode);
+                }
+            }
+        }
+
+        if (removedCount > 0 || addedCount > 0 || affectedRoles.Count > 0)
+        {
+            await _context.AuditLogs.AddAsync(new AuditLog
+            {
+                Username = SystemJobAccount.Username,
+                ModuleName = "System",
+                ActionType = "SyncRbacMatrix",
+                EntityName = "RolePermission",
+                EntityId = "RbacPolicyMatrix",
+                NewValuesJson = JsonSerializer.Serialize(new
+                {
+                    RemovedRolePermissions = removedCount,
+                    AddedRolePermissions = addedCount,
+                    RolesUpdated = affectedRoles.OrderBy(r => r).ToArray()
+                }),
+                IpAddress = "127.0.0.1",
+                UserAgent = "ApplicationDbContextInitializer"
+            }, cancellationToken);
+
+            await _context.SaveChangesAsync(cancellationToken);
+        }
     }
 
     public async Task EnsureSamplePayroll202608RepairedAsync(CancellationToken cancellationToken = default)

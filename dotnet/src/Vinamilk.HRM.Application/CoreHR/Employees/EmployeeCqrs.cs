@@ -39,16 +39,22 @@ public sealed class GetEmployeesAdvancedQueryHandler
     : IRequestHandler<GetEmployeesAdvancedQuery, EmployeeListResultDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
 
-    public GetEmployeesAdvancedQueryHandler(IApplicationDbContext context)
+    public GetEmployeesAdvancedQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService? currentUser = null)
     {
         _context = context;
+        _currentUser = currentUser;
     }
 
     public async Task<EmployeeListResultDto> Handle(
         GetEmployeesAdvancedQuery request,
         CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
+
         var query = _context.Employees
             .AsNoTracking()
             .Include(e => e.OrganizationUnit)
@@ -58,6 +64,15 @@ public sealed class GetEmployeesAdvancedQueryHandler
                 .ThenInclude(st => st!.SalaryScale)
             .Include(e => e.Dependents)
             .AsQueryable();
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            query = query.Where(e =>
+                allowedUnitIds.Contains(e.OrganizationUnitId) ||
+                (selfEmpId.HasValue && e.Id == selfEmpId.Value));
+        }
 
         if (!string.IsNullOrWhiteSpace(request.Keyword))
         {
@@ -136,8 +151,17 @@ public sealed class GetEmployeesAdvancedQueryHandler
             .Take(size)
             .ToListAsync(cancellationToken);
 
-        var units = await _context.OrganizationUnits
+        var unitsQuery = _context.OrganizationUnits
             .AsNoTracking()
+            .AsQueryable();
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            unitsQuery = unitsQuery.Where(u => allowedUnitIds.Contains(u.Id));
+        }
+
+        var units = await unitsQuery
             .OrderBy(u => u.UnitLevel)
             .ThenBy(u => u.SortOrder)
             .ToListAsync(cancellationToken);
@@ -186,13 +210,16 @@ public sealed class GetEmployee360ProfileQueryHandler
 {
     private readonly IApplicationDbContext _context;
     private readonly IPiiEncryptionService _encryptionService;
+    private readonly ICurrentUserService? _currentUser;
 
     public GetEmployee360ProfileQueryHandler(
         IApplicationDbContext context,
-        IPiiEncryptionService encryptionService)
+        IPiiEncryptionService encryptionService,
+        ICurrentUserService? currentUser = null)
     {
         _context = context;
         _encryptionService = encryptionService;
+        _currentUser = currentUser;
     }
 
     public async Task<Employee360ProfileDto?> Handle(
@@ -224,6 +251,9 @@ public sealed class GetEmployee360ProfileQueryHandler
 
         if (emp is null)
             return null;
+
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
+        scope.EnsureCanAccessEmployee(emp.Id, emp.OrganizationUnitId);
 
         var trainings = await _context.TrainingEnrollments
             .AsNoTracking()

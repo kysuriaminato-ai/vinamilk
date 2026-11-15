@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -8,7 +8,7 @@ using Vinamilk.HRM.Application.CoreHR.ContractsAndTransfers;
 namespace Vinamilk.HRM.Web.Controllers;
 
 [Route("Transfers")]
-[Authorize]
+[Authorize(Policy = "Transfers.View")]
 public class TransfersController : Controller
 {
     private readonly ISender _sender;
@@ -65,6 +65,7 @@ public class TransfersController : Controller
     }
 
     [HttpPost("ApproveTransfer")]
+    [Authorize(Policy = "Transfers.Approve")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ApproveTransfer(
         int transferId,

@@ -5,7 +5,7 @@ using Vinamilk.HRM.Application.TimeAttendance;
 
 namespace Vinamilk.HRM.Web.Controllers;
 
-[Authorize]
+[Authorize(Policy = "Attendance.View")]
 public class ShiftsController : Controller
 {
     private readonly ISender _sender;
@@ -88,6 +88,7 @@ public class ShiftsController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Attendance.Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> BulkAssignSchedule(
         int? employeeId,
@@ -144,6 +145,7 @@ public class ShiftsController : Controller
         string? Notes = null);
 
     [HttpPost]
+    [Authorize(Policy = "Attendance.Edit")]
     public async Task<IActionResult> AssignCellAjax(
         [FromBody] DragDropAssignRequest req,
         CancellationToken cancellationToken = default)
@@ -208,6 +210,7 @@ public class ShiftsController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Attendance.Edit")]
     public async Task<IActionResult> BulkAssignCellsAjax(
         [FromBody] BulkAssignCellsAjaxRequest req,
         CancellationToken cancellationToken = default)
@@ -250,6 +253,7 @@ public class ShiftsController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Attendance.Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CopyPreviousWeek(
         DateOnly targetWeekStart,
@@ -355,6 +359,7 @@ public class ShiftsController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Attendance.Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> GenerateRotation(
         int patternId,
@@ -406,6 +411,7 @@ public class ShiftsController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Attendance.Approve")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ProcessSwap(
         int requestId,

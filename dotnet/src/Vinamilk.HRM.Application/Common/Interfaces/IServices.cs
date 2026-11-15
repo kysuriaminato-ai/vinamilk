@@ -21,6 +21,8 @@ public interface ICurrentUserService
     string? UserAgent { get; }
     bool IsAuthenticated { get; }
     bool HasPermission(string permissionCode);
+    IReadOnlyList<string> RoleCodes => Array.Empty<string>();
+    string? ScopeLevelClaim => null;
 }
 
 public static class CurrentUserServiceExtensions

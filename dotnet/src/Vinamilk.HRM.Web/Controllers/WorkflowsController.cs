@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Vinamilk.HRM.Application.Common.Interfaces;
@@ -6,7 +6,7 @@ using Vinamilk.HRM.Application.Workflows;
 
 namespace Vinamilk.HRM.Web.Controllers;
 
-[Authorize]
+[Authorize(Policy = "Leave.View")]
 public class WorkflowsController : Controller
 {
     private readonly ISender _sender;
@@ -64,6 +64,7 @@ public class WorkflowsController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "System.Manage")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveDefinition(
         int? id,

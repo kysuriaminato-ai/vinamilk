@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +9,7 @@ using Vinamilk.HRM.Infrastructure.Services;
 namespace Vinamilk.HRM.Web.Controllers;
 
 [Route("Contracts")]
-[Authorize]
+[Authorize(Policy = "Contracts.View")]
 public class ContractsController : Controller
 {
     private readonly ISender _sender;
@@ -41,6 +41,7 @@ public class ContractsController : Controller
     }
 
     [HttpPost("CreateAddendum")]
+    [Authorize(Policy = "Contracts.Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateAddendum(
         int laborContractId,

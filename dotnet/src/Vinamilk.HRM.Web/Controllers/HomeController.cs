@@ -13,11 +13,13 @@ public class HomeController : Controller
 {
     private readonly IMediator _mediator;
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUser;
 
-    public HomeController(IMediator mediator, IApplicationDbContext context)
+    public HomeController(IMediator mediator, IApplicationDbContext context, ICurrentUserService currentUser)
     {
         _mediator = mediator;
         _context = context;
+        _currentUser = currentUser;
     }
 
     public async Task<IActionResult> Index(
@@ -32,9 +34,18 @@ public class HomeController : Controller
             new GetRoleDashboardOverviewQuery(roleView, year, month, unitId, refresh),
             cancellationToken);
 
-        ViewBag.Units = await _context.OrganizationUnits
+        var scope = await Application.Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
+        var unitsQuery = _context.OrganizationUnits
             .AsNoTracking()
-            .Where(u => u.IsActive)
+            .Where(u => u.IsActive);
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            unitsQuery = unitsQuery.Where(u => allowedUnitIds.Contains(u.Id));
+        }
+
+        ViewBag.Units = await unitsQuery
             .OrderBy(u => u.UnitLevel)
             .ThenBy(u => u.UnitName)
             .Select(u => new { u.Id, u.UnitName })

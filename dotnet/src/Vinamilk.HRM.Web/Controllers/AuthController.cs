@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Vinamilk.HRM.Application.Common.Interfaces;
+using Vinamilk.HRM.Application.Common.Security;
 using Vinamilk.HRM.Domain.Entities.Identity;
 using Vinamilk.HRM.Domain.Entities.SystemEntities;
 using Vinamilk.HRM.Infrastructure.Security;
@@ -221,7 +222,13 @@ public class AuthController : Controller
         if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
             return Redirect(returnUrl);
 
-        return RedirectToAction("Index", "Home");
+        var hasDashboardView = user.UserRoles.Any(ur =>
+            string.Equals(ur.Role.RoleCode, "SUPER_ADMIN", StringComparison.OrdinalIgnoreCase) ||
+            ur.Role.RolePermissions.Any(rp => string.Equals(rp.Permission.PermissionCode, "Dashboard.View", StringComparison.OrdinalIgnoreCase)));
+
+        return hasDashboardView
+            ? RedirectToAction("Index", "Home")
+            : Redirect("/ESS");
     }
 
     [HttpGet("Logout")]
@@ -481,7 +488,10 @@ public class AuthController : Controller
             cancellationToken);
 
         TempData["AuthSuccess"] = "Đã cập nhật mật khẩu mới thành công!";
-        return RedirectToAction("Index", "Home");
+        var canDashboard = user.UserRoles.Any(ur =>
+            string.Equals(ur.Role.RoleCode, "SUPER_ADMIN", StringComparison.OrdinalIgnoreCase) ||
+            ur.Role.RolePermissions.Any(rp => string.Equals(rp.Permission.PermissionCode, "Dashboard.View", StringComparison.OrdinalIgnoreCase)));
+        return canDashboard ? RedirectToAction("Index", "Home") : Redirect("/ESS");
     }
 
     [HttpGet("Setup2FA")]
@@ -564,9 +574,7 @@ public class AuthController : Controller
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var primaryScope = roles
-            .Select(r => r.DefaultDataScope)
-            .FirstOrDefault() ?? "SelfOnly";
+        var primaryScope = DataScopeResolver.PickHighestScope(roles.Select(r => r.DefaultDataScope));
 
         var claims = new List<Claim>
         {

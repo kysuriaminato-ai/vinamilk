@@ -757,14 +757,19 @@ public record GetMonthlyAttendanceBoardQuery(
 public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyAttendanceBoardQuery, MonthlyAttendanceBoardDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
 
-    public GetMonthlyAttendanceBoardQueryHandler(IApplicationDbContext context)
+    public GetMonthlyAttendanceBoardQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService? currentUser = null)
     {
         _context = context;
+        _currentUser = currentUser;
     }
 
     public async Task<MonthlyAttendanceBoardDto> Handle(GetMonthlyAttendanceBoardQuery request, CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
         int month = request.Month ?? DateTime.Today.Month;
         int year = request.Year ?? DateTime.Today.Year;
         int daysInMonth = DateTime.DaysInMonth(year, month);
@@ -773,18 +778,10 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
 
         await AttendanceBoardSeeder.EnsureMonthAttendanceSeededAsync(_context, month, year, cancellationToken);
 
-        var units = await _context.OrganizationUnits
+        var unitsQuery = _context.OrganizationUnits.AsNoTracking().AsQueryable();
+        var activeEmpsQuery = _context.Employees
             .AsNoTracking()
-            .OrderBy(u => u.SortOrder)
-            .Select(u => new SimpleLookupDto(u.Id, u.UnitCode, u.UnitName))
-            .ToListAsync(cancellationToken);
-
-        var activeEmps = await _context.Employees
-            .AsNoTracking()
-            .Where(e => e.WorkStatus == "Official" || e.WorkStatus == "Probation")
-            .OrderBy(e => e.EmployeeCode)
-            .Select(e => new SimpleLookupDto(e.Id, e.EmployeeCode, $"{e.EmployeeCode} - {e.FullName}"))
-            .ToListAsync(cancellationToken);
+            .Where(e => e.WorkStatus == "Official" || e.WorkStatus == "Probation");
 
         var summariesQuery = _context.MonthlyAttendanceSummaries
             .AsNoTracking()
@@ -793,6 +790,29 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
             .Include(m => m.Employee)
                 .ThenInclude(e => e.Position)
             .Where(m => m.Month == month && m.Year == year);
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            unitsQuery = unitsQuery.Where(u => allowedUnitIds.Contains(u.Id));
+            activeEmpsQuery = activeEmpsQuery.Where(e =>
+                allowedUnitIds.Contains(e.OrganizationUnitId) ||
+                (selfEmpId.HasValue && e.Id == selfEmpId.Value));
+            summariesQuery = summariesQuery.Where(m =>
+                allowedUnitIds.Contains(m.Employee.OrganizationUnitId) ||
+                (selfEmpId.HasValue && m.EmployeeId == selfEmpId.Value));
+        }
+
+        var units = await unitsQuery
+            .OrderBy(u => u.SortOrder)
+            .Select(u => new SimpleLookupDto(u.Id, u.UnitCode, u.UnitName))
+            .ToListAsync(cancellationToken);
+
+        var activeEmps = await activeEmpsQuery
+            .OrderBy(e => e.EmployeeCode)
+            .Select(e => new SimpleLookupDto(e.Id, e.EmployeeCode, $"{e.EmployeeCode} - {e.FullName}"))
+            .ToListAsync(cancellationToken);
 
         if (request.UnitId.HasValue && request.UnitId.Value > 0)
         {

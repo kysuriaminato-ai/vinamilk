@@ -5,7 +5,7 @@ using Vinamilk.HRM.Application.TimeAttendance;
 
 namespace Vinamilk.HRM.Web.Controllers;
 
-[Authorize]
+[Authorize(Policy = "Leave.View")]
 public class LeavesController : Controller
 {
     private readonly ISender _sender;
@@ -27,6 +27,7 @@ public class LeavesController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Leave.Create")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SubmitLeaveRequest(
         int employeeId,
@@ -68,6 +69,7 @@ public class LeavesController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Leave.Approve")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RecalculateEntitlement(
         int year,
@@ -88,6 +90,7 @@ public class LeavesController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Leave.Approve")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveLeaveType(
         int? id,

@@ -6,7 +6,7 @@ using Vinamilk.HRM.Application.CoreHR.Organization;
 namespace Vinamilk.HRM.Web.Controllers;
 
 [Route("Organization")]
-[Authorize]
+[Authorize(Policy = "Departments.View")]
 public class OrganizationController : Controller
 {
     private readonly ISender _sender;
@@ -28,6 +28,7 @@ public class OrganizationController : Controller
     }
 
     [HttpPost("SaveUnit")]
+    [Authorize(Policy = "Departments.Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveUnit(
         int? id,
@@ -68,6 +69,7 @@ public class OrganizationController : Controller
     }
 
     [HttpPost("DeleteUnit")]
+    [Authorize(Policy = "Departments.Delete")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteUnit(int id, CancellationToken cancellationToken = default)
     {
@@ -84,6 +86,7 @@ public class OrganizationController : Controller
     }
 
     [HttpPost("ReorderUnits")]
+    [Authorize(Policy = "Departments.Edit")]
     public async Task<IActionResult> ReorderUnits([FromBody] List<int> orderedUnitIds, CancellationToken cancellationToken)
     {
         await _sender.Send(new ReorderOrganizationUnitsCommand(orderedUnitIds), cancellationToken);
@@ -91,6 +94,7 @@ public class OrganizationController : Controller
     }
 
     [HttpPost("SavePosition")]
+    [Authorize(Policy = "Departments.Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SavePosition(
         int? id,

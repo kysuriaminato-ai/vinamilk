@@ -14,15 +14,18 @@ public class ReportsController : Controller
     private readonly IMediator _mediator;
     private readonly IApplicationDbContext _context;
     private readonly AnalyticsReportExcelService _excelService;
+    private readonly ICurrentUserService _currentUser;
 
     public ReportsController(
         IMediator mediator,
         IApplicationDbContext context,
-        AnalyticsReportExcelService excelService)
+        AnalyticsReportExcelService excelService,
+        ICurrentUserService currentUser)
     {
         _mediator = mediator;
         _context = context;
         _excelService = excelService;
+        _currentUser = currentUser;
     }
 
     public async Task<IActionResult> Index(
@@ -51,9 +54,18 @@ public class ReportsController : Controller
             : new List<string> { "EmployeeCode", "FullName", "UnitName", "PositionName", "WorkStatus", "BaseSalary" };
         ViewBag.AllColumns = DynamicReportCatalog.AllColumns;
 
-        ViewBag.Units = await _context.OrganizationUnits
+        var scope = await Application.Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
+        var unitsQuery = _context.OrganizationUnits
             .AsNoTracking()
-            .Where(u => u.IsActive)
+            .Where(u => u.IsActive);
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            unitsQuery = unitsQuery.Where(u => allowedUnitIds.Contains(u.Id));
+        }
+
+        ViewBag.Units = await unitsQuery
             .OrderBy(u => u.UnitName)
             .Select(u => new { u.Id, u.UnitName })
             .ToListAsync(cancellationToken);

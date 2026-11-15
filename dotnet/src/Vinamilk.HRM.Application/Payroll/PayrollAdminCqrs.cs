@@ -140,13 +140,21 @@ public sealed class GetPayrollManagementOverviewQueryHandler
     : IRequestHandler<GetPayrollManagementOverviewQuery, PayrollManagementOverviewDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
 
-    public GetPayrollManagementOverviewQueryHandler(IApplicationDbContext context) => _context = context;
+    public GetPayrollManagementOverviewQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService? currentUser = null)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
 
     public async Task<PayrollManagementOverviewDto> Handle(
         GetPayrollManagementOverviewQuery request,
         CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
         var periodsRaw = await _context.PayrollPeriods
             .AsNoTracking()
             .Include(p => p.PayrollRecords)
@@ -197,11 +205,22 @@ public sealed class GetPayrollManagementOverviewQueryHandler
 
         if (selectedPeriod is not null)
         {
-            var rawRecs = await _context.PayrollRecords
+            var rawRecsQuery = _context.PayrollRecords
                 .AsNoTracking()
                 .Include(r => r.Employee)
                 .Include(r => r.OrganizationUnit)
-                .Where(r => r.PayrollPeriodId == selectedPeriod.Id)
+                .Where(r => r.PayrollPeriodId == selectedPeriod.Id);
+
+            if (!scope.IsUnrestricted)
+            {
+                var allowedUnitIds = scope.AllowedUnitIdList;
+                var selfEmpId = scope.CurrentEmployeeId;
+                rawRecsQuery = rawRecsQuery.Where(r =>
+                    allowedUnitIds.Contains(r.OrganizationUnitId) ||
+                    (selfEmpId.HasValue && r.EmployeeId == selfEmpId.Value));
+            }
+
+            var rawRecs = await rawRecsQuery
                 .OrderBy(r => r.Employee.EmployeeCode)
                 .ToListAsync(cancellationToken);
 

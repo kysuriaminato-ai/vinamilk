@@ -65,37 +65,54 @@ public class GetRoleDashboardOverviewQueryHandler : IRequestHandler<GetRoleDashb
 {
     private readonly IApplicationDbContext _context;
     private readonly IMemoryCache _cache;
+    private readonly ICurrentUserService? _currentUser;
 
     public GetRoleDashboardOverviewQueryHandler(
         IApplicationDbContext context,
-        IMemoryCache cache)
+        IMemoryCache cache,
+        ICurrentUserService? currentUser = null)
     {
         _context = context;
         _cache = cache;
+        _currentUser = currentUser;
     }
 
     public async Task<RoleDashboardOverviewDto> Handle(GetRoleDashboardOverviewQuery request, CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
+        bool canViewPayroll = _currentUser is null || !_currentUser.IsAuthenticated || _currentUser.HasPermission("Payroll.View");
+
         int year = request.Year ?? DateTime.Today.Year;
         int month = request.Month ?? DateTime.Today.Month;
         string roleView = string.IsNullOrWhiteSpace(request.RoleView) ? "Executive" : request.RoleView;
-        string cacheKey = $"VNM_DASH_{roleView}_{year}_{month}_{request.UnitId ?? 0}";
+        string cacheKey = $"VNM_DASH_{roleView}_{year}_{month}_{request.UnitId ?? 0}_{scope.CachePartitionKey}_{(canViewPayroll ? "P1" : "P0")}";
 
         if (!request.BypassCache && _cache.TryGetValue(cacheKey, out RoleDashboardOverviewDto? cached) && cached != null)
         {
             return cached with { IsFromCache = true };
         }
 
-        var units = await _context.OrganizationUnits.AsNoTracking()
-            .OrderBy(u => u.SortOrder)
-            .Select(u => new SimpleLookupDto(u.Id, u.UnitCode, u.UnitName))
-            .ToListAsync(cancellationToken);
-
+        var unitsQuery = _context.OrganizationUnits.AsNoTracking().AsQueryable();
         var empQuery = _context.Employees.AsNoTracking()
             .Include(e => e.OrganizationUnit)
             .Include(e => e.Position)
             .Include(e => e.EducationLevel)
             .AsQueryable();
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            unitsQuery = unitsQuery.Where(u => allowedUnitIds.Contains(u.Id));
+            empQuery = empQuery.Where(e =>
+                allowedUnitIds.Contains(e.OrganizationUnitId) ||
+                (selfEmpId.HasValue && e.Id == selfEmpId.Value));
+        }
+
+        var units = await unitsQuery
+            .OrderBy(u => u.SortOrder)
+            .Select(u => new SimpleLookupDto(u.Id, u.UnitCode, u.UnitName))
+            .ToListAsync(cancellationToken);
 
         if (request.UnitId.HasValue && request.UnitId.Value > 0)
         {
@@ -146,53 +163,66 @@ public class GetRoleDashboardOverviewQueryHandler : IRequestHandler<GetRoleDashb
             .OrderByDescending(x => x.Value)
             .ToList();
 
-        // Chi phí nhân sự từ bảng lương hoặc ước tính theo động cơ tính lương VietnamPayrollEngine tại kỳ đang xem
-        var payrollRecords = await _context.PayrollRecords.AsNoTracking().ToListAsync(cancellationToken);
-        decimal totalGross;
-        decimal totalNet;
-        decimal totalCompanySi;
+        // Chi phí nhân sự từ bảng lương hoặc ước tính (chỉ hiển thị cho role có quyền Payroll.View)
+        decimal totalGross = 0m;
+        decimal totalNet = 0m;
+        decimal totalCompanySi = 0m;
 
-        if (payrollRecords.Count > 0)
+        if (canViewPayroll)
         {
-            totalGross = payrollRecords.Sum(p => p.GrossIncome);
-            totalNet = payrollRecords.Sum(p => p.NetSalary);
-            totalCompanySi = payrollRecords.Sum(p => p.CompanySocialInsurance + p.CompanyHealthInsurance + p.CompanyUnemploymentInsurance + p.CompanyUnionFee);
-        }
-        else
-        {
-            totalGross = activeEmployees.Sum(e => e.BaseSalary + e.PositionAllowance + e.OtherAllowance);
-            var periodEndDate = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
-            var statutoryContext = await VietnamPayrollEngine.TryResolveStatutoryContextAsync(_context, periodEndDate, cancellationToken);
-            if (statutoryContext is not null)
+            var payrollQuery = _context.PayrollRecords.AsNoTracking().AsQueryable();
+            if (!scope.IsUnrestricted)
             {
-                decimal estNet = 0m;
-                decimal estCompSi = 0m;
-                foreach (var emp in activeEmployees)
-                {
-                    var b = VietnamPayrollEngine.Calculate(new PayrollCalculationInput(
-                        emp.BaseSalary,
-                        emp.PositionAllowance,
-                        emp.OtherAllowance,
-                        26m,
-                        26m,
-                        0m,
-                        0m,
-                        0m,
-                        0m,
-                        0m,
-                        0,
-                        emp.IsUnionMember,
-                        emp.WageRegion ?? emp.OrganizationUnit?.WageRegion ?? 1), statutoryContext);
-                    estNet += b.NetSalary;
-                    estCompSi += b.CompanySocialInsurance + b.CompanyHealthInsurance + b.CompanyUnemploymentInsurance + b.CompanyUnionFee;
-                }
-                totalNet = estNet;
-                totalCompanySi = estCompSi;
+                var allowedUnitIds = scope.AllowedUnitIdList;
+                var selfEmpId = scope.CurrentEmployeeId;
+                payrollQuery = payrollQuery.Where(p =>
+                    allowedUnitIds.Contains(p.OrganizationUnitId) ||
+                    (selfEmpId.HasValue && p.EmployeeId == selfEmpId.Value));
+            }
+
+            var payrollRecords = await payrollQuery.ToListAsync(cancellationToken);
+            if (payrollRecords.Count > 0)
+            {
+                totalGross = payrollRecords.Sum(p => p.GrossIncome);
+                totalNet = payrollRecords.Sum(p => p.NetSalary);
+                totalCompanySi = payrollRecords.Sum(p => p.CompanySocialInsurance + p.CompanyHealthInsurance + p.CompanyUnemploymentInsurance + p.CompanyUnionFee);
             }
             else
             {
-                totalNet = totalGross;
-                totalCompanySi = 0m;
+                totalGross = activeEmployees.Sum(e => e.BaseSalary + e.PositionAllowance + e.OtherAllowance);
+                var periodEndDate = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
+                var statutoryContext = await VietnamPayrollEngine.TryResolveStatutoryContextAsync(_context, periodEndDate, cancellationToken);
+                if (statutoryContext is not null)
+                {
+                    decimal estNet = 0m;
+                    decimal estCompSi = 0m;
+                    foreach (var emp in activeEmployees)
+                    {
+                        var b = VietnamPayrollEngine.Calculate(new PayrollCalculationInput(
+                            emp.BaseSalary,
+                            emp.PositionAllowance,
+                            emp.OtherAllowance,
+                            26m,
+                            26m,
+                            0m,
+                            0m,
+                            0m,
+                            0m,
+                            0m,
+                            0,
+                            emp.IsUnionMember,
+                            emp.WageRegion ?? emp.OrganizationUnit?.WageRegion ?? 1), statutoryContext);
+                        estNet += b.NetSalary;
+                        estCompSi += b.CompanySocialInsurance + b.CompanyHealthInsurance + b.CompanyUnemploymentInsurance + b.CompanyUnionFee;
+                    }
+                    totalNet = estNet;
+                    totalCompanySi = estCompSi;
+                }
+                else
+                {
+                    totalNet = totalGross;
+                    totalCompanySi = 0m;
+                }
             }
         }
 
@@ -204,9 +234,20 @@ public class GetRoleDashboardOverviewQueryHandler : IRequestHandler<GetRoleDashb
         }).ToList();
 
         // Hợp đồng sắp hết hạn trong 30-45 ngày
-        var contracts = await _context.LaborContracts.AsNoTracking()
+        var contractsQuery = _context.LaborContracts.AsNoTracking()
             .Include(c => c.Employee).ThenInclude(e => e.OrganizationUnit)
-            .Where(c => c.Status == "Active" && c.EndDate != null)
+            .Where(c => c.Status == "Active" && c.EndDate != null);
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            contractsQuery = contractsQuery.Where(c =>
+                allowedUnitIds.Contains(c.Employee.OrganizationUnitId) ||
+                (selfEmpId.HasValue && c.EmployeeId == selfEmpId.Value));
+        }
+
+        var contracts = await contractsQuery
             .OrderBy(c => c.EndDate)
             .Take(10)
             .ToListAsync(cancellationToken);

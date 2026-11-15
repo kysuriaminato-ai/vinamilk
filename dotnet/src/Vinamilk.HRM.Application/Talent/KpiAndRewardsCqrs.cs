@@ -224,18 +224,34 @@ public record GetKpiOverviewQuery(int? CycleId = null) : IRequest<KpiOverviewDto
 public class GetKpiOverviewQueryHandler : IRequestHandler<GetKpiOverviewQuery, KpiOverviewDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
 
-    public GetKpiOverviewQueryHandler(IApplicationDbContext context)
+    public GetKpiOverviewQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService? currentUser = null)
     {
         _context = context;
+        _currentUser = currentUser;
     }
 
     public async Task<KpiOverviewDto> Handle(GetKpiOverviewQuery request, CancellationToken cancellationToken)
     {
         await KpiSeeder.EnsureSeededAsync(_context, cancellationToken);
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
 
-        var activeEmployees = await _context.Employees.AsNoTracking()
-            .Where(e => e.WorkStatus == "Official" || e.WorkStatus == "Probation")
+        var activeEmployeesQuery = _context.Employees.AsNoTracking()
+            .Where(e => e.WorkStatus == "Official" || e.WorkStatus == "Probation");
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            activeEmployeesQuery = activeEmployeesQuery.Where(e =>
+                allowedUnitIds.Contains(e.OrganizationUnitId) ||
+                (selfEmpId.HasValue && e.Id == selfEmpId.Value));
+        }
+
+        var activeEmployees = await activeEmployeesQuery
             .OrderBy(e => e.EmployeeCode)
             .Select(e => new SimpleLookupDto(e.Id, e.EmployeeCode, $"{e.EmployeeCode} - {e.FullName}"))
             .ToListAsync(cancellationToken);
@@ -262,12 +278,23 @@ public class GetKpiOverviewQueryHandler : IRequestHandler<GetKpiOverviewQuery, K
 
         int selectedCycleId = request.CycleId ?? cycles.First().Id;
 
-        var evalsRaw = await _context.EmployeeKpiEvaluations.AsNoTracking()
+        var evalsQuery = _context.EmployeeKpiEvaluations.AsNoTracking()
             .Include(e => e.EvaluationCycle)
             .Include(e => e.Employee).ThenInclude(emp => emp.OrganizationUnit)
             .Include(e => e.Employee).ThenInclude(emp => emp.Position)
             .Include(e => e.Items)
-            .Where(e => e.EvaluationCycleId == selectedCycleId)
+            .Where(e => e.EvaluationCycleId == selectedCycleId);
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            evalsQuery = evalsQuery.Where(e =>
+                allowedUnitIds.Contains(e.Employee.OrganizationUnitId) ||
+                (selfEmpId.HasValue && e.EmployeeId == selfEmpId.Value));
+        }
+
+        var evalsRaw = await evalsQuery
             .OrderByDescending(e => e.FinalScore)
             .ToListAsync(cancellationToken);
 
@@ -479,18 +506,43 @@ public record GetRewardsAndBm03OverviewQuery(int? Year = null) : IRequest<Reward
 public class GetRewardsAndBm03OverviewQueryHandler : IRequestHandler<GetRewardsAndBm03OverviewQuery, RewardsAndBm03OverviewDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
 
-    public GetRewardsAndBm03OverviewQueryHandler(IApplicationDbContext context)
+    public GetRewardsAndBm03OverviewQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService? currentUser = null)
     {
         _context = context;
+        _currentUser = currentUser;
     }
 
     public async Task<RewardsAndBm03OverviewDto> Handle(GetRewardsAndBm03OverviewQuery request, CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
         int year = request.Year ?? DateTime.Today.Year;
 
-        var activeEmployees = await _context.Employees.AsNoTracking()
-            .Where(e => e.WorkStatus == "Official" || e.WorkStatus == "Probation")
+        var activeEmployeesQuery = _context.Employees.AsNoTracking()
+            .Where(e => e.WorkStatus == "Official" || e.WorkStatus == "Probation");
+
+        var itemsQuery = _context.RewardDisciplines.AsNoTracking()
+            .Include(r => r.Category)
+            .Include(r => r.Employee).ThenInclude(e => e.OrganizationUnit)
+            .Include(r => r.Employee).ThenInclude(e => e.Position)
+            .AsQueryable();
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            activeEmployeesQuery = activeEmployeesQuery.Where(e =>
+                allowedUnitIds.Contains(e.OrganizationUnitId) ||
+                (selfEmpId.HasValue && e.Id == selfEmpId.Value));
+            itemsQuery = itemsQuery.Where(r =>
+                allowedUnitIds.Contains(r.Employee.OrganizationUnitId) ||
+                (selfEmpId.HasValue && r.EmployeeId == selfEmpId.Value));
+        }
+
+        var activeEmployees = await activeEmployeesQuery
             .OrderBy(e => e.EmployeeCode)
             .Select(e => new SimpleLookupDto(e.Id, e.EmployeeCode, $"{e.EmployeeCode} - {e.FullName}"))
             .ToListAsync(cancellationToken);
@@ -500,10 +552,7 @@ public class GetRewardsAndBm03OverviewQueryHandler : IRequestHandler<GetRewardsA
             .Select(c => new RewardDisciplineCategoryDto(c.Id, c.CategoryCode, c.CategoryName, c.CategoryType, c.DefaultAmount))
             .ToListAsync(cancellationToken);
 
-        var itemsRaw = await _context.RewardDisciplines.AsNoTracking()
-            .Include(r => r.Category)
-            .Include(r => r.Employee).ThenInclude(e => e.OrganizationUnit)
-            .Include(r => r.Employee).ThenInclude(e => e.Position)
+        var itemsRaw = await itemsQuery
             .OrderByDescending(r => r.DecisionDate)
             .ToListAsync(cancellationToken);
 

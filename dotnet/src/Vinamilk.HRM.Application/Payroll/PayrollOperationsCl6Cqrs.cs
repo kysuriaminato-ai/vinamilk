@@ -342,8 +342,15 @@ public static class PayrollTraceHelper
 public sealed class GetPayrollRecordTraceQueryHandler : IRequestHandler<GetPayrollRecordTraceQuery, PayrollRecordTraceDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
 
-    public GetPayrollRecordTraceQueryHandler(IApplicationDbContext context) => _context = context;
+    public GetPayrollRecordTraceQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService? currentUser = null)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
 
     public async Task<PayrollRecordTraceDto> Handle(GetPayrollRecordTraceQuery request, CancellationToken cancellationToken)
     {
@@ -354,6 +361,9 @@ public sealed class GetPayrollRecordTraceQueryHandler : IRequestHandler<GetPayro
             .Include(r => r.OrganizationUnit)
             .FirstOrDefaultAsync(r => r.Id == request.PayrollRecordId, cancellationToken)
             ?? throw new KeyNotFoundException($"Không tìm thấy bảng lương chi tiết #{request.PayrollRecordId}.");
+
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
+        scope.EnsureCanAccessEmployee(rec.EmployeeId, rec.OrganizationUnitId);
 
         var wageRegion = rec.Employee.WageRegion ?? rec.OrganizationUnit.WageRegion;
         var (steps, brackets, isRecomputed, notice) = await PayrollTraceHelper.ResolveOrRecomputeAsync(

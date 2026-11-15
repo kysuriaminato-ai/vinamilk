@@ -134,6 +134,8 @@ public class GetEssMssPortalQueryHandler : IRequestHandler<GetEssMssPortalQuery,
 
     public async Task<EssMssPortalDto> Handle(GetEssMssPortalQuery request, CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUserService, cancellationToken);
+
         var employeeQuery = _context.Employees
             .AsNoTracking()
             .Include(e => e.OrganizationUnit)
@@ -141,14 +143,53 @@ public class GetEssMssPortalQueryHandler : IRequestHandler<GetEssMssPortalQuery,
             .Include(e => e.DirectManager)
             .AsQueryable();
 
-        var targetEmp = request.EmployeeId.HasValue && request.EmployeeId > 0
-            ? await employeeQuery.FirstOrDefaultAsync(e => e.Id == request.EmployeeId.Value, cancellationToken)
-            : null;
-
-        if (targetEmp is null && _currentUserService.UserId.HasValue)
+        Domain.Entities.Core.Employee? ownEmp = null;
+        if (scope.CurrentEmployeeId.HasValue && scope.CurrentEmployeeId.Value > 0)
         {
-            targetEmp = await employeeQuery.FirstOrDefaultAsync(
+            ownEmp = await employeeQuery.FirstOrDefaultAsync(e => e.Id == scope.CurrentEmployeeId.Value, cancellationToken);
+        }
+        else if (_currentUserService.UserId.HasValue)
+        {
+            ownEmp = await employeeQuery.FirstOrDefaultAsync(
                 e => e.UserAccount != null && e.UserAccount.Id == _currentUserService.UserId.Value, cancellationToken);
+        }
+
+        Domain.Entities.Core.Employee? targetEmp = null;
+        if (request.EmployeeId.HasValue && request.EmployeeId > 0)
+        {
+            var requestedEmp = await employeeQuery.FirstOrDefaultAsync(e => e.Id == request.EmployeeId.Value, cancellationToken);
+            if (_currentUserService.IsAuthenticated)
+            {
+                bool isSelf = ownEmp is not null && ownEmp.Id == request.EmployeeId.Value;
+                if (!isSelf)
+                {
+                    bool canViewOthers = _currentUserService.HasPermission("Employees.View")
+                        || _currentUserService.HasPermission("Payroll.View");
+                    if (!canViewOthers)
+                    {
+                        throw new UnauthorizedAccessException("Bạn chỉ được phép xem hồ sơ và phiếu lương ESS của chính mình.");
+                    }
+
+                    if (requestedEmp is null)
+                    {
+                        if (!scope.IsUnrestricted)
+                            throw new UnauthorizedAccessException("Bạn không có quyền truy cập hồ sơ nhân sự ngoài phạm vi quản lý.");
+                    }
+                    else
+                    {
+                        scope.EnsureCanAccessEmployee(requestedEmp.Id, requestedEmp.OrganizationUnitId);
+                    }
+                }
+            }
+
+            targetEmp = requestedEmp;
+        }
+
+        targetEmp ??= ownEmp;
+
+        if (targetEmp is null && _currentUserService.IsAuthenticated)
+        {
+            throw new UnauthorizedAccessException("Tài khoản hiện tại chưa được liên kết với hồ sơ nhân sự.");
         }
 
         targetEmp ??= await employeeQuery
@@ -298,13 +339,25 @@ public class GetEssMssPortalQueryHandler : IRequestHandler<GetEssMssPortalQuery,
 
         var subordinateCount = await _context.Employees
             .CountAsync(e => e.DirectManagerId == targetEmp.Id, cancellationToken);
-        var isManager = subordinateCount > 0 || targetEmp.Position.PositionLevel <= 4;
+        var isManager = subordinateCount > 0
+            || _currentUserService.HasPermission("Leave.Approve")
+            || _currentUserService.HasPermission("Attendance.Approve");
 
-        var pendingWorkflows = await _context.WorkflowInstances
+        var pendingWorkflowsQuery = _context.WorkflowInstances
             .AsNoTracking()
             .Include(w => w.WorkflowDefinition)
             .Include(w => w.InitiatorEmployee)
-            .Where(w => w.Status == "InProgress" || w.Status == "Pending")
+            .Where(w => w.Status == "InProgress" || w.Status == "Pending");
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            pendingWorkflowsQuery = pendingWorkflowsQuery.Where(w =>
+                w.InitiatorEmployeeId == targetEmp.Id ||
+                (isManager && allowedUnitIds.Contains(w.InitiatorEmployee.OrganizationUnitId)));
+        }
+
+        var pendingWorkflows = await pendingWorkflowsQuery
             .OrderByDescending(w => w.CreatedAt)
             .Take(15)
             .Select(w => new MssPendingApprovalDto(

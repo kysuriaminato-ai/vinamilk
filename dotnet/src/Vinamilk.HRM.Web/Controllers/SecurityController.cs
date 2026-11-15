@@ -51,6 +51,7 @@ public class SecurityController : Controller
     /* ========================================================================
      * 1. MA TRẬN PHÂN QUYỀN ROLE × PERMISSION & GÁN ROLE / DATA SCOPE CHO USER
      * ======================================================================== */
+    [HttpGet("")]
     [HttpGet("RbacMatrix")]
     public async Task<IActionResult> RbacMatrix(CancellationToken cancellationToken)
     {

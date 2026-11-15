@@ -1,11 +1,11 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Vinamilk.HRM.Application.Talent;
 
 namespace Vinamilk.HRM.Web.Controllers;
 
-[Authorize]
+[Authorize(Policy = "Kpi.View")]
 public class KpiController : Controller
 {
     private readonly ISender _sender;
@@ -23,6 +23,7 @@ public class KpiController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Kpi.Create")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateCycle(
         string cycleCode,
@@ -41,6 +42,7 @@ public class KpiController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Kpi.Evaluate")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CreateEmployeeKpi(
         int evaluationCycleId,
@@ -63,6 +65,7 @@ public class KpiController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Kpi.Evaluate")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CalibrateAndApprove(
         int evaluationCycleId,

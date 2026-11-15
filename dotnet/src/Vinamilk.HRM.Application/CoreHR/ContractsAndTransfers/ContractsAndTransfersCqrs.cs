@@ -22,16 +22,22 @@ public sealed class GetContractsOverviewQueryHandler
     : IRequestHandler<GetContractsOverviewQuery, ContractsOverviewDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
 
-    public GetContractsOverviewQueryHandler(IApplicationDbContext context)
+    public GetContractsOverviewQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService? currentUser = null)
     {
         _context = context;
+        _currentUser = currentUser;
     }
 
     public async Task<ContractsOverviewDto> Handle(
         GetContractsOverviewQuery request,
         CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
+
         var query = _context.LaborContracts
             .AsNoTracking()
             .Include(c => c.Employee)
@@ -40,6 +46,20 @@ public sealed class GetContractsOverviewQueryHandler
                 .ThenInclude(e => e.Position)
             .Include(c => c.Addendums.OrderByDescending(a => a.EffectiveDate))
             .AsQueryable();
+
+        var employeesQuery = _context.Employees.AsNoTracking().AsQueryable();
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            query = query.Where(c =>
+                allowedUnitIds.Contains(c.Employee.OrganizationUnitId) ||
+                (selfEmpId.HasValue && c.EmployeeId == selfEmpId.Value));
+            employeesQuery = employeesQuery.Where(e =>
+                allowedUnitIds.Contains(e.OrganizationUnitId) ||
+                (selfEmpId.HasValue && e.Id == selfEmpId.Value));
+        }
 
         if (!string.IsNullOrWhiteSpace(request.ContractType))
             query = query.Where(c => c.ContractType == request.ContractType);
@@ -69,8 +89,7 @@ public sealed class GetContractsOverviewQueryHandler
                 .ToList();
         }
 
-        var employees = await _context.Employees
-            .AsNoTracking()
+        var employees = await employeesQuery
             .OrderBy(e => e.EmployeeCode)
             .ToListAsync(cancellationToken);
 
@@ -258,31 +277,59 @@ public sealed class GetTransfersAndLifecycleQueryHandler
     : IRequestHandler<GetTransfersAndLifecycleQuery, TransfersAndLifecycleDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
 
-    public GetTransfersAndLifecycleQueryHandler(IApplicationDbContext context)
+    public GetTransfersAndLifecycleQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService? currentUser = null)
     {
         _context = context;
+        _currentUser = currentUser;
     }
 
     public async Task<TransfersAndLifecycleDto> Handle(
         GetTransfersAndLifecycleQuery request,
         CancellationToken cancellationToken)
     {
-        var transfers = await _context.PersonnelTransfers
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
+
+        var transfersQuery = _context.PersonnelTransfers
             .AsNoTracking()
             .Include(t => t.Employee)
             .Include(t => t.FromUnit)
             .Include(t => t.ToUnit)
             .Include(t => t.FromPosition)
             .Include(t => t.ToPosition)
+            .AsQueryable();
+
+        var employeesQuery = _context.Employees
+            .AsNoTracking()
+            .Include(e => e.OrganizationUnit)
+            .Include(e => e.Position)
+            .AsQueryable();
+
+        var unitsQuery = _context.OrganizationUnits.AsNoTracking().AsQueryable();
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            transfersQuery = transfersQuery.Where(t =>
+                allowedUnitIds.Contains(t.FromUnitId) ||
+                allowedUnitIds.Contains(t.ToUnitId) ||
+                (selfEmpId.HasValue && t.EmployeeId == selfEmpId.Value));
+            employeesQuery = employeesQuery.Where(e =>
+                allowedUnitIds.Contains(e.OrganizationUnitId) ||
+                (selfEmpId.HasValue && e.Id == selfEmpId.Value));
+            unitsQuery = unitsQuery.Where(u => allowedUnitIds.Contains(u.Id));
+        }
+
+        var transfers = await transfersQuery
             .OrderByDescending(t => t.DecisionDate)
             .ThenByDescending(t => t.Id)
             .ToListAsync(cancellationToken);
 
-        var employees = await _context.Employees
-            .AsNoTracking()
-            .Include(e => e.OrganizationUnit)
-            .Include(e => e.Position)
+        var employees = await employeesQuery
             .OrderBy(e => e.EmployeeCode)
             .ToListAsync(cancellationToken);
 
@@ -302,8 +349,7 @@ public sealed class GetTransfersAndLifecycleQueryHandler
             .Take(15)
             .ToList();
 
-        var units = await _context.OrganizationUnits
-            .AsNoTracking()
+        var units = await unitsQuery
             .OrderBy(u => u.UnitLevel)
             .ThenBy(u => u.SortOrder)
             .ToListAsync(cancellationToken);

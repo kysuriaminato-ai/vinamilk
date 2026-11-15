@@ -7,7 +7,7 @@ using Vinamilk.HRM.Infrastructure.Services;
 
 namespace Vinamilk.HRM.Web.Controllers;
 
-[Authorize]
+[Authorize(Policy = "Attendance.View")]
 public class AttendanceController : Controller
 {
     private readonly ISender _sender;
@@ -151,6 +151,7 @@ public class AttendanceController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Attendance.Lock")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ToggleLockMonth(
         int month,
@@ -407,6 +408,7 @@ public class AttendanceController : Controller
         bool DeleteLog = false);
 
     [HttpPost]
+    [Authorize(Policy = "Attendance.Edit")]
     public async Task<IActionResult> SaveCellPunchLogAjax(
         [FromBody] SaveCellPunchLogAjaxRequest req,
         CancellationToken cancellationToken = default)
@@ -442,6 +444,7 @@ public class AttendanceController : Controller
         string Reason);
 
     [HttpPost]
+    [Authorize(Policy = "Attendance.Edit")]
     public async Task<IActionResult> UpdateDaySymbolAjax(
         [FromBody] UpdateDaySymbolAjaxRequest req,
         CancellationToken cancellationToken = default)
@@ -463,6 +466,7 @@ public class AttendanceController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Attendance.Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> BulkAssignSymbol(
         int month,
@@ -525,6 +529,7 @@ public class AttendanceController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Attendance.Lock")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AdvanceClosingStep(
         int month,
@@ -597,6 +602,7 @@ public class AttendanceController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Attendance.Approve")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DecidePostLockAdjustment(
         long adjustmentId,
@@ -620,6 +626,7 @@ public class AttendanceController : Controller
     }
 
     [HttpGet]
+    [Authorize(Policy = "Attendance.Export")]
     public async Task<IActionResult> ExportExcel(
         int? month = null,
         int? year = null,

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Vinamilk.HRM.Application.CoreHR.Employees;
@@ -7,7 +7,7 @@ using Vinamilk.HRM.Infrastructure.Services;
 namespace Vinamilk.HRM.Web.Controllers;
 
 [Route("Employees")]
-[Authorize]
+[Authorize(Policy = "Employees.View")]
 public class EmployeesController : Controller
 {
     private readonly ISender _sender;
@@ -36,16 +36,24 @@ public class EmployeesController : Controller
     [HttpGet("Details/{id:int}")]
     public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
     {
-        var profile = await _sender.Send(new GetEmployee360ProfileQuery(id), cancellationToken);
-        if (profile is null)
-            return RedirectToAction(nameof(Index));
+        try
+        {
+            var profile = await _sender.Send(new GetEmployee360ProfileQuery(id), cancellationToken);
+            if (profile is null)
+                return RedirectToAction(nameof(Index));
 
-        ViewData["Title"] = $"Hồ sơ 360°: {profile.Employee.EmployeeCode} — {profile.Employee.FullName}";
-        ViewData["BreadcrumbParent"] = "Quản lý Hồ sơ Nhân sự";
-        return View(profile);
+            ViewData["Title"] = $"Hồ sơ 360°: {profile.Employee.EmployeeCode} — {profile.Employee.FullName}";
+            ViewData["BreadcrumbParent"] = "Quản lý Hồ sơ Nhân sự";
+            return View(profile);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpPost("Save")]
+    [Authorize(Policy = "Employees.Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Save(
         int? id,
@@ -109,6 +117,7 @@ public class EmployeesController : Controller
     }
 
     [HttpPost("AddDependent")]
+    [Authorize(Policy = "Employees.Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddDependent(
         int employeeId,
@@ -134,6 +143,7 @@ public class EmployeesController : Controller
     }
 
     [HttpPost("AddCertificate")]
+    [Authorize(Policy = "Employees.Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddCertificate(
         int employeeId,
@@ -157,6 +167,7 @@ public class EmployeesController : Controller
     }
 
     [HttpPost("AddDocument")]
+    [Authorize(Policy = "Employees.Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddDocument(
         int employeeId,
@@ -180,6 +191,7 @@ public class EmployeesController : Controller
     }
 
     [HttpPost("UpdateAvatar")]
+    [Authorize(Policy = "Employees.Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UpdateAvatar(
         int employeeId,
@@ -195,6 +207,7 @@ public class EmployeesController : Controller
      * EXCEL IMPORT / EXPORT (CLOSEDXML) & PDF MẪU 2C (QUESTPDF)
      * ------------------------------------------------------------------------ */
     [HttpGet("DownloadTemplate")]
+    [Authorize(Policy = "Employees.Export")]
     public IActionResult DownloadTemplate()
     {
         var bytes = _documentService.GenerateEmployeeImportTemplateExcel();
@@ -205,6 +218,7 @@ public class EmployeesController : Controller
     }
 
     [HttpPost("ImportExcel")]
+    [Authorize(Policy = "Employees.Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ImportExcel(IFormFile? excelFile, CancellationToken cancellationToken)
     {
@@ -232,6 +246,7 @@ public class EmployeesController : Controller
     }
 
     [HttpGet("ExportExcel")]
+    [Authorize(Policy = "Employees.Export")]
     public async Task<IActionResult> ExportExcel(
         [FromQuery] GetEmployeesAdvancedQuery query,
         CancellationToken cancellationToken)
@@ -245,28 +260,43 @@ public class EmployeesController : Controller
     }
 
     [HttpGet("Export2CPdf/{id:int}")]
+    [Authorize(Policy = "Employees.Export")]
     public async Task<IActionResult> Export2CPdf(int id, CancellationToken cancellationToken)
     {
-        var profile = await _sender.Send(new GetEmployee360ProfileQuery(id), cancellationToken);
-        if (profile is null)
-            return NotFound();
+        try
+        {
+            var profile = await _sender.Send(new GetEmployee360ProfileQuery(id), cancellationToken);
+            if (profile is null)
+                return NotFound();
 
-        var pdfBytes = _documentService.GenerateEmployee2CPdf(profile.Employee);
-        return File(
-            pdfBytes,
-            "application/pdf",
-            $"SoYeuLyLich_2C_{profile.Employee.EmployeeCode}.pdf");
+            var pdfBytes = _documentService.GenerateEmployee2CPdf(profile.Employee);
+            return File(
+                pdfBytes,
+                "application/pdf",
+                $"SoYeuLyLich_2C_{profile.Employee.EmployeeCode}.pdf");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpGet("Print2C/{id:int}")]
     public async Task<IActionResult> Print2C(int id, CancellationToken cancellationToken)
     {
-        var profile = await _sender.Send(new GetEmployee360ProfileQuery(id), cancellationToken);
-        if (profile is null)
-            return RedirectToAction(nameof(Index));
+        try
+        {
+            var profile = await _sender.Send(new GetEmployee360ProfileQuery(id), cancellationToken);
+            if (profile is null)
+                return RedirectToAction(nameof(Index));
 
-        ViewData["Title"] = $"Sơ yếu lý lịch Mẫu 2C-BNV/2008 — {profile.Employee.EmployeeCode}";
-        return View(profile);
+            ViewData["Title"] = $"Sơ yếu lý lịch Mẫu 2C-BNV/2008 — {profile.Employee.EmployeeCode}";
+            return View(profile);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 }
 

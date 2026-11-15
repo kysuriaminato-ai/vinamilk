@@ -1,11 +1,11 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Vinamilk.HRM.Application.Talent;
 
 namespace Vinamilk.HRM.Web.Controllers;
 
-[Authorize]
+[Authorize(Policy = "Recruitment.View")]
 public class RecruitmentController : Controller
 {
     private readonly ISender _sender;
@@ -44,6 +44,7 @@ public class RecruitmentController : Controller
     }
 
     [HttpPost]
+    [Authorize(Policy = "Recruitment.Approve")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ApproveRequest(int requestId, bool isApproved, CancellationToken cancellationToken = default)
     {

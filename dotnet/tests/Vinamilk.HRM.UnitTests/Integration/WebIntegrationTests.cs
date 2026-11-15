@@ -529,13 +529,121 @@ public class WebIntegrationTests : IClassFixture<CustomWebApplicationFactory>
         }, "Cookie"));
 
         var changeResp = await controller.ChangePasswordSubmit(null, "Vinamilk@2026", "NewStrong@2026#Pass", "NewStrong@2026#Pass", CancellationToken.None);
-        var homeRedirect = changeResp.Should().BeOfType<Microsoft.AspNetCore.Mvc.RedirectToActionResult>().Subject;
-        homeRedirect.ControllerName.Should().Be("Home");
+        var essRedirect = changeResp.Should().BeOfType<Microsoft.AspNetCore.Mvc.RedirectResult>().Subject;
+        essRedirect.Url.Should().Be("/ESS");
 
         var updatedUser = await db.Users.AsNoTracking().SingleAsync(u => u.Id == 501);
         updatedUser.MustChangePassword.Should().BeFalse();
         updatedUser.PasswordHash.Should().StartWith("PBKDF2$");
         passwordService.VerifyPassword("NewStrong@2026#Pass", updatedUser.PasswordHash).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AllSixRoles_Should_EnforceStrictRbacHttpMatrix_AndEssSelfOnlyOwnership()
+    {
+        var (_, _, emp1RecordId, emp2RecordId) = await _factory.SeedPayrollIntegrationDataAsync();
+
+        HttpClient CreateRoleClient(string roleCode, string userId, string employeeId, bool allowAutoRedirect = true)
+        {
+            var client = _factory.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = allowAutoRedirect,
+                HandleCookies = false
+            });
+            client.DefaultRequestHeaders.Add("X-Test-Role", roleCode);
+            client.DefaultRequestHeaders.Add("X-Test-UserId", userId);
+            client.DefaultRequestHeaders.Add("X-Test-EmployeeId", employeeId);
+
+            var def = Vinamilk.HRM.Application.Common.Security.RbacPolicyMatrix.GetRoleDefinition(roleCode)!;
+            if (def.PermissionCodes.Count > 0)
+            {
+                client.DefaultRequestHeaders.Add("X-Test-Permission", string.Join(",", def.PermissionCodes));
+            }
+            return client;
+        }
+
+        // 1. EMPLOYEE (tung.pt / EmployeeId=1): 403 thực trên /Payroll, /Employees, /Security, /Payroll/RecordTrace; ESS chỉ xem được của mình
+        var employeeClient = CreateRoleClient("EMPLOYEE", "10", "1", allowAutoRedirect: true);
+
+        (await employeeClient.GetAsync("/Payroll")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await employeeClient.GetAsync("/Employees")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await employeeClient.GetAsync("/Security")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await employeeClient.GetAsync($"/Payroll/RecordTrace?recordId={emp1RecordId}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var essOwnResp = await employeeClient.GetAsync("/ESS");
+        essOwnResp.StatusCode.Should().Be(HttpStatusCode.OK);
+        var essOwnHtml = await essOwnResp.Content.ReadAsStringAsync();
+        essOwnHtml.Should().Contain("PAY-2026-10");
+
+        var essOtherResp = await employeeClient.GetAsync("/ESS?employeeId=2");
+        essOtherResp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var essOtherPdf = await employeeClient.GetAsync($"/ESS/Home/DownloadPayslip?payrollRecordId={emp2RecordId}");
+        essOtherPdf.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var essOwnPdf = await employeeClient.GetAsync($"/ESS/Home/DownloadPayslip?payrollRecordId={emp1RecordId}");
+        essOwnPdf.StatusCode.Should().Be(HttpStatusCode.OK);
+        essOwnPdf.Content.Headers.ContentType?.MediaType.Should().Be("application/pdf");
+
+        // 2. LINE_MANAGER: xem được /, /Employees, /Attendance, /Leaves, /Kpi; bị chặn 403 ở /Payroll, /Contracts, /Reports, /Security
+        var lineMgrClient = CreateRoleClient("LINE_MANAGER", "20", "1", allowAutoRedirect: true);
+        (await lineMgrClient.GetAsync("/")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await lineMgrClient.GetAsync("/Employees")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await lineMgrClient.GetAsync("/Attendance")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await lineMgrClient.GetAsync("/Leaves")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await lineMgrClient.GetAsync("/Kpi")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        (await lineMgrClient.GetAsync("/Payroll")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await lineMgrClient.GetAsync($"/Payroll/RecordTrace?recordId={emp1RecordId}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await lineMgrClient.GetAsync("/Contracts")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await lineMgrClient.GetAsync("/Reports")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await lineMgrClient.GetAsync("/Security")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // 3. ACCOUNTANT: xem /Payroll, /Reports; bị chặn 403 khi Calculate / Approve / Lock / Security
+        var accountantClient = CreateRoleClient("ACCOUNTANT", "30", "1", allowAutoRedirect: true);
+        (await accountantClient.GetAsync("/Payroll")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await accountantClient.GetAsync("/Reports")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await accountantClient.PostAsync("/Payroll/Calculate", null)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await accountantClient.PostAsync("/Payroll/Approve", null)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await accountantClient.PostAsync("/Payroll/Lock", null)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await accountantClient.GetAsync("/Security")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // 4. HR_STAFF: xem /Payroll, /Employees, /Contracts; bị chặn 403 khi Approve / Lock / Unlock / Security
+        var hrStaffClient = CreateRoleClient("HR_STAFF", "40", "1", allowAutoRedirect: true);
+        (await hrStaffClient.GetAsync("/Payroll")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await hrStaffClient.GetAsync("/Employees")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await hrStaffClient.GetAsync("/Contracts")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await hrStaffClient.PostAsync("/Payroll/Approve", null)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await hrStaffClient.PostAsync("/Payroll/Lock", null)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await hrStaffClient.PostAsync("/Payroll/Unlock", null)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await hrStaffClient.GetAsync("/Security")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // 5. HR_MANAGER: xem /Payroll, /Reports, /AiExpert; bị chặn 403 khi Unlock / Security / Backup
+        var hrMgrClient = CreateRoleClient("HR_MANAGER", "50", "1", allowAutoRedirect: true);
+        (await hrMgrClient.GetAsync("/Payroll")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await hrMgrClient.GetAsync("/Reports")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await hrMgrClient.GetAsync("/AiExpert")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await hrMgrClient.PostAsync("/Payroll/Unlock", null)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await hrMgrClient.GetAsync("/Security")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // Dùng factory tách riêng cho endpoint có EnableRateLimiting("backup-limiter") để tránh đụng quota với test trước
+        await using var backupFactory = new CustomWebApplicationFactory();
+        var isolatedHrMgr = backupFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = true, HandleCookies = false });
+        isolatedHrMgr.DefaultRequestHeaders.Add("X-Test-Role", "HR_MANAGER");
+        isolatedHrMgr.DefaultRequestHeaders.Add("X-Test-UserId", "50");
+        isolatedHrMgr.DefaultRequestHeaders.Add("X-Test-Permission", string.Join(",", Vinamilk.HRM.Application.Common.Security.RbacPolicyMatrix.GetRoleDefinition("HR_MANAGER")!.PermissionCodes));
+        (await isolatedHrMgr.PostAsync("/api/v1/system/backup", null)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // 6. SUPER_ADMIN: truy cập /Security, /Payroll và /api/v1/system/backup đều 200 OK
+        var superAdminClient = CreateRoleClient("SUPER_ADMIN", "1", "1", allowAutoRedirect: true);
+        (await superAdminClient.GetAsync("/Security")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await superAdminClient.GetAsync("/Payroll")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var isolatedSuperAdmin = backupFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = true, HandleCookies = false });
+        isolatedSuperAdmin.DefaultRequestHeaders.Add("X-Test-Role", "SUPER_ADMIN");
+        isolatedSuperAdmin.DefaultRequestHeaders.Add("X-Test-UserId", "1");
+        isolatedSuperAdmin.DefaultRequestHeaders.Add("X-Test-Permission", string.Join(",", Vinamilk.HRM.Application.Common.Security.RbacPolicyMatrix.GetRoleDefinition("SUPER_ADMIN")!.PermissionCodes));
+        (await isolatedSuperAdmin.PostAsync("/api/v1/system/backup", null)).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 }
 

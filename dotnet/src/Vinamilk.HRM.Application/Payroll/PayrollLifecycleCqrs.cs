@@ -455,16 +455,15 @@ public sealed class GetPayrollRecordPdfQueryHandler : IRequestHandler<GetPayroll
             .FirstOrDefaultAsync(r => r.Id == request.PayrollRecordId, cancellationToken)
             ?? throw new KeyNotFoundException($"Không tìm thấy phiếu lương #{request.PayrollRecordId}.");
 
-        if (request.EnforceSelfOnly && !_currentUser.HasPermission("Payroll.View"))
+        if (request.EnforceSelfOnly)
         {
             if (!_currentUser.EmployeeId.HasValue || _currentUser.EmployeeId.Value != record.EmployeeId)
                 throw new UnauthorizedAccessException("Bạn chỉ được phép xem và tải phiếu lương của chính mình.");
         }
-        else if (request.EnforceSelfOnly && _currentUser.EmployeeId.HasValue && _currentUser.EmployeeId.Value != record.EmployeeId)
+        else
         {
-            // Trên cổng ESS chỉ cho phép tải phiếu lương của chính mình trừ SuperAdmin / Payroll.Approve
-            if (!_currentUser.HasPermission("Payroll.Approve"))
-                throw new UnauthorizedAccessException("Bạn chỉ được phép xem và tải phiếu lương của chính mình.");
+            var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
+            scope.EnsureCanAccessEmployee(record.EmployeeId, record.OrganizationUnitId);
         }
 
         var periodEndDate = record.PayrollPeriod.EndDate != default

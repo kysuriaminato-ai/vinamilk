@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Vinamilk.HRM.Application.Analytics;
+using Vinamilk.HRM.Application.Common.Interfaces;
 using Vinamilk.HRM.Application.Payroll;
 using Vinamilk.HRM.Application.TimeAttendance;
 using Vinamilk.HRM.Application.Workflows;
@@ -13,8 +14,13 @@ namespace Vinamilk.HRM.Web.Areas.ESS.Controllers;
 public class HomeController : Controller
 {
     private readonly IMediator _mediator;
+    private readonly ICurrentUserService _currentUser;
 
-    public HomeController(IMediator mediator) => _mediator = mediator;
+    public HomeController(IMediator mediator, ICurrentUserService currentUser)
+    {
+        _mediator = mediator;
+        _currentUser = currentUser;
+    }
 
     public async Task<IActionResult> Index(
         int? employeeId = null,
@@ -24,11 +30,25 @@ public class HomeController : Controller
         int? pitYear = null,
         CancellationToken cancellationToken = default)
     {
-        var model = await _mediator.Send(
-            new GetEssMssPortalQuery(employeeId, timesheetYear, timesheetMonth, pitYear),
-            cancellationToken);
-        ViewBag.ActiveTab = tab.ToLowerInvariant();
-        return View(model);
+        try
+        {
+            var model = await _mediator.Send(
+                new GetEssMssPortalQuery(employeeId, timesheetYear, timesheetMonth, pitYear),
+                cancellationToken);
+            ViewBag.ActiveTab = tab.ToLowerInvariant();
+            return View(model);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+    }
+
+    private bool CanSubmitForEmployee(int employeeId)
+    {
+        if (_currentUser.HasPermission("Employees.Edit") || _currentUser.HasPermission("Leave.Approve"))
+            return true;
+        return _currentUser.EmployeeId.HasValue && _currentUser.EmployeeId.Value == employeeId;
     }
 
     [HttpPost]
@@ -41,6 +61,9 @@ public class HomeController : Controller
         string reason,
         CancellationToken cancellationToken = default)
     {
+        if (!CanSubmitForEmployee(employeeId))
+            return Forbid();
+
         var id = await _mediator.Send(new SubmitLeaveRequestCommand(
             employeeId, leaveTypeId, startDate, endDate, "Full", "Full", null, reason), cancellationToken);
 
@@ -59,6 +82,9 @@ public class HomeController : Controller
         string reason,
         CancellationToken cancellationToken = default)
     {
+        if (!CanSubmitForEmployee(employeeId))
+            return Forbid();
+
         var id = await _mediator.Send(new SubmitOvertimeRequestCommand(
             employeeId, overtimeDate, startTime, endTime, overtimeRateType, reason), cancellationToken);
 
@@ -77,6 +103,9 @@ public class HomeController : Controller
         string reason,
         CancellationToken cancellationToken = default)
     {
+        if (!CanSubmitForEmployee(employeeId))
+            return Forbid();
+
         try
         {
             var res = await _mediator.Send(
@@ -94,7 +123,7 @@ public class HomeController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    [Authorize(Roles = "SUPER_ADMIN,HR_DIRECTOR,HR_MANAGER,DEPARTMENT_MANAGER")]
+    [Authorize(Roles = "SUPER_ADMIN,HR_DIRECTOR,HR_MANAGER,LINE_MANAGER,DEPARTMENT_MANAGER")]
     public async Task<IActionResult> ProcessMssApproval(
         int employeeId,
         int workflowInstanceId,

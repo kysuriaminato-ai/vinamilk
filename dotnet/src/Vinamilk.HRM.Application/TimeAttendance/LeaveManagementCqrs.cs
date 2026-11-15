@@ -253,14 +253,19 @@ public record GetLeaveManagementOverviewQuery(
 public class GetLeaveManagementOverviewQueryHandler : IRequestHandler<GetLeaveManagementOverviewQuery, LeaveManagementOverviewDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
 
-    public GetLeaveManagementOverviewQueryHandler(IApplicationDbContext context)
+    public GetLeaveManagementOverviewQueryHandler(
+        IApplicationDbContext context,
+        ICurrentUserService? currentUser = null)
     {
         _context = context;
+        _currentUser = currentUser;
     }
 
     public async Task<LeaveManagementOverviewDto> Handle(GetLeaveManagementOverviewQuery request, CancellationToken cancellationToken)
     {
+        var scope = await Common.Security.DataScopeResolver.ResolveAsync(_context, _currentUser, cancellationToken);
         int year = request.Year ?? DateTime.Today.Year;
         int month = request.Month ?? DateTime.Today.Month;
         int daysInMonth = DateTime.DaysInMonth(year, month);
@@ -286,12 +291,13 @@ public class GetLeaveManagementOverviewQueryHandler : IRequestHandler<GetLeaveMa
         // Seed một số đơn nghỉ phép / công tác mẫu nếu chưa có
         if (!await _context.LeaveRequests.AnyAsync(cancellationToken))
         {
-            var annualType = await _context.LeaveTypes.FirstAsync(l => l.LeaveTypeCode == "ANNUAL", cancellationToken);
+            var annualType = await _context.LeaveTypes.FirstOrDefaultAsync(l => l.LeaveTypeCode == "ANNUAL", cancellationToken)
+                ?? await _context.LeaveTypes.FirstOrDefaultAsync(cancellationToken);
             var marriageType = await _context.LeaveTypes.FirstOrDefaultAsync(l => l.LeaveTypeCode == "MARRIAGE", cancellationToken) ?? annualType;
             var tripType = await _context.LeaveTypes.FirstOrDefaultAsync(l => l.LeaveTypeCode == "BUSINESS_TRIP", cancellationToken) ?? annualType;
             var emps = await _context.Employees.AsNoTracking().OrderBy(e => e.EmployeeCode).Take(5).ToListAsync(cancellationToken);
 
-            if (emps.Count >= 3)
+            if (annualType is not null && marriageType is not null && tripType is not null && emps.Count >= 3)
             {
                 await _context.LeaveRequests.AddRangeAsync(new List<LeaveRequest>
                 {
@@ -340,15 +346,27 @@ public class GetLeaveManagementOverviewQueryHandler : IRequestHandler<GetLeaveMa
             }
         }
 
-        var units = await _context.OrganizationUnits
+        var unitsQuery = _context.OrganizationUnits.AsNoTracking().AsQueryable();
+        var activeEmployeesQuery = _context.Employees
             .AsNoTracking()
+            .Where(e => e.WorkStatus == "Official" || e.WorkStatus == "Probation");
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            unitsQuery = unitsQuery.Where(u => allowedUnitIds.Contains(u.Id));
+            activeEmployeesQuery = activeEmployeesQuery.Where(e =>
+                allowedUnitIds.Contains(e.OrganizationUnitId) ||
+                (selfEmpId.HasValue && e.Id == selfEmpId.Value));
+        }
+
+        var units = await unitsQuery
             .OrderBy(u => u.SortOrder)
             .Select(u => new SimpleLookupDto(u.Id, u.UnitCode, u.UnitName))
             .ToListAsync(cancellationToken);
 
-        var activeEmployees = await _context.Employees
-            .AsNoTracking()
-            .Where(e => e.WorkStatus == "Official" || e.WorkStatus == "Probation")
+        var activeEmployees = await activeEmployeesQuery
             .OrderBy(e => e.EmployeeCode)
             .Select(e => new SimpleLookupDto(e.Id, e.EmployeeCode, $"{e.EmployeeCode} - {e.FullName}"))
             .ToListAsync(cancellationToken);
@@ -388,6 +406,15 @@ public class GetLeaveManagementOverviewQueryHandler : IRequestHandler<GetLeaveMa
             .Include(b => b.Employee)
                 .ThenInclude(e => e.Position)
             .Where(b => b.Year == year);
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            balancesQuery = balancesQuery.Where(b =>
+                allowedUnitIds.Contains(b.Employee.OrganizationUnitId) ||
+                (selfEmpId.HasValue && b.EmployeeId == selfEmpId.Value));
+        }
 
         if (request.UnitId.HasValue && request.UnitId.Value > 0)
         {
@@ -443,11 +470,23 @@ public class GetLeaveManagementOverviewQueryHandler : IRequestHandler<GetLeaveMa
             .AsNoTracking()
             .ToDictionaryAsync(e => e.Id, e => e.FullName, cancellationToken);
 
-        var requestsRaw = await _context.LeaveRequests
+        var requestsQuery = _context.LeaveRequests
             .AsNoTracking()
             .Include(r => r.Employee)
                 .ThenInclude(e => e.OrganizationUnit)
             .Include(r => r.LeaveType)
+            .AsQueryable();
+
+        if (!scope.IsUnrestricted)
+        {
+            var allowedUnitIds = scope.AllowedUnitIdList;
+            var selfEmpId = scope.CurrentEmployeeId;
+            requestsQuery = requestsQuery.Where(r =>
+                allowedUnitIds.Contains(r.Employee.OrganizationUnitId) ||
+                (selfEmpId.HasValue && r.EmployeeId == selfEmpId.Value));
+        }
+
+        var requestsRaw = await requestsQuery
             .OrderByDescending(r => r.CreatedAt)
             .Take(80)
             .ToListAsync(cancellationToken);

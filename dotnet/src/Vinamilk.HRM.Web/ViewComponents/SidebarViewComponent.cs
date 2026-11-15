@@ -38,8 +38,8 @@ public class SidebarViewComponent : ViewComponent
             new("overview", "Tổng quan", "ti-layout-dashboard", new List<SidebarMenuItem>
             {
                 new("Dashboard", "ti-layout-dashboard", "/", RequiredPermission: "Dashboard.View"),
-                new("Báo cáo BM01–BM04", "ti-file-spreadsheet", "/Reports"),
-                new("Trợ lý AI nhân sự", "ti-sparkles", "/AiExpert")
+                new("Báo cáo BM01–BM04", "ti-file-spreadsheet", "/Reports", RequiredPermission: "Reports.View"),
+                new("Trợ lý AI nhân sự", "ti-sparkles", "/AiExpert", RequiredPermission: "Analytics.View")
             }),
             new("corehr", "Nhân sự", "ti-users", new List<SidebarMenuItem>
             {
@@ -53,7 +53,7 @@ public class SidebarViewComponent : ViewComponent
                 new("Ca làm việc & ngày lễ", "ti-calendar-clock", "/Shifts", RequiredPermission: "Attendance.View"),
                 new("Bảng chấm công", "ti-calendar-check", "/Attendance", RequiredPermission: "Attendance.View"),
                 new("Nghỉ phép", "ti-beach", "/Leaves", RequiredPermission: "Leave.View"),
-                new("Duyệt đơn", "ti-checklist", "/Workflows")
+                new("Duyệt đơn", "ti-checklist", "/Workflows", RequiredPermission: "Leave.Approve")
             }),
             new("payroll", "Tiền lương", "ti-cash", new List<SidebarMenuItem>
             {

@@ -5,7 +5,7 @@ using Vinamilk.HRM.Application.Analytics;
 
 namespace Vinamilk.HRM.Web.Controllers;
 
-[Authorize]
+[Authorize(Policy = "Analytics.View")]
 public class AiExpertController : Controller
 {
     private readonly IMediator _mediator;
