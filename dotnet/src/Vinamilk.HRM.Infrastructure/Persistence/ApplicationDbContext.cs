@@ -71,6 +71,9 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<AttendanceSymbolDefinition> AttendanceSymbolDefinitions => Set<AttendanceSymbolDefinition>();
     public DbSet<PostLockAttendanceAdjustment> PostLockAttendanceAdjustments => Set<PostLockAttendanceAdjustment>();
     public DbSet<AttendanceRecalculationBatch> AttendanceRecalculationBatches => Set<AttendanceRecalculationBatch>();
+    public DbSet<EmployeeTimeRequest> EmployeeTimeRequests => Set<EmployeeTimeRequest>();
+    public DbSet<RequestCancellationRequest> RequestCancellationRequests => Set<RequestCancellationRequest>();
+    public DbSet<TerminationLeaveSettlement> TerminationLeaveSettlements => Set<TerminationLeaveSettlement>();
 
     // Payroll Schema
     public DbSet<PayrollStatutoryParameter> PayrollStatutoryParameters => Set<PayrollStatutoryParameter>();

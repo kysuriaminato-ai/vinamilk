@@ -307,7 +307,7 @@ public sealed class AttendanceRecalculationService : IAttendanceRecalculationJob
 
                         var dayOts = overtimes
                             .Where(o => o.EmployeeId == emp.Id && o.OvertimeDate == date)
-                            .Select(o => new AttendanceApprovedOvertimeInput(o.StartTime, o.EndTime, o.ApprovedHours, o.OvertimeRateType))
+                            .Select(o => new AttendanceApprovedOvertimeInput(o.StartTime, o.EndTime, o.ApprovedHours, o.OvertimeRateType, o.CompensationMode))
                             .ToList();
 
                         AttendanceApprovedExplanationInput? approvedExplain = null;

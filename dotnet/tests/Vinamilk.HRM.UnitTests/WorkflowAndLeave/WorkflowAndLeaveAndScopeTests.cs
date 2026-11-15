@@ -10,6 +10,7 @@ using Vinamilk.HRM.Domain.Entities.Identity;
 using Vinamilk.HRM.Domain.Entities.SystemEntities;
 using Vinamilk.HRM.Domain.Entities.Time;
 using Vinamilk.HRM.Infrastructure.Persistence;
+using Vinamilk.HRM.Infrastructure.Persistence.Seed;
 using Xunit;
 
 namespace Vinamilk.HRM.UnitTests.WorkflowAndLeave;
@@ -145,7 +146,8 @@ public class WorkflowAndLeaveAndScopeTests
             HireDate = new DateOnly(2014, 1, 1), // 12 năm -> +2 ngày thâm niên
             WorkStatus = "Official"
         });
-        db.LeaveTypes.Add(new LeaveType { Id = 1, LeaveTypeCode = "ANNUAL", LeaveTypeName = "Nghỉ phép năm", MaxDaysPerYear = 12m, AllowCarryForward = true });
+        db.AttendanceStatutoryParameters.AddRange(ApplicationDbContextInitializer.BuildDefaultAttendanceStatutoryParameters());
+        db.LeaveTypes.Add(new LeaveType { Id = 1, LeaveTypeCode = "ANNUAL", LeaveTypeName = "Nghỉ phép năm", CountsAgainstAnnualLeave = true, MaxDaysPerYear = 12m, AllowCarryForward = true });
         db.LeaveBalances.Add(new LeaveBalance
         {
             Id = 1,
@@ -155,6 +157,7 @@ public class WorkflowAndLeaveAndScopeTests
             StandardEntitlement = 12m,
             SeniorityExtraDays = 0m,
             CarriedForwardDays = 4m,
+            UsedCarriedForwardDays = 4m,
             UsedDays = 14m,
             PendingDays = 0m,
             RemainingDays = 2m

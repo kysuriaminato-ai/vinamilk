@@ -20,7 +20,8 @@ public sealed record PayrollCalculationInput(
     decimal DisciplineDeduction,
     int DependentCount,
     bool IsUnionMember = true,
-    int WageRegion = 1);
+    int WageRegion = 1,
+    decimal UnusedLeavePayout = 0m);
 
 public sealed record PayrollStatutoryContext(
     PayrollStatutoryParameter Parameter,
@@ -126,7 +127,7 @@ public static class VietnamPayrollEngine
             0,
             MidpointRounding.AwayFromZero);
 
-        var gross = actualBase + input.PositionAllowance + input.OtherAllowance + otPay + input.KpiBonus;
+        var gross = actualBase + input.PositionAllowance + input.OtherAllowance + otPay + input.KpiBonus + input.UnusedLeavePayout;
 
         var siCap = parameter.StatutoryBaseSalary * parameter.SocialInsuranceCapMultiplier;
         var regionalMinWage = parameter.GetRegionalMinWage(input.WageRegion);
@@ -264,9 +265,22 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
         var statutoryContext = await VietnamPayrollEngine.ResolveStatutoryContextAsync(
             _context, periodEndDate, cancellationToken);
 
+        var periodSettlements = await _context.TerminationLeaveSettlements
+            .Where(s => s.TargetPayrollYear == period.Year
+                && s.TargetPayrollMonth == period.Month
+                && (s.Status == "PushedToPayroll" || s.Status == "Paid"))
+            .ToListAsync(cancellationToken);
+
+        var settlementByEmpId = periodSettlements
+            .GroupBy(s => s.EmployeeId)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.PayoutAmount));
+
+        var settlementEmpIds = settlementByEmpId.Keys.ToHashSet();
+
         var empQuery = _context.Employees
             .Include(e => e.OrganizationUnit)
-            .Where(e => e.WorkStatus != "Terminated" && e.WorkStatus != "Resigned" && e.WorkStatus != "Retired");
+            .Where(e => (e.WorkStatus != "Terminated" && e.WorkStatus != "Resigned" && e.WorkStatus != "Retired")
+                || settlementEmpIds.Contains(e.Id));
 
         if (request.EmployeeId.HasValue)
             empQuery = empQuery.Where(e => e.Id == request.EmployeeId.Value);
@@ -331,6 +345,8 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
             decimal ot200 = att?.TotalOtHours200 ?? 0m;
             decimal ot300 = att?.TotalOtHours300 ?? 0m;
 
+            decimal unusedLeavePayout = settlementByEmpId.TryGetValue(emp.Id, out var payoutAmt) ? payoutAmt : 0m;
+
             var breakdown = VietnamPayrollEngine.Calculate(new PayrollCalculationInput(
                 emp.BaseSalary,
                 emp.PositionAllowance,
@@ -344,7 +360,8 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
                 0m,
                 deps,
                 emp.IsUnionMember,
-                wageRegion), statutoryContext);
+                wageRegion,
+                unusedLeavePayout), statutoryContext);
 
             var pitSlices = VietnamPayrollEngine.CalculateProgressivePitBreakdown(
                 breakdown.AssessableIncome, statutoryContext.PitBrackets);
@@ -384,6 +401,7 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
                 OtherAllowance = emp.OtherAllowance,
                 OvertimePay = breakdown.OvertimePay,
                 KpiBonus = 0m,
+                UnusedLeavePayout = unusedLeavePayout,
                 GrossIncome = breakdown.GrossIncome,
                 InsuranceSalaryBase = breakdown.SocialInsuranceBase,
                 UnemploymentInsuranceBase = breakdown.UnemploymentInsuranceBase,

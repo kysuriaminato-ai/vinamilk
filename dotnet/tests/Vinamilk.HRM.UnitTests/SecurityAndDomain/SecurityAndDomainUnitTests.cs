@@ -79,7 +79,8 @@ public class SecurityAndDomainUnitTests
         var retMale = VietnamRetirementCalculator.Calculate(new DateOnly(1975, 5, 15), "Nam", new DateOnly(2026, 11, 15));
         retMale.RetirementAgeYears.Should().BeGreaterOrEqualTo(61);
 
-        var leave = VietnamAnnualLeavePolicyCalculator.CalculateEntitlement(new DateOnly(2014, 1, 1), 2026);
+        var statutoryDefault = Vinamilk.HRM.Infrastructure.Persistence.Seed.ApplicationDbContextInitializer.BuildDefaultAttendanceStatutoryParameters().First();
+        var leave = VietnamAnnualLeavePolicyCalculator.CalculateEntitlement(new DateOnly(2014, 1, 1), 2026, statutoryDefault);
         leave.SeniorityExtraDays.Should().Be(2);
 
         var (grade, mult, _) = KpiGradingCalculator.EvaluateGrade(95m);

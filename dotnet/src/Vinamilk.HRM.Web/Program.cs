@@ -191,7 +191,8 @@ if (args.Contains("--verify-attendance"))
 {
     var gpsEval = Vinamilk.HRM.Application.TimeAttendance.VinamilkGeofenceCalculator.EvaluateGps(10.7298, 106.7220);
     var qrToken = Vinamilk.HRM.Application.TimeAttendance.VinamilkGeofenceCalculator.GenerateDynamicQrToken(DateTime.UtcNow);
-    var leaveEnt = Vinamilk.HRM.Application.TimeAttendance.VietnamAnnualLeavePolicyCalculator.CalculateEntitlement(new DateOnly(2014, 3, 1), 2026);
+    var statutoryDefault = Vinamilk.HRM.Infrastructure.Persistence.Seed.ApplicationDbContextInitializer.BuildDefaultAttendanceStatutoryParameters().First();
+    var leaveEnt = Vinamilk.HRM.Application.TimeAttendance.VietnamAnnualLeavePolicyCalculator.CalculateEntitlement(new DateOnly(2014, 3, 1), 2026, statutoryDefault);
     var condMatch = Vinamilk.HRM.Application.Workflows.WorkflowSeederHelper.EvaluateStepCondition("TotalDays >= 3", 4.0m);
     using var scope = app.Services.CreateScope();
     var attDocService = scope.ServiceProvider.GetRequiredService<Vinamilk.HRM.Infrastructure.Services.TimeAttendanceDocumentService>();

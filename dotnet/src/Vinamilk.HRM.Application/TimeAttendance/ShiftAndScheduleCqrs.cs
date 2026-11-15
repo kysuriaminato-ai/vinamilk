@@ -2,6 +2,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Vinamilk.HRM.Application.Common.Interfaces;
+using Vinamilk.HRM.Application.Workflows;
 using Vinamilk.HRM.Domain.Entities.Time;
 
 namespace Vinamilk.HRM.Application.TimeAttendance;
@@ -1034,11 +1035,16 @@ public class SubmitShiftSwapRequestCommandHandler : IRequestHandler<SubmitShiftS
 {
     private readonly IApplicationDbContext _context;
     private readonly ICurrentUserService _currentUser;
+    private readonly ISender? _sender;
 
-    public SubmitShiftSwapRequestCommandHandler(IApplicationDbContext context, ICurrentUserService currentUser)
+    public SubmitShiftSwapRequestCommandHandler(
+        IApplicationDbContext context,
+        ICurrentUserService currentUser,
+        ISender? sender = null)
     {
         _context = context;
         _currentUser = currentUser;
+        _sender = sender;
     }
 
     public async Task<int> Handle(SubmitShiftSwapRequestCommand request, CancellationToken cancellationToken)
@@ -1091,6 +1097,19 @@ public class SubmitShiftSwapRequestCommandHandler : IRequestHandler<SubmitShiftS
             UserAgent = _currentUser.UserAgent,
             CreatedAt = DateTime.UtcNow
         }, cancellationToken);
+
+        if (_sender != null)
+        {
+            var wfId = await _sender.Send(new StartWorkflowInstanceCommand(
+                "ShiftSwapRequest",
+                swap.Id,
+                request.RequesterEmployeeId,
+                $"Đơn Đổi ca #{swap.Id} ({request.RequesterWorkDate:dd/MM} ↔ {request.TargetWorkDate:dd/MM})",
+                1m,
+                "/Shifts?tab=swaps"), cancellationToken);
+            swap.WorkflowInstanceId = wfId;
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
 
         return swap.Id;

@@ -2,6 +2,7 @@ using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Vinamilk.HRM.Application.Common.Interfaces;
+using Vinamilk.HRM.Application.TimeAttendance;
 using Vinamilk.HRM.Domain.Entities.SystemEntities;
 using Vinamilk.HRM.Domain.Entities.Time;
 
@@ -93,9 +94,19 @@ public static class WorkflowSeederHelper
         IApplicationDbContext context,
         CancellationToken cancellationToken)
     {
-        var hasAny = await context.WorkflowDefinitions.AnyAsync(cancellationToken);
-        var hasPayrollWf = await context.WorkflowDefinitions.AnyAsync(d => d.EntityType == "PayrollPeriod", cancellationToken);
-        if (hasAny && hasPayrollWf)
+        var existingEntityTypes = (await context.WorkflowDefinitions
+            .AsNoTracking()
+            .Select(d => d.EntityType)
+            .ToListAsync(cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var expectedTypes = new[]
+        {
+            "LeaveRequest", "OvertimeRequest", "AttendanceExplanation", "PersonnelTransfer", "PayrollPeriod",
+            "TimeRequest:LateEarly", "TimeRequest:BusinessTrip", "TimeRequest:RemoteWork", "TimeRequest:AttendanceExplanation",
+            "ShiftSwapRequest", "RequestCancellationRequest"
+        };
+        if (expectedTypes.All(t => existingEntityTypes.Contains(t)))
             return;
 
         var roles = await context.Roles.AsNoTracking().ToDictionaryAsync(r => r.RoleCode, r => r.Id, cancellationToken);
@@ -106,17 +117,14 @@ public static class WorkflowSeederHelper
         int? lineManagerUserId = users.TryGetValue("hung.nv", out var uLm) ? uLm : null;
         int? chroUserId = users.TryGetValue("huyen.ntt", out var uChro) ? uChro : null;
 
-        if (!hasAny)
-        {
-
-        var definitions = new List<WorkflowDefinition>
+        var candidates = new List<WorkflowDefinition>
         {
             new()
             {
                 WorkflowCode = "WF_LEAVE",
                 WorkflowName = "Quy trình Phê duyệt Đơn Nghỉ phép & Nghỉ chế độ",
                 EntityType = "LeaveRequest",
-                Description = "Áp dụng cho nghỉ phép năm, nghỉ ốm BHXH, thai sản, hiếu hỷ, không lương và đi công tác. Đơn >= 3 ngày qua thêm bước C&B thẩm định.",
+                Description = "Áp dụng cho nghỉ phép năm, nghỉ ốm BHXH, thai sản, hiếu hỷ, không lương, nghỉ bù và đi công tác. Đơn >= 3 ngày qua thêm bước C&B thẩm định.",
                 IsActive = true,
                 Steps = new List<WorkflowStep>
                 {
@@ -146,7 +154,7 @@ public static class WorkflowSeederHelper
                 WorkflowCode = "WF_OVERTIME",
                 WorkflowName = "Quy trình Phê duyệt Làm thêm giờ (Overtime - OT)",
                 EntityType = "OvertimeRequest",
-                Description = "Kiểm soát trần OT tối đa 40 giờ/tháng và 200-300 giờ/năm theo Điều 107 Bộ luật Lao động 2019.",
+                Description = "Kiểm soát trần OT tối đa theo tham số pháp lý BLLĐ 2019 và hỗ trợ trả tiền hoặc nghỉ bù.",
                 IsActive = true,
                 Steps = new List<WorkflowStep>
                 {
@@ -203,6 +211,80 @@ public static class WorkflowSeederHelper
             },
             new()
             {
+                WorkflowCode = "WF_LATE_EARLY",
+                WorkflowName = "Quy trình Đơn Xin Đi muộn / Về sớm",
+                EntityType = "TimeRequest:LateEarly",
+                Description = "Quản lý trực tiếp phê duyệt đơn xin đi muộn hoặc về sớm có lý do chính đáng.",
+                IsActive = true,
+                Steps = new List<WorkflowStep>
+                {
+                    new() { StepOrder = 1, StepName = "Bước 1: Quản lý trực tiếp phê duyệt", ApproverType = "DirectManager", ApproverUserId = lineManagerUserId, ConditionExpression = "Always", SlaHours = 12 }
+                }
+            },
+            new()
+            {
+                WorkflowCode = "WF_BUSINESS_TRIP",
+                WorkflowName = "Quy trình Phê duyệt Đi Công tác (CT)",
+                EntityType = "TimeRequest:BusinessTrip",
+                Description = "Phê duyệt cử đi công tác trong/ngoài nước và ghi nhận ký hiệu CT vào bảng công.",
+                IsActive = true,
+                Steps = new List<WorkflowStep>
+                {
+                    new() { StepOrder = 1, StepName = "Bước 1: Quản lý trực tiếp phê duyệt", ApproverType = "DirectManager", ApproverUserId = lineManagerUserId, ConditionExpression = "Always", SlaHours = 12 },
+                    new() { StepOrder = 2, StepName = "Bước 2: C&B / HR xác nhận công tác >= 3 ngày", ApproverType = "SpecificRole", ApproverRoleId = hrStaffRoleId, ApproverUserId = chroUserId, ConditionExpression = "TotalDays >= 3", SlaHours = 24 }
+                }
+            },
+            new()
+            {
+                WorkflowCode = "WF_REMOTE_WORK",
+                WorkflowName = "Quy trình Đăng ký Làm việc Từ xa (WFH)",
+                EntityType = "TimeRequest:RemoteWork",
+                Description = "Quản lý trực tiếp duyệt làm việc từ xa (WFH), miễn kiểm tra geofence văn phòng trong thời gian duyệt.",
+                IsActive = true,
+                Steps = new List<WorkflowStep>
+                {
+                    new() { StepOrder = 1, StepName = "Bước 1: Quản lý trực tiếp phê duyệt", ApproverType = "DirectManager", ApproverUserId = lineManagerUserId, ConditionExpression = "Always", SlaHours = 12 }
+                }
+            },
+            new()
+            {
+                WorkflowCode = "WF_TIME_EXPLAIN",
+                WorkflowName = "Quy trình Giải trình Công Chuẩn hóa",
+                EntityType = "TimeRequest:AttendanceExplanation",
+                Description = "Đơn giải trình quên chấm công / lỗi thiết bị đi qua 2 cấp xác nhận.",
+                IsActive = true,
+                Steps = new List<WorkflowStep>
+                {
+                    new() { StepOrder = 1, StepName = "Bước 1: Quản lý trực tiếp xác nhận", ApproverType = "DirectManager", ApproverUserId = lineManagerUserId, ConditionExpression = "Always", SlaHours = 24 },
+                    new() { StepOrder = 2, StepName = "Bước 2: C&B cập nhật bảng công", ApproverType = "SpecificRole", ApproverRoleId = hrStaffRoleId, ApproverUserId = chroUserId, ConditionExpression = "Always", SlaHours = 24 }
+                }
+            },
+            new()
+            {
+                WorkflowCode = "WF_SHIFT_SWAP",
+                WorkflowName = "Quy trình Phê duyệt Đổi ca Làm việc",
+                EntityType = "ShiftSwapRequest",
+                Description = "Trưởng ca / Quản lý trực tiếp phê duyệt đổi ca và cập nhật ShiftSchedule.",
+                IsActive = true,
+                Steps = new List<WorkflowStep>
+                {
+                    new() { StepOrder = 1, StepName = "Bước 1: Quản lý trực tiếp duyệt đổi ca", ApproverType = "DirectManager", ApproverUserId = lineManagerUserId, ConditionExpression = "Always", SlaHours = 12 }
+                }
+            },
+            new()
+            {
+                WorkflowCode = "WF_REQUEST_CANCEL",
+                WorkflowName = "Quy trình Thu hồi / Hủy Đơn Đã duyệt",
+                EntityType = "RequestCancellationRequest",
+                Description = "Kiểm soát hủy đơn đã được phê duyệt (chỉ cho phép trước khi khóa công) và hoàn trả số dư phép/nghỉ bù.",
+                IsActive = true,
+                Steps = new List<WorkflowStep>
+                {
+                    new() { StepOrder = 1, StepName = "Bước 1: Quản lý trực tiếp / HR duyệt thu hồi đơn", ApproverType = "DirectManager", ApproverUserId = lineManagerUserId, ConditionExpression = "Always", SlaHours = 24 }
+                }
+            },
+            new()
+            {
                 WorkflowCode = "WF_TRANSFER",
                 WorkflowName = "Quy trình Tờ trình Điều chuyển & Bổ nhiệm Nhân sự",
                 EntityType = "PersonnelTransfer",
@@ -230,15 +312,8 @@ public static class WorkflowSeederHelper
                         SlaHours = 48
                     }
                 }
-            }
-        };
-
-        await context.WorkflowDefinitions.AddRangeAsync(definitions, cancellationToken);
-        }
-
-        if (!hasPayrollWf)
-        {
-            await context.WorkflowDefinitions.AddAsync(new WorkflowDefinition
+            },
+            new()
             {
                 WorkflowCode = "WF_PAYROLL",
                 WorkflowName = "Quy trình Phê duyệt Kỳ tính lương Hàng tháng",
@@ -258,10 +333,15 @@ public static class WorkflowSeederHelper
                         SlaHours = 24
                     }
                 }
-            }, cancellationToken);
-        }
+            }
+        };
 
-        await context.SaveChangesAsync(cancellationToken);
+        var toAdd = candidates.Where(c => !existingEntityTypes.Contains(c.EntityType)).ToList();
+        if (toAdd.Count > 0)
+        {
+            await context.WorkflowDefinitions.AddRangeAsync(toAdd, cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
+        }
     }
 
     public static async Task<int> ResolveApproverUserIdAsync(
@@ -477,6 +557,18 @@ public class GetWorkflowCenterQueryHandler : IRequestHandler<GetWorkflowCenterQu
             .AsNoTracking()
             .ToDictionaryAsync(p => p.Id, cancellationToken);
 
+        var timeReqDict = await _context.EmployeeTimeRequests
+            .AsNoTracking()
+            .ToDictionaryAsync(t => t.Id, cancellationToken);
+
+        var swapDict = await _context.ShiftSwapRequests
+            .AsNoTracking()
+            .ToDictionaryAsync(s => s.Id, cancellationToken);
+
+        var cancelDict = await _context.RequestCancellationRequests
+            .AsNoTracking()
+            .ToDictionaryAsync(c => c.Id, cancellationToken);
+
         var instanceDtos = new List<WorkflowInstanceItemDto>();
 
         foreach (var inst in instancesRaw)
@@ -508,7 +600,7 @@ public class GetWorkflowCenterQueryHandler : IRequestHandler<GetWorkflowCenterQu
                     if (otDict.TryGetValue(inst.EntityId, out var ot))
                     {
                         docTitle = $"Đăng ký OT {ot.OvertimeRateType} ({ot.RequestedHours:0.#} giờ)";
-                        docSummary = $"Ngày {ot.OvertimeDate:dd/MM/yyyy} ({ot.StartTime:HH\\:mm} - {ot.EndTime:HH\\:mm}) • {ot.Reason ?? "Tăng ca sản xuất"}";
+                        docSummary = $"Ngày {ot.OvertimeDate:dd/MM/yyyy} ({ot.StartTime:HH\\:mm} - {ot.EndTime:HH\\:mm}) • Hình thức: {(ot.CompensationMode == "CompensatoryLeave" ? "Nghỉ bù" : "Trả tiền OT")} • {ot.Reason ?? "Tăng ca"}";
                     }
                     break;
 
@@ -519,6 +611,45 @@ public class GetWorkflowCenterQueryHandler : IRequestHandler<GetWorkflowCenterQu
                     {
                         docTitle = $"Giải trình công ngày {da.AttendanceDate:dd/MM/yyyy}";
                         docSummary = da.EditReason ?? "Bổ sung giờ vào/ra do quên chấm công hoặc đi công tác ngoài";
+                    }
+                    break;
+
+                case "TimeRequest:LateEarly":
+                case "TimeRequest:BusinessTrip":
+                case "TimeRequest:RemoteWork":
+                case "TimeRequest:AttendanceExplanation":
+                    entityLabel = inst.EntityType switch
+                    {
+                        "TimeRequest:LateEarly" => "Đơn Đi muộn / Về sớm",
+                        "TimeRequest:BusinessTrip" => "Đơn Đi công tác",
+                        "TimeRequest:RemoteWork" => "Đơn Làm việc từ xa (WFH)",
+                        _ => "Giải trình Công"
+                    };
+                    targetUrl = "/Leaves?tab=time-requests";
+                    if (timeReqDict.TryGetValue(inst.EntityId, out var trq))
+                    {
+                        docTitle = $"{entityLabel} ({trq.StartDate:dd/MM} - {trq.EndDate:dd/MM/yyyy})";
+                        docSummary = $"{trq.Reason}" + (string.IsNullOrWhiteSpace(trq.LocationOrDestination) ? string.Empty : $" • Nơi công tác/WFH: {trq.LocationOrDestination}");
+                    }
+                    break;
+
+                case "ShiftSwapRequest":
+                    entityLabel = "Đơn Đổi ca Làm việc";
+                    targetUrl = "/Shifts";
+                    if (swapDict.TryGetValue(inst.EntityId, out var sw))
+                    {
+                        docTitle = $"Đổi ca #{sw.Id} ({sw.RequesterWorkDate:dd/MM} ↔ {sw.TargetWorkDate:dd/MM/yyyy})";
+                        docSummary = sw.Reason;
+                    }
+                    break;
+
+                case "RequestCancellationRequest":
+                    entityLabel = "Yêu cầu Thu hồi Đơn đã duyệt";
+                    targetUrl = "/Leaves?tab=cancellations";
+                    if (cancelDict.TryGetValue(inst.EntityId, out var cn))
+                    {
+                        docTitle = $"Thu hồi {cn.OriginalEntityType} #{cn.OriginalEntityId}";
+                        docSummary = $"Lý do: {cn.Reason}" + (string.IsNullOrWhiteSpace(cn.RestoredBalanceSummary) ? string.Empty : $" • {cn.RestoredBalanceSummary}");
                     }
                     break;
 
@@ -1122,10 +1253,23 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
 
                     if (balance != null)
                     {
+                        var resolvedPol = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(_context, leaveReq.EmployeeId, leaveReq.StartDate, cancellationToken);
+                        var expiryDate = balance.CarryForwardExpiryDate
+                            ?? new DateOnly(balance.Year, Math.Clamp(resolvedPol.Policy.CarryForwardExpiryMonth, 1, 12), Math.Clamp(resolvedPol.Policy.CarryForwardExpiryDay, 1, 28));
+
+                        if (leaveReq.StartDate <= expiryDate)
+                        {
+                            decimal availCarry = Math.Max(0m, balance.CarriedForwardDays - balance.UsedCarriedForwardDays);
+                            decimal consumeFromCarry = Math.Min(availCarry, leaveReq.TotalDays);
+                            balance.UsedCarriedForwardDays += consumeFromCarry;
+                        }
+
                         balance.PendingDays = Math.Max(0m, balance.PendingDays - leaveReq.TotalDays);
                         balance.UsedDays += leaveReq.TotalDays;
-                        balance.RemainingDays = Math.Max(0m,
-                            balance.StandardEntitlement + balance.SeniorityExtraDays + balance.CarriedForwardDays - balance.UsedDays - balance.PendingDays);
+                        var (_, expiredCarry, avail, _) = VietnamAnnualLeavePolicyCalculator.ComputeAvailableBalance(
+                            balance, resolvedPol.Policy, leaveReq.StartDate);
+                        balance.ExpiredCarryForwardDays = Math.Max(balance.ExpiredCarryForwardDays, expiredCarry);
+                        balance.RemainingDays = Math.Max(0m, avail);
                     }
 
                     // Tự động điền ký hiệu nghỉ phép/công tác vào Bảng chấm công ngày (DailyAttendances)
@@ -1175,29 +1319,156 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
                     otReq.ApprovedHours = otReq.RequestedHours;
                     otReq.ApprovedByEmployeeId = approverEmpId;
 
-                    // Tự động cộng giờ OT vào DailyAttendance
-                    var daily = await _context.DailyAttendances
-                        .FirstOrDefaultAsync(d => d.EmployeeId == otReq.EmployeeId && d.AttendanceDate == otReq.OvertimeDate, cancellationToken);
-
-                    if (daily == null)
+                    if (string.Equals(otReq.CompensationMode, "Paid", StringComparison.OrdinalIgnoreCase))
                     {
-                        daily = new DailyAttendance
-                        {
-                            EmployeeId = otReq.EmployeeId,
-                            AttendanceDate = otReq.OvertimeDate,
-                            AttendanceSymbol = "OT",
-                            WorkingHours = 8m,
-                            WorkdayCount = 1m
-                        };
-                        await _context.DailyAttendances.AddAsync(daily, cancellationToken);
-                    }
+                        var daily = await _context.DailyAttendances
+                            .FirstOrDefaultAsync(d => d.EmployeeId == otReq.EmployeeId && d.AttendanceDate == otReq.OvertimeDate, cancellationToken);
 
-                    if (otReq.OvertimeRateType == "OT300")
-                        daily.OvertimeHours300 = otReq.ApprovedHours;
-                    else if (otReq.OvertimeRateType == "OT200")
-                        daily.OvertimeHours200 = otReq.ApprovedHours;
-                    else
-                        daily.OvertimeHours150 = otReq.ApprovedHours;
+                        if (daily == null)
+                        {
+                            daily = new DailyAttendance
+                            {
+                                EmployeeId = otReq.EmployeeId,
+                                AttendanceDate = otReq.OvertimeDate,
+                                AttendanceSymbol = "OT",
+                                WorkingHours = 8m,
+                                WorkdayCount = 1m
+                            };
+                            await _context.DailyAttendances.AddAsync(daily, cancellationToken);
+                        }
+
+                        if (otReq.OvertimeRateType == "OT300")
+                            daily.OvertimeHours300 = otReq.ApprovedHours;
+                        else if (otReq.OvertimeRateType == "OT200")
+                            daily.OvertimeHours200 = otReq.ApprovedHours;
+                        else
+                            daily.OvertimeHours150 = otReq.ApprovedHours;
+                    }
+                }
+                break;
+
+            case "TimeRequest:LateEarly":
+            case "TimeRequest:BusinessTrip":
+            case "TimeRequest:RemoteWork":
+            case "TimeRequest:AttendanceExplanation":
+                var timeReq = await _context.EmployeeTimeRequests
+                    .FirstOrDefaultAsync(t => t.Id == instance.EntityId, cancellationToken);
+                if (timeReq != null && timeReq.Status != "Approved")
+                {
+                    timeReq.Status = "Approved";
+                    timeReq.ApprovedByEmployeeId = approverEmpId;
+                    timeReq.ApprovedAt = DateTime.UtcNow;
+                    timeReq.ApproverComment = comment ?? "Đã duyệt qua Workflow";
+
+                    for (var dt = timeReq.StartDate; dt <= timeReq.EndDate; dt = dt.AddDays(1))
+                    {
+                        if (dt.DayOfWeek == DayOfWeek.Sunday && timeReq.RequestType != "AttendanceExplanation")
+                            continue;
+
+                        var daily = await _context.DailyAttendances
+                            .FirstOrDefaultAsync(d => d.EmployeeId == timeReq.EmployeeId && d.AttendanceDate == dt, cancellationToken);
+
+                        if (daily == null)
+                        {
+                            daily = new DailyAttendance
+                            {
+                                EmployeeId = timeReq.EmployeeId,
+                                AttendanceDate = dt,
+                                AttendanceSymbol = timeReq.RequestType == "BusinessTrip" ? "CT" : "X",
+                                WorkingHours = 8m,
+                                WorkdayCount = 1m
+                            };
+                            await _context.DailyAttendances.AddAsync(daily, cancellationToken);
+                        }
+
+                        if (timeReq.RequestType == "BusinessTrip")
+                        {
+                            daily.AttendanceSymbol = "CT";
+                            daily.WorkdayCount = 1m;
+                            daily.WorkingHours = 8m;
+                            daily.LateMinutes = 0;
+                            daily.EarlyLeaveMinutes = 0;
+                            daily.EditReason = $"[Công tác duyệt #{timeReq.Id}] {timeReq.LocationOrDestination}";
+                        }
+                        else if (timeReq.RequestType == "RemoteWork")
+                        {
+                            daily.AttendanceSymbol = "X";
+                            daily.WorkdayCount = 1m;
+                            daily.WorkingHours = 8m;
+                            daily.LateMinutes = 0;
+                            daily.EarlyLeaveMinutes = 0;
+                            daily.EditReason = $"[WFH duyệt #{timeReq.Id}] {timeReq.LocationOrDestination ?? "Từ xa"}";
+                        }
+                        else if (timeReq.RequestType == "LateEarly")
+                        {
+                            int graceMins = Math.Max(0, timeReq.RequestedMinutes ?? 0);
+                            if (string.Equals(timeReq.SubType, "EarlyDeparture", StringComparison.OrdinalIgnoreCase))
+                                daily.EarlyLeaveMinutes = Math.Max(0, daily.EarlyLeaveMinutes - graceMins);
+                            else
+                                daily.LateMinutes = Math.Max(0, daily.LateMinutes - graceMins);
+                            daily.AttendanceSymbol = "X";
+                            daily.WorkdayCount = 1m;
+                            daily.EditReason = $"[Duyệt đi muộn/về sớm #{timeReq.Id}: {graceMins}p] {timeReq.Reason}";
+                        }
+                        else
+                        {
+                            daily.AttendanceSymbol = "X";
+                            daily.WorkdayCount = 1m;
+                            daily.WorkingHours = 8m;
+                            daily.LateMinutes = 0;
+                            daily.EarlyLeaveMinutes = 0;
+                            daily.IsMissedPunch = false;
+                            if (timeReq.PlannedTime.HasValue)
+                                daily.CheckInTime = dt.ToDateTime(timeReq.PlannedTime.Value);
+                            if (timeReq.ProposedEndTime.HasValue)
+                                daily.CheckOutTime = dt.ToDateTime(timeReq.ProposedEndTime.Value);
+                            daily.EditReason = $"[Duyệt giải trình #{timeReq.Id}] {timeReq.Reason}";
+                        }
+                    }
+                }
+                break;
+
+            case "ShiftSwapRequest":
+                var swapReq = await _context.ShiftSwapRequests
+                    .FirstOrDefaultAsync(s => s.Id == instance.EntityId, cancellationToken);
+                if (swapReq != null && swapReq.Status == "Pending")
+                {
+                    swapReq.Status = "Approved";
+                    swapReq.ApprovedByUserId = approverUserId;
+                    swapReq.ApprovedAt = DateTime.UtcNow;
+                    swapReq.ApproverComment = comment ?? "Đã duyệt qua Workflow";
+
+                    var reqSched = await _context.ShiftSchedules.FirstOrDefaultAsync(s => s.EmployeeId == swapReq.RequesterEmployeeId && s.WorkDate == swapReq.RequesterWorkDate, cancellationToken);
+                    var tgtSched = await _context.ShiftSchedules.FirstOrDefaultAsync(s => s.EmployeeId == swapReq.TargetEmployeeId && s.WorkDate == swapReq.TargetWorkDate, cancellationToken);
+                    var defaultShiftId = await _context.WorkShifts.AsNoTracking().Select(w => w.Id).FirstOrDefaultAsync(cancellationToken);
+
+                    if (defaultShiftId > 0)
+                    {
+                        var rShift = reqSched?.WorkShiftId ?? swapReq.RequesterOriginalShiftId ?? defaultShiftId;
+                        var tShift = tgtSched?.WorkShiftId ?? swapReq.TargetOriginalShiftId ?? defaultShiftId;
+                        if (reqSched != null) reqSched.WorkShiftId = tShift;
+                        if (tgtSched != null) tgtSched.WorkShiftId = rShift;
+                    }
+                }
+                break;
+
+            case "RequestCancellationRequest":
+                var cancelReq = await _context.RequestCancellationRequests
+                    .FirstOrDefaultAsync(c => c.Id == instance.EntityId, cancellationToken);
+                if (cancelReq != null && cancelReq.Status == "Pending")
+                {
+                    cancelReq.Status = "Approved";
+                    cancelReq.ProcessedByUserId = approverUserId;
+                    cancelReq.ProcessedAt = DateTime.UtcNow;
+                    cancelReq.ApproverComment = comment ?? "Đồng ý thu hồi đơn";
+                    cancelReq.RestoredBalanceSummary = await RequestReversalHelper.ReverseEntityDirectlyAsync(
+                        _context,
+                        cancelReq.OriginalEntityType,
+                        cancelReq.OriginalEntityId,
+                        approverUserId,
+                        approverUsername,
+                        cancelReq.Reason,
+                        cancellationToken);
                 }
                 break;
 
@@ -1271,24 +1542,51 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
         {
             case "LeaveRequest":
                 var leaveReq = await _context.LeaveRequests
+                    .Include(l => l.LeaveType)
                     .FirstOrDefaultAsync(l => l.Id == instance.EntityId, cancellationToken);
                 if (leaveReq != null && leaveReq.Status == "Pending")
                 {
                     leaveReq.Status = instance.Status;
                     leaveReq.ApproverComment = comment;
 
-                    var balance = await _context.LeaveBalances
-                        .FirstOrDefaultAsync(b =>
-                            b.EmployeeId == leaveReq.EmployeeId &&
-                            b.LeaveTypeId == leaveReq.LeaveTypeId &&
-                            b.Year == leaveReq.StartDate.Year,
-                            cancellationToken);
-
-                    if (balance != null)
+                    if (string.Equals(leaveReq.LeaveType.LeaveTypeCode, "COMP_LEAVE", StringComparison.OrdinalIgnoreCase))
                     {
-                        balance.PendingDays = Math.Max(0m, balance.PendingDays - leaveReq.TotalDays);
-                        balance.RemainingDays = Math.Max(0m,
-                            balance.StandardEntitlement + balance.SeniorityExtraDays + balance.CarriedForwardDays - balance.UsedDays - balance.PendingDays);
+                        var annualTypeId = await _context.LeaveTypes.AsNoTracking()
+                            .Where(l => l.LeaveTypeCode == "ANNUAL")
+                            .Select(l => (int?)l.Id)
+                            .FirstOrDefaultAsync(cancellationToken);
+                        if (annualTypeId.HasValue)
+                        {
+                            var compBal = await _context.LeaveBalances.FirstOrDefaultAsync(b =>
+                                b.EmployeeId == leaveReq.EmployeeId && b.LeaveTypeId == annualTypeId.Value && b.Year == leaveReq.StartDate.Year, cancellationToken);
+                            if (compBal != null)
+                            {
+                                var statutory = await AttendancePolicyAndShiftEngine.TryResolveStatutoryParameterAsync(_context, leaveReq.StartDate, cancellationToken);
+                                decimal stdH = statutory?.MaxNormalDailyHours > 0m ? statutory.MaxNormalDailyHours : 8m;
+                                decimal restoreHours = leaveReq.RequestedHours ?? Math.Round(leaveReq.TotalDays * stdH, 2, MidpointRounding.AwayFromZero);
+                                compBal.CompensatoryHoursBalance += restoreHours;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var balance = await _context.LeaveBalances
+                            .FirstOrDefaultAsync(b =>
+                                b.EmployeeId == leaveReq.EmployeeId &&
+                                b.LeaveTypeId == leaveReq.LeaveTypeId &&
+                                b.Year == leaveReq.StartDate.Year,
+                                cancellationToken);
+
+                        if (balance != null)
+                        {
+                            balance.PendingDays = Math.Max(0m, balance.PendingDays - leaveReq.TotalDays);
+                            balance.AdvanceUsedDays = Math.Max(0m, balance.AdvanceUsedDays - leaveReq.TotalDays);
+                            var resolvedPol = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(_context, leaveReq.EmployeeId, leaveReq.StartDate, cancellationToken);
+                            var (_, expiredCarry, avail, _) = VietnamAnnualLeavePolicyCalculator.ComputeAvailableBalance(
+                                balance, resolvedPol.Policy, leaveReq.StartDate);
+                            balance.ExpiredCarryForwardDays = Math.Max(balance.ExpiredCarryForwardDays, expiredCarry);
+                            balance.RemainingDays = Math.Max(0m, avail);
+                        }
                     }
                 }
                 break;
@@ -1299,6 +1597,41 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
                 if (otReq != null)
                 {
                     otReq.Status = instance.Status;
+                }
+                break;
+
+            case "TimeRequest:LateEarly":
+            case "TimeRequest:BusinessTrip":
+            case "TimeRequest:RemoteWork":
+            case "TimeRequest:AttendanceExplanation":
+                var timeReq = await _context.EmployeeTimeRequests
+                    .FirstOrDefaultAsync(t => t.Id == instance.EntityId, cancellationToken);
+                if (timeReq != null && timeReq.Status == "Pending")
+                {
+                    timeReq.Status = instance.Status;
+                    timeReq.ApproverComment = comment;
+                }
+                break;
+
+            case "ShiftSwapRequest":
+                var swapReq = await _context.ShiftSwapRequests
+                    .FirstOrDefaultAsync(s => s.Id == instance.EntityId, cancellationToken);
+                if (swapReq != null && swapReq.Status == "Pending")
+                {
+                    swapReq.Status = instance.Status;
+                    swapReq.ApproverComment = comment;
+                }
+                break;
+
+            case "RequestCancellationRequest":
+                var cancelReq = await _context.RequestCancellationRequests
+                    .FirstOrDefaultAsync(c => c.Id == instance.EntityId, cancellationToken);
+                if (cancelReq != null && cancelReq.Status == "Pending")
+                {
+                    cancelReq.Status = instance.Status;
+                    cancelReq.ProcessedByUserId = actorUserId;
+                    cancelReq.ProcessedAt = DateTime.UtcNow;
+                    cancelReq.ApproverComment = comment;
                 }
                 break;
 

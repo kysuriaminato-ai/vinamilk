@@ -63,6 +63,9 @@ public interface IApplicationDbContext
     DbSet<AttendanceSymbolDefinition> AttendanceSymbolDefinitions { get; }
     DbSet<PostLockAttendanceAdjustment> PostLockAttendanceAdjustments { get; }
     DbSet<AttendanceRecalculationBatch> AttendanceRecalculationBatches { get; }
+    DbSet<EmployeeTimeRequest> EmployeeTimeRequests { get; }
+    DbSet<RequestCancellationRequest> RequestCancellationRequests { get; }
+    DbSet<TerminationLeaveSettlement> TerminationLeaveSettlements { get; }
 
     // Payroll Schema
     DbSet<PayrollStatutoryParameter> PayrollStatutoryParameters { get; }

@@ -171,16 +171,26 @@ public class MonthlyAttendanceSummary : BaseAuditableEntity
 public class OvertimeRequest : BaseAuditableEntity
 {
     public int EmployeeId { get; set; }
+    public string? OvertimeBatchCode { get; set; }
     public DateOnly OvertimeDate { get; set; }
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
     public decimal RequestedHours { get; set; }
     public decimal ApprovedHours { get; set; }
+    public decimal ActualWorkedOtHours { get; set; } = 0m;
+    public decimal ReconciledOtHours { get; set; } = 0m;
     public string OvertimeRateType { get; set; } = "OT150";
+    /// <summary>Paid (trả tiền OT) | CompensatoryLeave (quy đổi nghỉ bù)</summary>
+    public string CompensationMode { get; set; } = "Paid";
+    public decimal CompensatoryHoursCredited { get; set; } = 0m;
+    public string? LimitWarningMessage { get; set; }
     public string? Reason { get; set; }
     public int? ApprovedByEmployeeId { get; set; }
     public int? WorkflowInstanceId { get; set; }
     public string Status { get; set; } = "Pending";
+    public string? CancelReason { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public string? CancelledByUsername { get; set; }
 
     public Employee Employee { get; set; } = null!;
 }
@@ -191,9 +201,19 @@ public class LeaveType : BaseAuditableEntity
     public string LeaveTypeName { get; set; } = string.Empty;
     public bool IsPaidByCompany { get; set; } = true;
     public bool IsPaidBySocialInsurance { get; set; } = false;
+    public bool CountsAgainstAnnualLeave { get; set; } = false;
+    public bool AllowHalfDay { get; set; } = true;
+    public bool AllowHourly { get; set; } = false;
+    public bool RequiresAttachment { get; set; } = false;
+    public decimal? MaxDaysPerRequest { get; set; }
     public decimal MaxDaysPerYear { get; set; } = 12m;
     public bool AllowCarryForward { get; set; } = true;
     public string AttendanceSymbol { get; set; } = "P";
+    public int DisplayOrder { get; set; } = 0;
+    public bool IsActive { get; set; } = true;
+    public string? LegalReference { get; set; }
+    public bool NeedsHrVerification { get; set; } = true;
+    public string? Description { get; set; }
 
     public ICollection<LeaveBalance> LeaveBalances { get; set; } = new List<LeaveBalance>();
     public ICollection<LeaveRequest> LeaveRequests { get; set; } = new List<LeaveRequest>();
@@ -207,10 +227,19 @@ public class LeaveBalance : BaseAuditableEntity
     public decimal StandardEntitlement { get; set; } = 12m;
     public decimal SeniorityExtraDays { get; set; } = 0m;
     public decimal CarriedForwardDays { get; set; } = 0m;
+    public decimal UsedCarriedForwardDays { get; set; } = 0m;
+    public decimal ExpiredCarryForwardDays { get; set; } = 0m;
     public decimal UsedDays { get; set; } = 0m;
     public decimal PendingDays { get; set; } = 0m;
+    public decimal AdvanceUsedDays { get; set; } = 0m;
     public decimal RemainingDays { get; set; } = 12m;
+    public decimal CompensatoryHoursBalance { get; set; } = 0m;
     public DateOnly? CarryForwardExpiryDate { get; set; }
+    public decimal TerminationPayoutDays { get; set; } = 0m;
+    public decimal TerminationPayoutAmount { get; set; } = 0m;
+    public bool IsTerminationSettled { get; set; } = false;
+    public DateTime? TerminationSettledAt { get; set; }
+    public int? TerminationPayrollPeriodId { get; set; }
 
     public Employee Employee { get; set; } = null!;
     public LeaveType LeaveType { get; set; } = null!;
@@ -224,6 +253,9 @@ public class LeaveRequest : BaseAuditableEntity
     public DateOnly EndDate { get; set; }
     public string StartSession { get; set; } = "FullDay";
     public string EndSession { get; set; } = "FullDay";
+    /// <summary>Days | HalfDay | Hours</summary>
+    public string LeaveDurationMode { get; set; } = "Days";
+    public decimal? RequestedHours { get; set; }
     public decimal TotalDays { get; set; }
     public string? Reason { get; set; }
     public int? HandoverToEmployeeId { get; set; }
@@ -233,6 +265,9 @@ public class LeaveRequest : BaseAuditableEntity
     public string Status { get; set; } = "Pending";
     public string? ApproverComment { get; set; }
     public DateTime? ApprovedAt { get; set; }
+    public string? CancelReason { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public string? CancelledByUsername { get; set; }
 
     public Employee Employee { get; set; } = null!;
     public LeaveType LeaveType { get; set; } = null!;
@@ -253,8 +288,14 @@ public class AttendanceStatutoryParameter : BaseAuditableEntity
     public decimal MinInterShiftRestHours { get; set; } = 12m;
     public decimal MaxNormalDailyHours { get; set; } = 8m;
     public decimal MaxNormalWeeklyHours { get; set; } = 48m;
+    public decimal MaxDailyOvertimeHours { get; set; } = 4m;
+    public decimal MaxTotalDailyWorkingAndOtHours { get; set; } = 12m;
     public decimal MaxMonthlyOvertimeHours { get; set; } = 40m;
     public decimal MaxYearlyOvertimeHours { get; set; } = 200m;
+    public decimal MaxSpecialIndustryYearlyOvertimeHours { get; set; } = 300m;
+    public decimal StandardAnnualLeaveDays { get; set; } = 12m;
+    public int SeniorityBonusYearsInterval { get; set; } = 5;
+    public decimal SeniorityBonusDaysPerInterval { get; set; } = 1m;
     public decimal WeekdayOtMultiplier { get; set; } = 1.5m;
     public decimal WeeklyDayOffOtMultiplier { get; set; } = 2.0m;
     public decimal HolidayOtMultiplier { get; set; } = 3.0m;
@@ -325,6 +366,18 @@ public class AttendancePolicy : BaseAuditableEntity
     public decimal MissedPunchCreditWorkdays { get; set; } = 0m;
     /// <summary>Số ngày X cho phép nhân viên xem & gửi giải trình trước khi khóa bảng công.</summary>
     public int EmployeeReviewWindowDays { get; set; } = 3;
+    public decimal AnnualLeaveCarryForwardCapDays { get; set; } = 5m;
+    public int CarryForwardExpiryMonth { get; set; } = 3;
+    public int CarryForwardExpiryDay { get; set; } = 31;
+    public bool AllowAdvanceAnnualLeave { get; set; } = false;
+    public decimal MaxAdvanceAnnualLeaveDays { get; set; } = 3m;
+    public int MidMonthHireCutoffDay { get; set; } = 15;
+    /// <summary>MinOfApprovedAndActual | UseActualUpToRegistered | UseApprovedFixed</summary>
+    public string OtReconciliationMode { get; set; } = "MinOfApprovedAndActual";
+    public int OvertimeWarningThresholdPercent { get; set; } = 85;
+    public bool BlockOvertimeWhenExceedingLimit { get; set; } = true;
+    public bool AllowCompensatoryLeaveForOt { get; set; } = true;
+    public bool UseSpecialIndustry300OtLimit { get; set; } = false;
 
     public PolicyGroup PolicyGroup { get; set; } = null!;
 }
@@ -357,11 +410,15 @@ public class ShiftSwapRequest : BaseAuditableEntity
     public int? RequesterOriginalShiftId { get; set; }
     public int? TargetOriginalShiftId { get; set; }
     public string Reason { get; set; } = string.Empty;
-    /// <summary>Trạng thái: Pending | Approved | Rejected</summary>
+    /// <summary>Trạng thái: Pending | Approved | Rejected | Cancelled</summary>
     public string Status { get; set; } = "Pending";
+    public int? WorkflowInstanceId { get; set; }
     public int? ApprovedByUserId { get; set; }
     public DateTime? ApprovedAt { get; set; }
     public string? ApproverComment { get; set; }
+    public string? CancelReason { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public string? CancelledByUsername { get; set; }
 
     public Employee RequesterEmployee { get; set; } = null!;
     public Employee TargetEmployee { get; set; } = null!;
@@ -515,6 +572,84 @@ public class AttendanceRecalculationBatch : BaseAuditableEntity
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public string? Message { get; set; }
+}
+
+/// <summary>
+/// Đơn chấm công tổng quát đi qua Workflow: Đi muộn/Về sớm (LateEarly), Công tác (BusinessTrip), Làm việc từ xa (RemoteWork), Giải trình công (AttendanceExplanation).
+/// </summary>
+public class EmployeeTimeRequest : BaseAuditableEntity
+{
+    public int EmployeeId { get; set; }
+    /// <summary>LateEarly | BusinessTrip | RemoteWork | AttendanceExplanation</summary>
+    public string RequestType { get; set; } = "LateEarly";
+    /// <summary>LateArrival | EarlyDeparture | Domestic | Overseas | Home | ClientSite | MissedCheckIn | MissedCheckOut | DeviceError</summary>
+    public string? SubType { get; set; }
+    public DateOnly StartDate { get; set; }
+    public DateOnly EndDate { get; set; }
+    public TimeOnly? PlannedTime { get; set; }
+    public TimeOnly? ProposedEndTime { get; set; }
+    public int? RequestedMinutes { get; set; }
+    public string? LocationOrDestination { get; set; }
+    public string? AttachmentUrl { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    /// <summary>Pending | Approved | Rejected | Cancelled</summary>
+    public string Status { get; set; } = "Pending";
+    public int? WorkflowInstanceId { get; set; }
+    public int? ApprovedByEmployeeId { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public string? ApproverComment { get; set; }
+    public string? CancelReason { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public string? CancelledByUsername { get; set; }
+
+    public Employee Employee { get; set; } = null!;
+}
+
+/// <summary>
+/// Đơn đề nghị hủy/thu hồi đơn đã được duyệt trước đó (đi qua Workflow phê duyệt thu hồi).
+/// </summary>
+public class RequestCancellationRequest : BaseAuditableEntity
+{
+    public int RequesterEmployeeId { get; set; }
+    /// <summary>LeaveRequest | OvertimeRequest | EmployeeTimeRequest | ShiftSwapRequest</summary>
+    public string OriginalEntityType { get; set; } = "LeaveRequest";
+    public int OriginalEntityId { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    /// <summary>Pending | Approved | Rejected</summary>
+    public string Status { get; set; } = "Pending";
+    public int? WorkflowInstanceId { get; set; }
+    public int? ProcessedByUserId { get; set; }
+    public DateTime? ProcessedAt { get; set; }
+    public string? ApproverComment { get; set; }
+    public string? RestoredBalanceSummary { get; set; }
+
+    public Employee RequesterEmployee { get; set; } = null!;
+}
+
+/// <summary>
+/// Quyết toán thanh toán tiền phép năm chưa nghỉ khi nghỉ việc (Điều 113 khoản 3 BLLĐ 2019), đẩy sang kỳ lương.
+/// </summary>
+public class TerminationLeaveSettlement : BaseAuditableEntity
+{
+    public int EmployeeId { get; set; }
+    public int SettlementYear { get; set; }
+    public DateOnly TerminationDate { get; set; }
+    public decimal ProRatedEntitlementDays { get; set; }
+    public decimal SeniorityExtraDays { get; set; }
+    public decimal ValidCarryForwardDays { get; set; }
+    public decimal UsedDays { get; set; }
+    public decimal UnusedPayableDays { get; set; }
+    public decimal BaseSalaryUsed { get; set; }
+    public decimal StandardWorkdaysUsed { get; set; }
+    public decimal PayoutAmount { get; set; }
+    public int TargetPayrollMonth { get; set; }
+    public int TargetPayrollYear { get; set; }
+    public int? PayrollPeriodId { get; set; }
+    /// <summary>Calculated | PushedToPayroll | Paid</summary>
+    public string Status { get; set; } = "PushedToPayroll";
+    public string? Notes { get; set; }
+
+    public Employee Employee { get; set; } = null!;
 }
 
 

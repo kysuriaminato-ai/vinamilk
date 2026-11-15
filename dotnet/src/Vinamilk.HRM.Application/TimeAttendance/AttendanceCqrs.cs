@@ -1235,7 +1235,8 @@ public record SubmitOvertimeRequestCommand(
     TimeOnly StartTime,
     TimeOnly EndTime,
     string OvertimeRateType, // OT150, OT200, OT300
-    string Reason) : IRequest<int>;
+    string Reason,
+    string CompensationMode = "Paid") : IRequest<int>;
 
 public class SubmitOvertimeRequestCommandHandler : IRequestHandler<SubmitOvertimeRequestCommand, int>
 {
@@ -1254,12 +1255,20 @@ public class SubmitOvertimeRequestCommandHandler : IRequestHandler<SubmitOvertim
         if (hours <= 0) hours += 24.0; // Ca qua đêm
         decimal requestedHours = Math.Round((decimal)hours, 1);
 
-        if (requestedHours <= 0 || requestedHours > 12)
-            throw new InvalidOperationException("Số giờ đăng ký OT trong ngày phải từ 0.5 đến 12 giờ.");
+        if (requestedHours <= 0)
+            throw new InvalidOperationException("Số giờ đăng ký OT trong ngày phải lớn hơn 0.");
+
+        var normalizedCompMode = string.Equals(request.CompensationMode, "CompensatoryLeave", StringComparison.OrdinalIgnoreCase)
+            ? "CompensatoryLeave"
+            : "Paid";
 
         var statutory = await AttendancePolicyAndShiftEngine.ResolveStatutoryParameterAsync(_context, request.OvertimeDate, cancellationToken);
+        var resolvedPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(_context, request.EmployeeId, request.OvertimeDate, cancellationToken);
 
-        // Kiểm tra trần OT tháng và năm từ bảng AttendanceStatutoryParameter
+        if (normalizedCompMode == "CompensatoryLeave" && !resolvedPolicy.Policy.AllowCompensatoryLeaveForOt)
+            throw new InvalidOperationException($"Nhóm chính sách '{resolvedPolicy.PolicyCode}' không cho phép chọn nghỉ bù thay trả tiền OT.");
+
+        // Kiểm tra trần OT ngày/tháng/năm từ AttendanceStatutoryParameter & AttendancePolicy
         var monthOt = await _context.OvertimeRequests
             .AsNoTracking()
             .Where(o => o.EmployeeId == request.EmployeeId &&
@@ -1268,9 +1277,6 @@ public class SubmitOvertimeRequestCommandHandler : IRequestHandler<SubmitOvertim
                         o.Status != "Rejected" && o.Status != "Cancelled")
             .SumAsync(o => o.RequestedHours, cancellationToken);
 
-        if (monthOt + requestedHours > statutory.MaxMonthlyOvertimeHours)
-            throw new InvalidOperationException($"Vượt trần làm thêm giờ tháng! Tổng OT tháng hiện tại ({monthOt:0.#}h) + đơn mới ({requestedHours:0.#}h) vượt giới hạn {statutory.MaxMonthlyOvertimeHours:0.#} giờ/tháng theo {statutory.LegalReference}.");
-
         var yearOt = await _context.OvertimeRequests
             .AsNoTracking()
             .Where(o => o.EmployeeId == request.EmployeeId &&
@@ -1278,8 +1284,11 @@ public class SubmitOvertimeRequestCommandHandler : IRequestHandler<SubmitOvertim
                         o.Status != "Rejected" && o.Status != "Cancelled")
             .SumAsync(o => o.RequestedHours, cancellationToken);
 
-        if (yearOt + requestedHours > statutory.MaxYearlyOvertimeHours)
-            throw new InvalidOperationException($"Vượt trần làm thêm giờ năm ({yearOt + requestedHours:0.#}/{statutory.MaxYearlyOvertimeHours:0.#} giờ) theo {statutory.LegalReference}.");
+        var limitEval = OvertimePolicyEngine.EvaluateLimits(
+            requestedHours, monthOt, yearOt, statutory, resolvedPolicy.Policy);
+
+        if (!limitEval.IsAllowed)
+            throw new InvalidOperationException(limitEval.Message ?? "Vượt trần làm thêm giờ quy định.");
 
         var otEntity = new OvertimeRequest
         {
@@ -1289,7 +1298,11 @@ public class SubmitOvertimeRequestCommandHandler : IRequestHandler<SubmitOvertim
             EndTime = request.EndTime,
             RequestedHours = requestedHours,
             ApprovedHours = 0m,
+            ActualWorkedOtHours = 0m,
+            ReconciledOtHours = 0m,
             OvertimeRateType = request.OvertimeRateType,
+            CompensationMode = normalizedCompMode,
+            LimitWarningMessage = limitEval.Message,
             Reason = request.Reason.Trim(),
             Status = "Pending"
         };
@@ -1302,7 +1315,7 @@ public class SubmitOvertimeRequestCommandHandler : IRequestHandler<SubmitOvertim
             "OvertimeRequest",
             otEntity.Id,
             request.EmployeeId,
-            $"Đăng ký OT {request.OvertimeRateType} ({requestedHours:0.#}h ngày {request.OvertimeDate:dd/MM/yyyy})",
+            $"Đăng ký OT {(normalizedCompMode == "CompensatoryLeave" ? "[Nghỉ bù] " : string.Empty)}{request.OvertimeRateType} ({requestedHours:0.#}h ngày {request.OvertimeDate:dd/MM/yyyy})",
             requestedHours,
             "/Attendance?tab=overtime"), cancellationToken);
 

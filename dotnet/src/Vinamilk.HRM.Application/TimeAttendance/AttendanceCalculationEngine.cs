@@ -92,7 +92,8 @@ public sealed record AttendanceApprovedOvertimeInput(
     TimeOnly StartTime,
     TimeOnly EndTime,
     decimal ApprovedHours,
-    string? RateType = null);
+    string? RateType = null,
+    string CompensationMode = "Paid");
 
 public sealed record AttendanceApprovedExplanationInput(
     TimeOnly ProposedCheckIn,
@@ -663,7 +664,11 @@ public static class AttendanceCalculationEngine
         AttendanceStatutoryParameter statutory,
         bool isNonWorkingDay)
     {
-        if (approvedOvertimes.Count == 0 && policy.RequireApprovedOvertimeRequest)
+        var paidOvertimes = approvedOvertimes
+            .Where(o => !string.Equals(o.CompensationMode, "CompensatoryLeave", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (paidOvertimes.Count == 0 && policy.RequireApprovedOvertimeRequest)
             return (0m, 0m);
 
         decimal dayMinutes = 0m;
@@ -672,34 +677,47 @@ public static class AttendanceCalculationEngine
         DateTime? firstPunch = validPunches.FirstOrDefault()?.PunchTime;
         DateTime? lastPunch = validPunches.Count > 1 ? validPunches.Last().PunchTime : null;
 
-        if (approvedOvertimes.Count > 0)
+        if (paidOvertimes.Count > 0)
         {
-            foreach (var ot in approvedOvertimes)
+            foreach (var ot in paidOvertimes)
             {
                 var otStart = workDate.ToDateTime(ot.StartTime);
                 var otEnd = ot.EndTime <= ot.StartTime
                     ? workDate.AddDays(1).ToDateTime(ot.EndTime)
                     : workDate.ToDateTime(ot.EndTime);
 
-                // Nếu có log chấm công thực tế thì kẹp trong khoảng [firstPunch .. lastPunch], nếu thiếu punch trên ngày OT duyệt vẫn tôn trọng tối đa ApprovedHours
-                if (firstPunch.HasValue && lastPunch.HasValue && lastPunch > firstPunch)
+                if (string.Equals(policy.OtReconciliationMode, "UseApprovedFixed", StringComparison.OrdinalIgnoreCase))
                 {
-                    var effStart = otStart > firstPunch.Value ? otStart : firstPunch.Value;
-                    var effEnd = otEnd < lastPunch.Value ? otEnd : lastPunch.Value;
-                    if (effEnd <= effStart)
+                    if (ot.ApprovedHours > 0m)
                     {
-                        // Không chấm trong khung OT -> dùng otEnd/otStart theo ApprovedHours nếu không yêu cầu punch? Thực tế phải có mặt để tính OT: nếu punch nằm hoàn toàn ngoài -> 0; trừ khi 0 punch hoàn toàn (giả định test chỉ truyền ApprovedOvertime hoặc kèm punch)
-                        continue;
+                        var fixedEnd = otStart.AddMinutes((double)(ot.ApprovedHours * 60m));
+                        if (otEnd > fixedEnd) otEnd = fixedEnd;
                     }
-                    otStart = effStart;
-                    otEnd = effEnd;
                 }
-
-                // Kẹp thời lượng tối đa không vượt quá ApprovedHours (nếu > 0)
-                if (ot.ApprovedHours > 0m)
+                else
                 {
-                    var maxEnd = otStart.AddMinutes((double)(ot.ApprovedHours * 60m));
-                    if (otEnd > maxEnd) otEnd = maxEnd;
+                    // Đối chiếu với log chấm công thực tế: MIN(đăng ký, thực tế)
+                    if (firstPunch.HasValue && lastPunch.HasValue && lastPunch > firstPunch)
+                    {
+                        var effStart = otStart > firstPunch.Value ? otStart : firstPunch.Value;
+                        var effEnd = otEnd < lastPunch.Value ? otEnd : lastPunch.Value;
+                        if (effEnd <= effStart)
+                        {
+                            if (!string.Equals(policy.OtReconciliationMode, "UseActualUpToRegistered", StringComparison.OrdinalIgnoreCase))
+                                continue;
+                        }
+                        else
+                        {
+                            otStart = effStart;
+                            otEnd = effEnd;
+                        }
+                    }
+
+                    if (ot.ApprovedHours > 0m)
+                    {
+                        var maxEnd = otStart.AddMinutes((double)(ot.ApprovedHours * 60m));
+                        if (otEnd > maxEnd) otEnd = maxEnd;
+                    }
                 }
 
                 var nMins = CalculateNightMinutesSingleSpan(otStart, otEnd, statutory.NightWorkStartTime, statutory.NightWorkEndTime);

@@ -199,9 +199,17 @@ public class OvertimeRequestConfiguration : IEntityTypeConfiguration<OvertimeReq
 
         builder.Property(x => x.RequestedHours).HasColumnType("decimal(5,2)");
         builder.Property(x => x.ApprovedHours).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.ActualWorkedOtHours).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.ReconciledOtHours).HasColumnType("decimal(5,2)");
         builder.Property(x => x.OvertimeRateType).HasColumnType("varchar(20)").IsRequired();
+        builder.Property(x => x.OvertimeBatchCode).HasColumnType("varchar(50)");
+        builder.Property(x => x.CompensationMode).HasColumnType("varchar(30)").HasDefaultValue("Paid");
+        builder.Property(x => x.CompensatoryHoursCredited).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.LimitWarningMessage).HasMaxLength(500);
         builder.Property(x => x.Reason).HasMaxLength(500);
         builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("Pending");
+        builder.Property(x => x.CancelReason).HasMaxLength(500);
+        builder.Property(x => x.CancelledByUsername).HasMaxLength(100);
 
         builder.HasIndex(x => new { x.EmployeeId, x.OvertimeDate })
             .HasDatabaseName("IX_OvertimeRequests_Emp_Date");
@@ -221,8 +229,11 @@ public class LeaveTypeConfiguration : IEntityTypeConfiguration<LeaveType>
 
         builder.Property(x => x.LeaveTypeCode).HasColumnType("varchar(30)").IsRequired();
         builder.Property(x => x.LeaveTypeName).HasMaxLength(150).IsRequired();
+        builder.Property(x => x.MaxDaysPerRequest).HasColumnType("decimal(5,2)");
         builder.Property(x => x.MaxDaysPerYear).HasColumnType("decimal(5,2)");
-        builder.Property(x => x.AttendanceSymbol).HasColumnType("varchar(10)").IsRequired();
+        builder.Property(x => x.AttendanceSymbol).HasColumnType("nvarchar(20)").IsRequired();
+        builder.Property(x => x.LegalReference).HasMaxLength(300);
+        builder.Property(x => x.Description).HasMaxLength(500);
 
         builder.HasIndex(x => x.LeaveTypeCode)
             .IsUnique()
@@ -240,9 +251,15 @@ public class LeaveBalanceConfiguration : IEntityTypeConfiguration<LeaveBalance>
         builder.Property(x => x.StandardEntitlement).HasColumnType("decimal(5,2)");
         builder.Property(x => x.SeniorityExtraDays).HasColumnType("decimal(5,2)");
         builder.Property(x => x.CarriedForwardDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.UsedCarriedForwardDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.ExpiredCarryForwardDays).HasColumnType("decimal(5,2)");
         builder.Property(x => x.UsedDays).HasColumnType("decimal(5,2)");
         builder.Property(x => x.PendingDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.AdvanceUsedDays).HasColumnType("decimal(5,2)");
         builder.Property(x => x.RemainingDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.CompensatoryHoursBalance).HasColumnType("decimal(6,2)");
+        builder.Property(x => x.TerminationPayoutDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.TerminationPayoutAmount).HasColumnType("decimal(18,0)");
 
         builder.HasIndex(x => new { x.EmployeeId, x.LeaveTypeId, x.Year })
             .IsUnique()
@@ -269,11 +286,15 @@ public class LeaveRequestConfiguration : IEntityTypeConfiguration<LeaveRequest>
 
         builder.Property(x => x.StartSession).HasColumnType("varchar(20)").HasDefaultValue("FullDay");
         builder.Property(x => x.EndSession).HasColumnType("varchar(20)").HasDefaultValue("FullDay");
+        builder.Property(x => x.LeaveDurationMode).HasColumnType("varchar(20)").HasDefaultValue("Days");
+        builder.Property(x => x.RequestedHours).HasColumnType("decimal(5,2)");
         builder.Property(x => x.TotalDays).HasColumnType("decimal(5,2)");
         builder.Property(x => x.Reason).HasMaxLength(500);
         builder.Property(x => x.AttachmentUrl).HasMaxLength(300);
         builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("Pending");
         builder.Property(x => x.ApproverComment).HasMaxLength(500);
+        builder.Property(x => x.CancelReason).HasMaxLength(500);
+        builder.Property(x => x.CancelledByUsername).HasMaxLength(100);
 
         builder.HasIndex(x => new { x.EmployeeId, x.StartDate, x.Status })
             .HasDatabaseName("IX_LeaveRequests_Emp_Start_Status");
@@ -300,8 +321,13 @@ public class AttendanceStatutoryParameterConfiguration : IEntityTypeConfiguratio
         builder.Property(x => x.MinInterShiftRestHours).HasColumnType("decimal(5,2)");
         builder.Property(x => x.MaxNormalDailyHours).HasColumnType("decimal(5,2)");
         builder.Property(x => x.MaxNormalWeeklyHours).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.MaxDailyOvertimeHours).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.MaxTotalDailyWorkingAndOtHours).HasColumnType("decimal(5,2)");
         builder.Property(x => x.MaxMonthlyOvertimeHours).HasColumnType("decimal(6,2)");
         builder.Property(x => x.MaxYearlyOvertimeHours).HasColumnType("decimal(6,2)");
+        builder.Property(x => x.MaxSpecialIndustryYearlyOvertimeHours).HasColumnType("decimal(6,2)");
+        builder.Property(x => x.StandardAnnualLeaveDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.SeniorityBonusDaysPerInterval).HasColumnType("decimal(5,2)");
         builder.Property(x => x.WeekdayOtMultiplier).HasColumnType("decimal(5,2)");
         builder.Property(x => x.WeeklyDayOffOtMultiplier).HasColumnType("decimal(5,2)");
         builder.Property(x => x.HolidayOtMultiplier).HasColumnType("decimal(5,2)");
@@ -375,6 +401,9 @@ public class AttendancePolicyConfiguration : IEntityTypeConfiguration<Attendance
         builder.Property(x => x.MaxWeeklyWorkingHoursOverride).HasColumnType("decimal(5,2)");
         builder.Property(x => x.PunchPairingMode).HasColumnType("varchar(30)").HasDefaultValue("FirstLast");
         builder.Property(x => x.MissedPunchCreditWorkdays).HasColumnType("decimal(4,2)").HasDefaultValue(0m);
+        builder.Property(x => x.AnnualLeaveCarryForwardCapDays).HasColumnType("decimal(5,2)").HasDefaultValue(5m);
+        builder.Property(x => x.MaxAdvanceAnnualLeaveDays).HasColumnType("decimal(5,2)").HasDefaultValue(3m);
+        builder.Property(x => x.OtReconciliationMode).HasColumnType("varchar(40)").HasDefaultValue("MinOfApprovedAndActual");
 
         builder.HasIndex(x => x.PolicyGroupId)
             .IsUnique()
@@ -592,6 +621,83 @@ public class AttendanceRecalculationBatchConfiguration : IEntityTypeConfiguratio
             .IsUnique()
             .HasDatabaseName("UQ_AttendanceRecalculationBatches_Code")
             .HasFilter("[IsDeleted] = 0");
+    }
+}
+
+public class EmployeeTimeRequestConfiguration : IEntityTypeConfiguration<EmployeeTimeRequest>
+{
+    public void Configure(EntityTypeBuilder<EmployeeTimeRequest> builder)
+    {
+        builder.ConfigureBaseAuditable<EmployeeTimeRequest, int>("EmployeeTimeRequests", "time");
+
+        builder.Property(x => x.RequestType).HasColumnType("varchar(30)").IsRequired();
+        builder.Property(x => x.SubType).HasColumnType("varchar(30)");
+        builder.Property(x => x.LocationOrDestination).HasMaxLength(250);
+        builder.Property(x => x.AttachmentUrl).HasMaxLength(300);
+        builder.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+        builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("Pending");
+        builder.Property(x => x.ApproverComment).HasMaxLength(500);
+        builder.Property(x => x.CancelReason).HasMaxLength(500);
+        builder.Property(x => x.CancelledByUsername).HasMaxLength(100);
+
+        builder.HasIndex(x => new { x.EmployeeId, x.RequestType, x.StartDate })
+            .HasDatabaseName("IX_EmployeeTimeRequests_Emp_Type_Start");
+
+        builder.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class RequestCancellationRequestConfiguration : IEntityTypeConfiguration<RequestCancellationRequest>
+{
+    public void Configure(EntityTypeBuilder<RequestCancellationRequest> builder)
+    {
+        builder.ConfigureBaseAuditable<RequestCancellationRequest, int>("RequestCancellationRequests", "time");
+
+        builder.Property(x => x.OriginalEntityType).HasColumnType("varchar(40)").IsRequired();
+        builder.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+        builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("Pending");
+        builder.Property(x => x.ApproverComment).HasMaxLength(500);
+        builder.Property(x => x.RestoredBalanceSummary).HasMaxLength(500);
+
+        builder.HasIndex(x => new { x.OriginalEntityType, x.OriginalEntityId, x.Status })
+            .HasDatabaseName("IX_RequestCancellationRequests_Entity");
+
+        builder.HasOne(x => x.RequesterEmployee)
+            .WithMany()
+            .HasForeignKey(x => x.RequesterEmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class TerminationLeaveSettlementConfiguration : IEntityTypeConfiguration<TerminationLeaveSettlement>
+{
+    public void Configure(EntityTypeBuilder<TerminationLeaveSettlement> builder)
+    {
+        builder.ConfigureBaseAuditable<TerminationLeaveSettlement, int>("TerminationLeaveSettlements", "time");
+
+        builder.Property(x => x.ProRatedEntitlementDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.SeniorityExtraDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.ValidCarryForwardDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.UsedDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.UnusedPayableDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.BaseSalaryUsed).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.StandardWorkdaysUsed).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.PayoutAmount).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("PushedToPayroll");
+        builder.Property(x => x.Notes).HasMaxLength(500);
+
+        builder.HasIndex(x => new { x.EmployeeId, x.SettlementYear })
+            .IsUnique()
+            .HasDatabaseName("UQ_TerminationLeaveSettlements_Emp_Year")
+            .HasFilter("[IsDeleted] = 0");
+
+        builder.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 

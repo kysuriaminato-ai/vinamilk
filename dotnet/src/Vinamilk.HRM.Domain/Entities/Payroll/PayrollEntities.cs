@@ -146,6 +146,7 @@ public class PayrollRecord : BaseLongAuditableEntity
     public decimal OtherAllowance { get; set; }
     public decimal OvertimePay { get; set; }
     public decimal KpiBonus { get; set; }
+    public decimal UnusedLeavePayout { get; set; } = 0m;
     public decimal GrossIncome { get; set; }
     public decimal InsuranceSalaryBase { get; set; }
     public decimal UnemploymentInsuranceBase { get; set; }

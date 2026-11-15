@@ -34,17 +34,25 @@ public sealed record CalculatedAttendanceResultDto(
 
 public static class AttendancePolicyAndShiftEngine
 {
-    public static async Task<AttendanceStatutoryParameter> ResolveStatutoryParameterAsync(
+    public static async Task<AttendanceStatutoryParameter?> TryResolveStatutoryParameterAsync(
         IApplicationDbContext context,
         DateOnly effectiveDate,
         CancellationToken cancellationToken)
     {
-        var param = await context.AttendanceStatutoryParameters
+        return await context.AttendanceStatutoryParameters
             .AsNoTracking()
             .Where(p => p.EffectiveFrom <= effectiveDate && (p.EffectiveTo == null || p.EffectiveTo >= effectiveDate))
             .OrderByDescending(p => p.EffectiveFrom)
             .ThenByDescending(p => p.Id)
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public static async Task<AttendanceStatutoryParameter> ResolveStatutoryParameterAsync(
+        IApplicationDbContext context,
+        DateOnly effectiveDate,
+        CancellationToken cancellationToken)
+    {
+        var param = await TryResolveStatutoryParameterAsync(context, effectiveDate, cancellationToken);
 
         return param ?? throw new InvalidOperationException(
             $"Chưa cấu hình tham số pháp lý chấm công (AttendanceStatutoryParameter) hiệu lực tại ngày {effectiveDate:dd/MM/yyyy}.");

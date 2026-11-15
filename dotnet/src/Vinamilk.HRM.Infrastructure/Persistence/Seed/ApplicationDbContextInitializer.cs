@@ -355,14 +355,7 @@ public sealed class ApplicationDbContextInitializer
             };
             await _context.WorkShifts.AddRangeAsync(shifts, cancellationToken);
 
-            var leaveTypes = new List<LeaveType>
-            {
-                new() { LeaveTypeCode = "ANNUAL", LeaveTypeName = "Nghỉ phép năm hưởng nguyên lương", IsPaidByCompany = true, MaxDaysPerYear = 12m, AllowCarryForward = true, AttendanceSymbol = "P" },
-                new() { LeaveTypeCode = "SICK", LeaveTypeName = "Nghỉ ốm hưởng BHXH", IsPaidByCompany = false, IsPaidBySocialInsurance = true, MaxDaysPerYear = 30m, AllowCarryForward = false, AttendanceSymbol = "Om" },
-                new() { LeaveTypeCode = "MATERNITY", LeaveTypeName = "Nghỉ thai sản", IsPaidByCompany = false, IsPaidBySocialInsurance = true, MaxDaysPerYear = 180m, AllowCarryForward = false, AttendanceSymbol = "TS" },
-                new() { LeaveTypeCode = "UNPAID", LeaveTypeName = "Nghỉ việc riêng không hưởng lương", IsPaidByCompany = false, MaxDaysPerYear = 30m, AllowCarryForward = false, AttendanceSymbol = "KL" },
-                new() { LeaveTypeCode = "MARRIAGE", LeaveTypeName = "Nghỉ chế độ Hiếu / Hỷ", IsPaidByCompany = true, MaxDaysPerYear = 3m, AllowCarryForward = false, AttendanceSymbol = "P" }
-            };
+            var leaveTypes = BuildDefaultLeaveTypes();
             await _context.LeaveTypes.AddRangeAsync(leaveTypes, cancellationToken);
 
             var payrollParams = new List<PayrollParameter>
@@ -786,6 +779,16 @@ public sealed class ApplicationDbContextInitializer
             await _context.AttendanceSymbolDefinitions.AddRangeAsync(BuildDefaultAttendanceSymbols(), cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
         }
+
+        // Idempotent seed cho CL4: Bổ sung các loại nghỉ theo BLLĐ 2019 (chính sách nghỉ việc riêng, nghỉ bù OT, công tác)
+        var existingLeaveCodes = await _context.LeaveTypes.Select(l => l.LeaveTypeCode).ToListAsync(cancellationToken);
+        var defaultLeaveTypes = BuildDefaultLeaveTypes();
+        var missingLeaveTypes = defaultLeaveTypes.Where(l => !existingLeaveCodes.Contains(l.LeaveTypeCode)).ToList();
+        if (missingLeaveTypes.Count > 0)
+        {
+            await _context.LeaveTypes.AddRangeAsync(missingLeaveTypes, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
     }
 
     public static List<AttendanceSymbolDefinition> BuildDefaultAttendanceSymbols() =>
@@ -820,27 +823,217 @@ public sealed class ApplicationDbContextInitializer
         new() { DeviceCode = "HIKVISION-FACE-HQ", DeviceName = "Máy nhận diện khuôn mặt Hikvision Trụ sở chính", ConnectorType = "FileExport", LocationName = "Trụ sở chính Vinamilk Tower", SyncIntervalMinutes = 15, IsActive = true }
     ];
 
+    public static List<LeaveType> BuildDefaultLeaveTypes() =>
+    [
+        new()
+        {
+            LeaveTypeCode = "ANNUAL",
+            LeaveTypeName = "Nghỉ phép năm hưởng nguyên lương",
+            IsPaidByCompany = true,
+            IsPaidBySocialInsurance = false,
+            CountsAgainstAnnualLeave = true,
+            AllowHalfDay = true,
+            AllowHourly = true,
+            RequiresAttachment = false,
+            MaxDaysPerRequest = 15m,
+            MaxDaysPerYear = 12m,
+            AllowCarryForward = true,
+            AttendanceSymbol = "P",
+            DisplayOrder = 1,
+            IsActive = true,
+            LegalReference = "Điều 113 & 114 Bộ luật Lao động 45/2019/QH14 (12 ngày cơ bản + 1 ngày / 5 năm thâm niên)",
+            NeedsHrVerification = true,
+            Description = "Phép năm tiêu chuẩn; phần nghỉ chưa dùng có thể chuyển năm theo chính sách công ty hoặc thanh toán khi nghỉ việc."
+        },
+        new()
+        {
+            LeaveTypeCode = "MARRIAGE",
+            LeaveTypeName = "Nghỉ việc riêng: Bản thân kết hôn (Hưởng nguyên lương)",
+            IsPaidByCompany = true,
+            IsPaidBySocialInsurance = false,
+            CountsAgainstAnnualLeave = false,
+            AllowHalfDay = false,
+            AllowHourly = false,
+            RequiresAttachment = true,
+            MaxDaysPerRequest = 3m,
+            MaxDaysPerYear = 3m,
+            AllowCarryForward = false,
+            AttendanceSymbol = "R",
+            DisplayOrder = 2,
+            IsActive = true,
+            LegalReference = "Điều 115 khoản 1 điểm a Bộ luật Lao động 45/2019/QH14",
+            NeedsHrVerification = true,
+            Description = "Người lao động kết hôn được nghỉ 03 ngày hưởng nguyên lương."
+        },
+        new()
+        {
+            LeaveTypeCode = "CHILD_MARRIAGE",
+            LeaveTypeName = "Nghỉ việc riêng: Con đẻ/con nuôi kết hôn (Hưởng nguyên lương)",
+            IsPaidByCompany = true,
+            IsPaidBySocialInsurance = false,
+            CountsAgainstAnnualLeave = false,
+            AllowHalfDay = false,
+            AllowHourly = false,
+            RequiresAttachment = true,
+            MaxDaysPerRequest = 1m,
+            MaxDaysPerYear = 2m,
+            AllowCarryForward = false,
+            AttendanceSymbol = "R",
+            DisplayOrder = 3,
+            IsActive = true,
+            LegalReference = "Điều 115 khoản 1 điểm b Bộ luật Lao động 45/2019/QH14",
+            NeedsHrVerification = true,
+            Description = "Con đẻ, con nuôi kết hôn được nghỉ 01 ngày hưởng nguyên lương."
+        },
+        new()
+        {
+            LeaveTypeCode = "BEREAVEMENT",
+            LeaveTypeName = "Nghỉ việc riêng: Tang chế người thân (Hưởng nguyên lương)",
+            IsPaidByCompany = true,
+            IsPaidBySocialInsurance = false,
+            CountsAgainstAnnualLeave = false,
+            AllowHalfDay = false,
+            AllowHourly = false,
+            RequiresAttachment = true,
+            MaxDaysPerRequest = 3m,
+            MaxDaysPerYear = 6m,
+            AllowCarryForward = false,
+            AttendanceSymbol = "R",
+            DisplayOrder = 4,
+            IsActive = true,
+            LegalReference = "Điều 115 khoản 1 điểm c Bộ luật Lao động 45/2019/QH14",
+            NeedsHrVerification = true,
+            Description = "Cha mẹ đẻ/nuôi, cha mẹ vợ/chồng, vợ/chồng, con đẻ/con nuôi chết được nghỉ 03 ngày hưởng nguyên lương."
+        },
+        new()
+        {
+            LeaveTypeCode = "SICK",
+            LeaveTypeName = "Nghỉ ốm hưởng chế độ BHXH",
+            IsPaidByCompany = false,
+            IsPaidBySocialInsurance = true,
+            CountsAgainstAnnualLeave = false,
+            AllowHalfDay = false,
+            AllowHourly = false,
+            RequiresAttachment = true,
+            MaxDaysPerRequest = 30m,
+            MaxDaysPerYear = 30m,
+            AllowCarryForward = false,
+            AttendanceSymbol = "Ô",
+            DisplayOrder = 5,
+            IsActive = true,
+            LegalReference = "Luật BHXH (Điều 25-26) — Cần giấy xác nhận nghỉ việc hưởng BHXH",
+            NeedsHrVerification = true,
+            Description = "Cơ quan BHXH chi trả theo hồ sơ y tế hợp lệ."
+        },
+        new()
+        {
+            LeaveTypeCode = "MATERNITY",
+            LeaveTypeName = "Nghỉ thai sản hưởng chế độ BHXH",
+            IsPaidByCompany = false,
+            IsPaidBySocialInsurance = true,
+            CountsAgainstAnnualLeave = false,
+            AllowHalfDay = false,
+            AllowHourly = false,
+            RequiresAttachment = true,
+            MaxDaysPerRequest = 180m,
+            MaxDaysPerYear = 180m,
+            AllowCarryForward = false,
+            AttendanceSymbol = "TS",
+            DisplayOrder = 6,
+            IsActive = true,
+            LegalReference = "Điều 139 Bộ luật Lao động 45/2019/QH14 & Luật BHXH",
+            NeedsHrVerification = true,
+            Description = "Nghỉ thai sản 6 tháng (hưởng BHXH); cần đính kèm giấy chứng sinh / xác nhận y tế."
+        },
+        new()
+        {
+            LeaveTypeCode = "UNPAID",
+            LeaveTypeName = "Nghỉ việc riêng không hưởng lương",
+            IsPaidByCompany = false,
+            IsPaidBySocialInsurance = false,
+            CountsAgainstAnnualLeave = false,
+            AllowHalfDay = true,
+            AllowHourly = true,
+            RequiresAttachment = false,
+            MaxDaysPerRequest = 30m,
+            MaxDaysPerYear = 30m,
+            AllowCarryForward = false,
+            AttendanceSymbol = "Ro",
+            DisplayOrder = 7,
+            IsActive = true,
+            LegalReference = "Điều 115 khoản 2-3 Bộ luật Lao động 45/2019/QH14",
+            NeedsHrVerification = true,
+            Description = "Nghỉ không lương theo thỏa thuận hoặc chế độ không hưởng lương."
+        },
+        new()
+        {
+            LeaveTypeCode = "BUSINESS_TRIP",
+            LeaveTypeName = "Đi công tác (Hưởng nguyên lương)",
+            IsPaidByCompany = true,
+            IsPaidBySocialInsurance = false,
+            CountsAgainstAnnualLeave = false,
+            AllowHalfDay = true,
+            AllowHourly = false,
+            RequiresAttachment = false,
+            MaxDaysPerRequest = 30m,
+            MaxDaysPerYear = 90m,
+            AllowCarryForward = false,
+            AttendanceSymbol = "CT",
+            DisplayOrder = 8,
+            IsActive = true,
+            LegalReference = "Quy chế công tác nội bộ doanh nghiệp",
+            NeedsHrVerification = true,
+            Description = "Được ghi nhận đủ công đi công tác mà không cần chấm công tại văn phòng."
+        },
+        new()
+        {
+            LeaveTypeCode = "COMP_LEAVE",
+            LeaveTypeName = "Nghỉ bù từ làm thêm giờ (Hưởng lương / trừ quỹ nghỉ bù)",
+            IsPaidByCompany = true,
+            IsPaidBySocialInsurance = false,
+            CountsAgainstAnnualLeave = false,
+            AllowHalfDay = true,
+            AllowHourly = true,
+            RequiresAttachment = false,
+            MaxDaysPerRequest = 5m,
+            MaxDaysPerYear = 30m,
+            AllowCarryForward = false,
+            AttendanceSymbol = "P",
+            DisplayOrder = 9,
+            IsActive = true,
+            LegalReference = "Thỏa thuận nghỉ bù OT theo quy chế lao động & BLLĐ 2019",
+            NeedsHrVerification = true,
+            Description = "Sử dụng quỹ giờ nghỉ bù đã tích lũy từ các đơn OT chọn hình thức nghỉ bù."
+        }
+    ];
+
     public static List<AttendanceStatutoryParameter> BuildDefaultAttendanceStatutoryParameters() =>
     [
         new()
         {
             EffectiveFrom = new DateOnly(2021, 1, 1),
             EffectiveTo = null,
-            LegalReference = "Bộ luật Lao động 45/2019/QH14 (Điều 105, 106, 107, 109, 112); NĐ 145/2020/NĐ-CP",
+            LegalReference = "Bộ luật Lao động 45/2019/QH14 (Điều 105, 106, 107, 109, 112, 113, 114); NĐ 145/2020/NĐ-CP",
             NeedsHrVerification = true,
             NightWorkStartTime = new TimeOnly(22, 0),
             NightWorkEndTime = new TimeOnly(6, 0),
             MinInterShiftRestHours = 12m,
             MaxNormalDailyHours = 8m,
             MaxNormalWeeklyHours = 48m,
+            MaxDailyOvertimeHours = 4m,
+            MaxTotalDailyWorkingAndOtHours = 12m,
             MaxMonthlyOvertimeHours = 40m,
             MaxYearlyOvertimeHours = 200m,
+            MaxSpecialIndustryYearlyOvertimeHours = 300m,
+            StandardAnnualLeaveDays = 12m,
+            SeniorityBonusYearsInterval = 5,
+            SeniorityBonusDaysPerInterval = 1m,
             WeekdayOtMultiplier = 1.5m,
             WeeklyDayOffOtMultiplier = 2.0m,
             HolidayOtMultiplier = 3.0m,
             NightShiftBonusRate = 0.30m,
             NightOtExtraBonusRate = 0.20m,
-            Notes = "Tham số pháp lý chấm công/OT/giờ đêm chuẩn BLLĐ 2019 — Cần HR đối chiếu khi ban hành văn bản mới"
+            Notes = "Tham số pháp lý chấm công/OT/phép năm chuẩn BLLĐ 2019 — Cần HR đối chiếu khi ban hành văn bản mới"
         }
     ];
 
@@ -866,7 +1059,19 @@ public sealed class ApplicationDbContextInitializer
             MissedPunchOverQuotaAction = "FixedFine",
             MissedPunchPenaltyAmount = 100000m,
             RequireApprovedOvertimeRequest = true,
-            WeeklyWorkdaysMask = "Mon,Tue,Wed,Thu,Fri"
+            WeeklyWorkdaysMask = "Mon,Tue,Wed,Thu,Fri",
+            EmployeeReviewWindowDays = 3,
+            AnnualLeaveCarryForwardCapDays = 5m,
+            CarryForwardExpiryMonth = 3,
+            CarryForwardExpiryDay = 31,
+            AllowAdvanceAnnualLeave = false,
+            MaxAdvanceAnnualLeaveDays = 3m,
+            MidMonthHireCutoffDay = 15,
+            OtReconciliationMode = "MinOfApprovedAndActual",
+            OvertimeWarningThresholdPercent = 85,
+            BlockOvertimeWhenExceedingLimit = true,
+            AllowCompensatoryLeaveForOt = true,
+            UseSpecialIndustry300OtLimit = false
         });
         return group;
     }

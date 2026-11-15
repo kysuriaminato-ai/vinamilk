@@ -150,6 +150,7 @@ public class PayrollRecordConfiguration : IEntityTypeConfiguration<PayrollRecord
         builder.Property(x => x.OtherAllowance).HasColumnType("decimal(18,2)");
         builder.Property(x => x.OvertimePay).HasColumnType("decimal(18,2)");
         builder.Property(x => x.KpiBonus).HasColumnType("decimal(18,2)");
+        builder.Property(x => x.UnusedLeavePayout).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
         builder.Property(x => x.GrossIncome).HasColumnType("decimal(18,2)");
         builder.Property(x => x.InsuranceSalaryBase).HasColumnType("decimal(18,2)");
         builder.Property(x => x.UnemploymentInsuranceBase).HasColumnType("decimal(18,2)");

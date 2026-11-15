@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Vinamilk.HRM.Application.TimeAttendance;
 using Vinamilk.HRM.Application.Workflows;
+using Vinamilk.HRM.Infrastructure.Persistence.Seed;
 using Xunit;
 
 namespace Vinamilk.HRM.UnitTests.TimeAttendance;
@@ -22,9 +23,11 @@ public class TimeAttendanceAndWorkflowTests
     public void AnnualLeavePolicyCalculator_ShouldAddOneExtraDayPerFiveYearsOfService()
     {
         // Nhân viên vào làm từ 10/03/2014 -> tính đến năm 2026 là 12 năm thâm niên -> +2 ngày phép thâm niên
+        var statutoryDefault = ApplicationDbContextInitializer.BuildDefaultAttendanceStatutoryParameters().First();
         var (seniorityYears, standardDays, extraDays) = VietnamAnnualLeavePolicyCalculator.CalculateEntitlement(
             new DateOnly(2014, 3, 10),
-            2026);
+            2026,
+            statutoryDefault);
 
         seniorityYears.Should().Be(12);
         standardDays.Should().Be(12m);
