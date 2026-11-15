@@ -794,6 +794,9 @@ public sealed class ApplicationDbContextInitializer
             }
         }
 
+        // Bảo đảm sinh ngày nghỉ bù cho các ngày lễ 2026 trùng ngày nghỉ hằng tuần theo từng PolicyGroup (VD: T2-T6: Giỗ Tổ CN 26/4 -> nghỉ bù T2 27/4)
+        await AttendancePolicyAndShiftEngine.EnsureCompensatoryHolidaysForYearAsync(_context, 2026, cancellationToken);
+
         if (!await _context.ShiftRotationPatterns.AnyAsync(cancellationToken))
         {
             await _context.ShiftRotationPatterns.AddRangeAsync(BuildDefaultShiftRotationPatterns(), cancellationToken);

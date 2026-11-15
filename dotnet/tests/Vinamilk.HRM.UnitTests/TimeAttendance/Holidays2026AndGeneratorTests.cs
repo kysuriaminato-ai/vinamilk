@@ -50,7 +50,8 @@ public class Holidays2026AndGeneratorTests
         var cultureDay = holidays2026.Single(h => h.HolidayDate == new DateOnly(2026, 11, 24));
         cultureDay.HolidayName.Should().Contain("Ngày Văn hóa Việt Nam");
         cultureDay.NeedsHrVerification.Should().BeTrue();
-        cultureDay.LegalReference.Should().Contain("80-NQ/TW").And.Contain("Điều 112");
+        cultureDay.EffectiveFrom.Should().Be(new DateOnly(2026, 7, 1));
+        cultureDay.LegalReference.Should().Be("Nghị quyết 28/2026/QH16 về phát triển văn hóa Việt Nam, Điều 2 khoản 1, hiệu lực 01/7/2026 (chủ trương: NQ 80-NQ/TW)");
 
         // Mặc định Quốc khánh 2026: 01/09 (TB 9441/TB-BNV) & 02/09
         holidays2026.Should().Contain(h => h.HolidayDate == new DateOnly(2026, 9, 1) && h.NeedsHrVerification);
@@ -81,13 +82,14 @@ public class Holidays2026AndGeneratorTests
         var user = new StubCurrentUser();
         var handler = new GenerateHolidaysForYearCommandHandler(db, user);
 
-        // Trường hợp 1: Chỉ sinh ngày Dương cố định cho 2027 (chưa nhập Tết/Giỗ Tổ -> cảnh báo HR bổ sung)
+        // Trường hợp 1: Chỉ sinh ngày Dương cố định cho 2027 (mặc định bật tự sinh nghỉ bù -> 01/05 Thứ 7 có nghỉ bù 03/05)
         var partialRes = await handler.Handle(new GenerateHolidaysForYearCommand(Year: 2027), CancellationToken.None);
-        partialRes.CreatedCount.Should().Be(6); // 01/01, 30/04, 01/05, 01/09, 02/09, 24/11
+        partialRes.CompensatoryCount.Should().BeGreaterThanOrEqualTo(1);
+        partialRes.CreatedCount.Should().Be(6); // 01/01, 30/04, 01/05, 01/09, 02/09, 24/11 (nghỉ bù tính riêng ở CompensatoryCount)
         partialRes.PendingManualItems.Should().HaveCount(2);
 
         var h2027 = await db.Holidays.Where(h => h.Year == 2027).OrderBy(h => h.HolidayDate).ToListAsync();
-        h2027.Select(h => h.HolidayDate).Should().BeEquivalentTo([
+        h2027.Where(h => !h.IsCompensatoryDay).Select(h => h.HolidayDate).Should().BeEquivalentTo([
             new DateOnly(2027, 1, 1),
             new DateOnly(2027, 4, 30),
             new DateOnly(2027, 5, 1),
@@ -95,8 +97,9 @@ public class Holidays2026AndGeneratorTests
             new DateOnly(2027, 9, 2),
             new DateOnly(2027, 11, 24)
         ]);
+        h2027.Should().Contain(h => h.IsCompensatoryDay && h.OriginalHolidayDate == new DateOnly(2027, 5, 1));
 
-        // Trường hợp 2: Nhập đủ ngày Âm lịch cho 2028 -> đủ 12 ngày + ghi AuditLog
+        // Trường hợp 2: Nhập đủ ngày Âm lịch cho 2028 -> đủ 12 ngày lễ gốc (+ nghỉ bù cuối tuần) + ghi AuditLog
         var fullRes = await handler.Handle(new GenerateHolidaysForYearCommand(
             Year: 2028,
             TetStartDate: new DateOnly(2028, 1, 25),
@@ -104,9 +107,10 @@ public class Holidays2026AndGeneratorTests
             NationalDayAdjacentChoice: "Before",
             IncludeVietnamCultureDay: true), CancellationToken.None);
 
+        fullRes.CompensatoryCount.Should().BeGreaterThan(0);
         fullRes.CreatedCount.Should().Be(12);
         fullRes.PendingManualItems.Should().BeEmpty();
-        (await db.Holidays.CountAsync(h => h.Year == 2028)).Should().Be(12);
+        (await db.Holidays.CountAsync(h => h.Year == 2028 && !h.IsCompensatoryDay)).Should().Be(12);
         (await db.AuditLogs.AnyAsync(a => a.ActionType == "GenerateHolidaysForYear" && a.EntityId == "2028")).Should().BeTrue();
     }
 
@@ -287,10 +291,10 @@ public class Holidays2026AndGeneratorTests
             .Where(m => m.Month == 11 && m.Year == 2026)
             .ToDictionaryAsync(m => m.EmployeeId);
 
-        // E1: nghỉ Lễ 24/11 -> ký hiệu L, 1 công, tổng tháng 21 công hưởng lương (20 ngày T2-T6 + 24/11); bảng công T2-T7 = 25 công chuẩn
+        // E1: nghỉ Lễ 24/11 -> ký hiệu L, 1 công, tổng tháng 21 công hưởng lương (20 ngày T2-T6 + 24/11); công chuẩn Mon-Fri = 21
         day24Logs[1].AttendanceSymbol.Should().Be("L");
         day24Logs[1].WorkdayCount.Should().Be(1m);
-        summaries[1].StandardWorkdays.Should().Be(25m);
+        summaries[1].StandardWorkdays.Should().Be(21m);
         summaries[1].HolidayDays.Should().Be(1m);
         summaries[1].TotalPayableWorkdays.Should().Be(21m);
 
@@ -298,7 +302,7 @@ public class Holidays2026AndGeneratorTests
         day24Logs[2].AttendanceSymbol.Should().Be("L");
         day24Logs[2].WorkdayCount.Should().Be(1m);
         day24Logs[2].OvertimeHours300.Should().Be(8m);
-        summaries[2].StandardWorkdays.Should().Be(25m);
+        summaries[2].StandardWorkdays.Should().Be(21m);
         summaries[2].HolidayDays.Should().Be(1m);
         summaries[2].TotalOtHours300.Should().Be(8m);
         summaries[2].TotalPayableWorkdays.Should().Be(21m);
@@ -306,7 +310,7 @@ public class Holidays2026AndGeneratorTests
         // E3: vào làm từ 25/11 (sau 24/11) -> KHÔNG được tính Lễ 24/11, chỉ hưởng 4 công (25, 26, 27, 30/11)
         day24Logs[3].AttendanceSymbol.Should().Be("OFF");
         day24Logs[3].WorkdayCount.Should().Be(0m);
-        summaries[3].StandardWorkdays.Should().Be(25m);
+        summaries[3].StandardWorkdays.Should().Be(21m);
         summaries[3].HolidayDays.Should().Be(0m);
         summaries[3].TotalPayableWorkdays.Should().Be(4m);
 
@@ -332,5 +336,186 @@ public class Holidays2026AndGeneratorTests
         payslips[3].PayableWorkdays.Should().Be(4m);
         payslips[3].ActualBaseSalary.Should().Be(4_000_000m); // Chỉ tính 4 công sau 24/11 (4/21 * 21,000,000)
         payslips[3].OvertimePay.Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task April2026_CompensatoryHoliday_ShouldApplyToMonFriGroupOnly_NotThursdayOffGroup()
+    {
+        await using var db = CreateDb();
+        var user = new StubCurrentUser();
+
+        await db.AttendanceStatutoryParameters.AddRangeAsync(ApplicationDbContextInitializer.BuildDefaultAttendanceStatutoryParameters());
+        await db.AttendanceSymbolDefinitions.AddRangeAsync(ApplicationDbContextInitializer.BuildDefaultAttendanceSymbols());
+        await db.PayrollStatutoryParameters.AddRangeAsync(ApplicationDbContextInitializer.BuildDefaultStatutoryParameters());
+        await db.PitBrackets.AddRangeAsync(ApplicationDbContextInitializer.BuildDefaultPitBrackets());
+        await db.PayrollParameters.AddRangeAsync(ApplicationDbContextInitializer.BuildDefaultTaxExemptPayrollParameters());
+
+        db.OrganizationUnits.AddRange(
+            new OrganizationUnit { Id = 1, UnitCode = "HO", UnitName = "Văn phòng T2-T6", CostCenterCode = "HO", WageRegion = 1, IsActive = true },
+            new OrganizationUnit { Id = 2, UnitCode = "SHOP", UnitName = "Cửa hàng nghỉ Thứ Năm", CostCenterCode = "SHOP", WageRegion = 1, IsActive = true });
+        db.Positions.Add(new Position { Id = 1, PositionCode = "NV", PositionName = "Nhân viên", IsActive = true });
+
+        var shiftHc = new WorkShift
+        {
+            Id = 1,
+            ShiftCode = "HC",
+            ShiftName = "Hành chính",
+            ShiftType = "Fixed",
+            StartTime = new TimeOnly(8, 0),
+            EndTime = new TimeOnly(17, 0),
+            BreakStartTime = new TimeOnly(12, 0),
+            BreakEndTime = new TimeOnly(13, 0),
+            StandardHours = 8m,
+            WorkdayValue = 1m,
+            GraceLateMinutes = 5
+        };
+        db.WorkShifts.Add(shiftHc);
+
+        var pgMonFri = ApplicationDbContextInitializer.BuildDefaultCompanyPolicyGroup();
+        pgMonFri.Id = 1;
+        pgMonFri.AttendancePolicies.Clear();
+
+        var pgThuOff = new PolicyGroup
+        {
+            Id = 2,
+            PolicyCode = "PG_THUOFF",
+            PolicyName = "Ca bán lẻ nghỉ Thứ Năm",
+            IsCompanyDefault = false,
+            IsActive = true
+        };
+        db.PolicyGroups.AddRange(pgMonFri, pgThuOff);
+        db.AttendancePolicies.AddRange(
+            new AttendancePolicy
+            {
+                Id = 1,
+                PolicyGroupId = 1,
+                WeeklyWorkdaysMask = "Mon,Tue,Wed,Thu,Fri"
+            },
+            new AttendancePolicy
+            {
+                Id = 2,
+                PolicyGroupId = 2,
+                WeeklyWorkdaysMask = "Mon,Tue,Wed,Fri,Sat,Sun"
+            });
+
+        var empOffice = new Employee
+        {
+            Id = 1,
+            EmployeeCode = "NV0401",
+            FullName = "Nguyễn Văn Phòng",
+            OrganizationUnitId = 1,
+            PositionId = 1,
+            WorkStatus = "Official",
+            CurrentContractType = "Indefinite",
+            HireDate = new DateOnly(2026, 1, 1),
+            BaseSalary = 22_000_000m
+        };
+        var empThuOff = new Employee
+        {
+            Id = 2,
+            EmployeeCode = "NV0402",
+            FullName = "Trần Nghỉ Thứ Năm",
+            OrganizationUnitId = 2,
+            PositionId = 1,
+            WorkStatus = "Official",
+            CurrentContractType = "Indefinite",
+            HireDate = new DateOnly(2026, 1, 1),
+            BaseSalary = 25_000_000m
+        };
+        db.Employees.AddRange(empOffice, empThuOff);
+        db.PolicyGroupAssignments.Add(new PolicyGroupAssignment
+        {
+            Id = 1,
+            PolicyGroupId = 2,
+            EmployeeId = 2,
+            EffectiveFrom = new DateOnly(2026, 1, 1),
+            IsActive = true
+        });
+
+        await db.Holidays.AddRangeAsync(ApplicationDbContextInitializer.BuildDefaultHolidays2026());
+        await db.SaveChangesAsync();
+
+        await AttendancePolicyAndShiftEngine.EnsureCompensatoryHolidaysForYearAsync(db, 2026, CancellationToken.None);
+
+        var aprilCompMonFri = await db.Holidays.AsNoTracking()
+            .Where(h => h.Year == 2026 && h.IsCompensatoryDay && h.PolicyGroupId == pgMonFri.Id && h.HolidayDate.Month == 4)
+            .ToListAsync();
+        aprilCompMonFri.Should().ContainSingle(h =>
+            h.HolidayDate == new DateOnly(2026, 4, 27)
+            && h.OriginalHolidayDate == new DateOnly(2026, 4, 26)
+            && h.IsPaidHoliday);
+
+        var aprilCompThuOff = await db.Holidays.AsNoTracking()
+            .Where(h => h.Year == 2026 && h.IsCompensatoryDay && h.PolicyGroupId == pgThuOff.Id && h.HolidayDate.Month == 4)
+            .ToListAsync();
+        aprilCompThuOff.Should().BeEmpty();
+
+        // Chấm công đủ ngày làm việc tháng 04/2026 cho từng nhóm
+        for (int day = 1; day <= 30; day++)
+        {
+            var d = new DateOnly(2026, 4, day);
+
+            bool officeWorkday = d.DayOfWeek is >= DayOfWeek.Monday and <= DayOfWeek.Friday;
+            db.ShiftSchedules.Add(new ShiftSchedule
+            {
+                EmployeeId = 1,
+                WorkShiftId = 1,
+                WorkDate = d,
+                IsDayOff = !officeWorkday
+            });
+            if (officeWorkday && d != new DateOnly(2026, 4, 27) && d != new DateOnly(2026, 4, 30))
+            {
+                db.AttendanceLogs.AddRange(
+                    new AttendanceLog { EmployeeId = 1, PunchTime = d.ToDateTime(new TimeOnly(8, 0)), PunchType = "CheckIn", SourceType = "BiometricDevice" },
+                    new AttendanceLog { EmployeeId = 1, PunchTime = d.ToDateTime(new TimeOnly(17, 0)), PunchType = "CheckOut", SourceType = "BiometricDevice" });
+            }
+
+            bool thuOffWorkday = d.DayOfWeek != DayOfWeek.Thursday;
+            db.ShiftSchedules.Add(new ShiftSchedule
+            {
+                EmployeeId = 2,
+                WorkShiftId = 1,
+                WorkDate = d,
+                IsDayOff = !thuOffWorkday
+            });
+            if (thuOffWorkday && d != new DateOnly(2026, 4, 26))
+            {
+                db.AttendanceLogs.AddRange(
+                    new AttendanceLog { EmployeeId = 2, PunchTime = d.ToDateTime(new TimeOnly(8, 0)), PunchType = "CheckIn", SourceType = "BiometricDevice" },
+                    new AttendanceLog { EmployeeId = 2, PunchTime = d.ToDateTime(new TimeOnly(17, 0)), PunchType = "CheckOut", SourceType = "BiometricDevice" });
+            }
+        }
+        await db.SaveChangesAsync();
+
+        var dispatcher = new InProcessAttendanceRecalculationDispatcher(db, new AttendanceRecalculationService(db));
+        var batchId = await new StartAttendanceRecalculationCommandHandler(dispatcher, user)
+            .Handle(new StartAttendanceRecalculationCommand(4, 2026), CancellationToken.None);
+        var batch = await new GetRecalculationBatchStatusQueryHandler(db)
+            .Handle(new GetRecalculationBatchStatusQuery(batchId), CancellationToken.None);
+        batch!.Status.Should().Be("Completed");
+
+        var officeApril26 = await db.DailyAttendances.AsNoTracking().SingleAsync(d => d.EmployeeId == 1 && d.AttendanceDate == new DateOnly(2026, 4, 26));
+        var officeApril27 = await db.DailyAttendances.AsNoTracking().SingleAsync(d => d.EmployeeId == 1 && d.AttendanceDate == new DateOnly(2026, 4, 27));
+        var officeSummary = await db.MonthlyAttendanceSummaries.AsNoTracking().SingleAsync(m => m.EmployeeId == 1 && m.Month == 4 && m.Year == 2026);
+
+        officeApril26.AttendanceSymbol.Should().Be("OFF");
+        officeApril26.WorkdayCount.Should().Be(0m);
+        officeApril27.AttendanceSymbol.Should().Be("L");
+        officeApril27.WorkdayCount.Should().Be(1m);
+        officeSummary.StandardWorkdays.Should().Be(22m);
+        officeSummary.HolidayDays.Should().Be(2m); // 27/4 (nghỉ bù Giỗ Tổ) + 30/4
+        officeSummary.TotalPayableWorkdays.Should().Be(22m);
+
+        var thuOffApril26 = await db.DailyAttendances.AsNoTracking().SingleAsync(d => d.EmployeeId == 2 && d.AttendanceDate == new DateOnly(2026, 4, 26));
+        var thuOffApril27 = await db.DailyAttendances.AsNoTracking().SingleAsync(d => d.EmployeeId == 2 && d.AttendanceDate == new DateOnly(2026, 4, 27));
+        var thuOffSummary = await db.MonthlyAttendanceSummaries.AsNoTracking().SingleAsync(m => m.EmployeeId == 2 && m.Month == 4 && m.Year == 2026);
+
+        thuOffApril26.AttendanceSymbol.Should().Be("L");
+        thuOffApril26.WorkdayCount.Should().Be(1m);
+        thuOffApril27.AttendanceSymbol.Should().Be("X");
+        thuOffApril27.WorkdayCount.Should().Be(1m);
+        thuOffSummary.StandardWorkdays.Should().Be(25m); // 30 ngày trừ 5 ngày Thứ Năm (2,9,16,23,30)
+        thuOffSummary.HolidayDays.Should().Be(1m); // Giỗ Tổ 26/4 (vì CN là ngày làm việc của nhóm này); không có nghỉ bù 27/4
+        thuOffSummary.TotalPayableWorkdays.Should().Be(25m);
     }
 }

@@ -573,6 +573,50 @@ public static class AttendancePolicyAndShiftEngine
         return result.Count > 0 ? result : new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday };
     }
 
+    public static bool IsHolidayApplicable(Holiday holiday, int? employeePolicyGroupId)
+    {
+        if (holiday.EffectiveFrom.HasValue && holiday.EffectiveFrom.Value > holiday.HolidayDate)
+            return false;
+
+        return holiday.PolicyGroupId == null || holiday.PolicyGroupId == employeePolicyGroupId;
+    }
+
+    public static Dictionary<DateOnly, Holiday> FilterHolidaysForPolicyGroup(
+        IEnumerable<Holiday> allHolidays,
+        int? employeePolicyGroupId)
+    {
+        var result = new Dictionary<DateOnly, Holiday>();
+        // Ưu tiên: lễ chung (PolicyGroupId == null) nạp trước, lễ riêng của nhóm ghi đè cùng ngày nếu có
+        foreach (var h in allHolidays
+                     .Where(x => IsHolidayApplicable(x, employeePolicyGroupId))
+                     .OrderBy(x => x.PolicyGroupId.HasValue ? 1 : 0))
+        {
+            result[h.HolidayDate] = h;
+        }
+        return result;
+    }
+
+    public static async Task<int> EnsureCompensatoryHolidaysForYearAsync(
+        IApplicationDbContext context,
+        int year,
+        CancellationToken cancellationToken)
+    {
+        var baseHolidays = await context.Holidays
+            .Where(h => h.Year == year && !h.IsCompensatoryDay)
+            .OrderBy(h => h.HolidayDate)
+            .ToListAsync(cancellationToken);
+
+        int createdCount = 0;
+        foreach (var h in baseHolidays)
+        {
+            var created = await EnsureCompensatoryHolidayAsync(context, h, cancellationToken);
+            if (created != null)
+                createdCount++;
+        }
+
+        return createdCount;
+    }
+
     public static async Task<Holiday?> EnsureCompensatoryHolidayAsync(
         IApplicationDbContext context,
         Holiday holiday,
@@ -583,55 +627,101 @@ public static class AttendancePolicyAndShiftEngine
             return null;
         }
 
-        var defaultGroup = await context.PolicyGroups
-            .AsNoTracking()
-            .Include(g => g.AttendancePolicies)
-            .FirstOrDefaultAsync(g => g.IsCompanyDefault && g.IsActive, cancellationToken);
-
-        var workdays = ParseWorkdaysMask(defaultGroup?.AttendancePolicies.FirstOrDefault()?.WeeklyWorkdaysMask);
-        if (workdays.Contains(holiday.HolidayDate.DayOfWeek))
+        if (holiday.EffectiveFrom.HasValue && holiday.EffectiveFrom.Value > holiday.HolidayDate)
         {
             return null;
         }
 
-        var existingDates = await context.Holidays
+        var activeGroups = await context.PolicyGroups
             .AsNoTracking()
-            .Where(h => h.Year == holiday.Year || h.Year == holiday.Year + 1)
-            .Select(h => h.HolidayDate)
+            .Include(g => g.AttendancePolicies)
+            .Where(g => g.IsActive)
+            .OrderByDescending(g => g.IsCompanyDefault)
+            .ThenBy(g => g.Id)
             .ToListAsync(cancellationToken);
 
-        var occupied = existingDates.ToHashSet();
-        var existingComp = await context.Holidays
-            .FirstOrDefaultAsync(h => h.IsCompensatoryDay && h.OriginalHolidayDate == holiday.HolidayDate, cancellationToken);
-        if (existingComp != null)
+        var targets = new List<(int? PolicyGroupId, IReadOnlySet<DayOfWeek> Workdays)>();
+        foreach (var pg in activeGroups)
         {
-            return existingComp;
+            var ap = pg.AttendancePolicies.FirstOrDefault();
+            if (ap == null) continue;
+            targets.Add((pg.Id, ParseWorkdaysMask(ap.WeeklyWorkdaysMask).ToHashSet()));
         }
 
-        var candidate = holiday.HolidayDate.AddDays(1);
-        for (int i = 0; i < 14; i++)
+        if (targets.Count == 0)
         {
-            if (workdays.Contains(candidate.DayOfWeek) && !occupied.Contains(candidate))
+            targets.Add((null, ParseWorkdaysMask(null).ToHashSet()));
+        }
+
+        var allRelevantHolidays = await context.Holidays
+            .AsNoTracking()
+            .Where(h => h.Year == holiday.Year || h.Year == holiday.Year + 1)
+            .ToListAsync(cancellationToken);
+
+        Holiday? firstCreated = null;
+        var newlyAdded = new List<Holiday>();
+
+        foreach (var (groupId, workdays) in targets)
+        {
+            // Chỉ phát sinh nghỉ bù nếu ngày lễ trùng vào NGÀY NGHỈ HẰNG TUẦN của nhóm này
+            if (workdays.Contains(holiday.HolidayDate.DayOfWeek))
             {
-                var comp = new Holiday
-                {
-                    HolidayDate = candidate,
-                    HolidayName = $"Nghỉ bù {holiday.HolidayName}",
-                    Year = candidate.Year,
-                    IsPaidHoliday = holiday.IsPaidHoliday,
-                    OvertimeMultiplier = holiday.OvertimeMultiplier,
-                    IsCompensatoryDay = true,
-                    OriginalHolidayDate = holiday.HolidayDate,
-                    LegalReference = "Điều 111 khoản 3 BLLĐ 2019 (Nghỉ bù ngày lễ trùng ngày nghỉ hàng tuần)",
-                    NeedsHrVerification = true
-                };
-                await context.Holidays.AddAsync(comp, cancellationToken);
-                await context.SaveChangesAsync(cancellationToken);
-                return comp;
+                continue;
             }
-            candidate = candidate.AddDays(1);
+
+            var existingComp = allRelevantHolidays.FirstOrDefault(h =>
+                h.IsCompensatoryDay
+                && h.OriginalHolidayDate == holiday.HolidayDate
+                && h.PolicyGroupId == groupId);
+            if (existingComp != null)
+            {
+                firstCreated ??= existingComp;
+                continue;
+            }
+
+            var occupied = allRelevantHolidays
+                .Where(h => h.PolicyGroupId == null || h.PolicyGroupId == groupId)
+                .Select(h => h.HolidayDate)
+                .Concat(newlyAdded.Where(h => h.PolicyGroupId == groupId).Select(h => h.HolidayDate))
+                .ToHashSet();
+
+            var candidate = holiday.HolidayDate.AddDays(1);
+            for (int i = 0; i < 14; i++)
+            {
+                if (workdays.Contains(candidate.DayOfWeek) && !occupied.Contains(candidate))
+                {
+                    string compName = $"Nghỉ bù {holiday.HolidayName}";
+                    if (compName.Length > 150)
+                        compName = compName[..150];
+
+                    var comp = new Holiday
+                    {
+                        HolidayDate = candidate,
+                        HolidayName = compName,
+                        Year = candidate.Year,
+                        IsPaidHoliday = holiday.IsPaidHoliday,
+                        OvertimeMultiplier = holiday.OvertimeMultiplier,
+                        IsCompensatoryDay = true,
+                        OriginalHolidayDate = holiday.HolidayDate,
+                        EffectiveFrom = holiday.EffectiveFrom,
+                        PolicyGroupId = groupId,
+                        LegalReference = "Điều 111 khoản 3 BLLĐ 2019 (Nghỉ bù ngày lễ trùng ngày nghỉ hàng tuần)",
+                        NeedsHrVerification = true
+                    };
+                    await context.Holidays.AddAsync(comp, cancellationToken);
+                    newlyAdded.Add(comp);
+                    firstCreated ??= comp;
+                    break;
+                }
+                candidate = candidate.AddDays(1);
+            }
         }
 
-        return null;
+        if (newlyAdded.Count > 0)
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
+        return firstCreated;
     }
 }

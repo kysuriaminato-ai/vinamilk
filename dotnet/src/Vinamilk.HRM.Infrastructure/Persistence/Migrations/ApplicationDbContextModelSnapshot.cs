@@ -7642,6 +7642,9 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(100)")
                         .HasDefaultValue("system.job");
 
+                    b.Property<DateOnly?>("EffectiveFrom")
+                        .HasColumnType("date");
+
                     b.Property<DateOnly>("HolidayDate")
                         .HasColumnType("date");
 
@@ -7674,6 +7677,9 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("OvertimeMultiplier")
                         .HasColumnType("decimal(5,2)");
 
+                    b.Property<int?>("PolicyGroupId")
+                        .HasColumnType("int");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -7692,9 +7698,11 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("HolidayDate")
+                    b.HasIndex("PolicyGroupId");
+
+                    b.HasIndex("HolidayDate", "PolicyGroupId")
                         .IsUnique()
-                        .HasDatabaseName("UQ_Holidays_HolidayDate")
+                        .HasDatabaseName("UQ_Holidays_HolidayDate_PolicyGroup")
                         .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("Holidays", "time");
@@ -10115,6 +10123,16 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.Holiday", b =>
+                {
+                    b.HasOne("Vinamilk.HRM.Domain.Entities.Time.PolicyGroup", "PolicyGroup")
+                        .WithMany()
+                        .HasForeignKey("PolicyGroupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("PolicyGroup");
                 });
 
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.LeaveBalance", b =>

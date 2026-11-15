@@ -261,6 +261,20 @@ public static class AttendanceBoardSeeder
         return count;
     }
 
+    public static decimal CalculateStandardWorkdays(int year, int month, string? weeklyWorkdaysMask)
+    {
+        var workdays = AttendancePolicyAndShiftEngine.ParseWorkdaysMask(weeklyWorkdaysMask);
+        int days = DateTime.DaysInMonth(year, month);
+        decimal count = 0m;
+        for (int d = 1; d <= days; d++)
+        {
+            var dow = new DateOnly(year, month, d).DayOfWeek;
+            if (workdays.Contains(dow))
+                count += 1m;
+        }
+        return count;
+    }
+
     public static async Task EnsureMonthAttendanceSeededAsync(
         IApplicationDbContext context,
         int month,
@@ -280,10 +294,11 @@ public static class AttendanceBoardSeeder
                 .ToListAsync(cancellationToken);
 
             var hcShift = await context.WorkShifts.AsNoTracking().FirstOrDefaultAsync(s => s.ShiftCode == "HC", cancellationToken);
-            var holidays = await context.Holidays
+            var holidaysRaw = await context.Holidays
                 .AsNoTracking()
                 .Where(h => h.HolidayDate >= monthStart && h.HolidayDate <= monthEnd)
-                .ToDictionaryAsync(h => h.HolidayDate, cancellationToken);
+                .ToListAsync(cancellationToken);
+            var holidays = AttendancePolicyAndShiftEngine.FilterHolidaysForPolicyGroup(holidaysRaw, null);
 
             var dailyList = new List<DailyAttendance>();
             var logsList = new List<AttendanceLog>();
@@ -526,6 +541,7 @@ public static class AttendanceBoardSeeder
             decimal payable = actualDays + paidLeave + paidPersonal + holidayDays;
 
             var resolvedPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(context, empId, monthStart, cancellationToken);
+            decimal empStandardDays = CalculateStandardWorkdays(year, month, resolvedPolicy.Policy.WeeklyWorkdaysMask);
             int missedPunchCount = group.Count(x => !string.IsNullOrEmpty(x.EditReason) && x.EditReason.Contains("Đề xuất giờ:", StringComparison.OrdinalIgnoreCase));
             int overQuotaCount = Math.Max(0, missedPunchCount - resolvedPolicy.Policy.MaxMissedPunchExplanationsPerMonth);
             decimal missedPunchPenalty = string.Equals(resolvedPolicy.Policy.MissedPunchOverQuotaAction, "FixedFine", StringComparison.OrdinalIgnoreCase)
@@ -534,7 +550,7 @@ public static class AttendanceBoardSeeder
 
             if (existing != null)
             {
-                existing.StandardWorkdays = standardDays;
+                existing.StandardWorkdays = empStandardDays;
                 existing.ActualWorkdays = actualDays;
                 existing.PaidLeaveDays = paidLeave;
                 existing.HolidayDays = holidayDays;
@@ -569,7 +585,7 @@ public static class AttendanceBoardSeeder
                     EmployeeId = empId,
                     Month = month,
                     Year = year,
-                    StandardWorkdays = standardDays,
+                    StandardWorkdays = empStandardDays,
                     ActualWorkdays = actualDays,
                     PaidLeaveDays = paidLeave,
                     HolidayDays = holidayDays,

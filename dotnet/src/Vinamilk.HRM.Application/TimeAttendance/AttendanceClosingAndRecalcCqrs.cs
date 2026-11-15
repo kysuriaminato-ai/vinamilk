@@ -166,10 +166,11 @@ public sealed class AttendanceRecalculationService : IAttendanceRecalculationJob
             var toDate = batch.ToDate;
             var statutory = await AttendancePolicyAndShiftEngine.ResolveStatutoryParameterAsync(_context, toDate, cancellationToken);
 
-            var holidays = await _context.Holidays
+            var allHolidaysInRange = await _context.Holidays
                 .AsNoTracking()
-                .Where(h => h.HolidayDate >= fromDate && h.HolidayDate <= toDate)
-                .ToDictionaryAsync(h => h.HolidayDate, cancellationToken);
+                .Where(h => (h.HolidayDate >= fromDate && h.HolidayDate <= toDate)
+                    || (h.IsCompensatoryDay && h.OriginalHolidayDate >= fromDate && h.OriginalHolidayDate <= toDate))
+                .ToListAsync(cancellationToken);
 
             var empIds = targetEmployees.Select(e => e.Id).ToList();
             var lockedSummaries = (await _context.MonthlyAttendanceSummaries
@@ -239,6 +240,8 @@ public sealed class AttendanceRecalculationService : IAttendanceRecalculationJob
                 {
                     var resolvedPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(
                         _context, emp.Id, fromDate, cancellationToken);
+                    var empHolidays = AttendancePolicyAndShiftEngine.FilterHolidaysForPolicyGroup(
+                        allHolidaysInRange, resolvedPolicy.Policy.PolicyGroupId);
                     var workdaysMask = (resolvedPolicy.Policy.WeeklyWorkdaysMask ?? "Mon,Tue,Wed,Thu,Fri")
                         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -321,12 +324,24 @@ public sealed class AttendanceRecalculationService : IAttendanceRecalculationJob
                         bool outsideEmployment = date < emp.HireDate
                             || (emp.TerminationDate.HasValue && date >= emp.TerminationDate.Value);
 
+                        var dayHoliday = outsideEmployment ? null : empHolidays.GetValueOrDefault(date);
+                        // Nếu ngày lễ trùng ngày nghỉ hằng tuần của nhóm VÀ nhóm đã có ngày nghỉ bù tương ứng ->
+                        // không cộng đúp thêm 1 công Lễ ở ngày nghỉ tuần (chỉ tính OT 300% nếu thực tế có quẹt thẻ trực lễ; ngày nghỉ bù được tính 1 công L).
+                        if (dayHoliday != null
+                            && !dayHoliday.IsCompensatoryDay
+                            && (sched?.IsDayOff == true || isWeeklyOff)
+                            && dayPunches.Count == 0
+                            && empHolidays.Values.Any(c => c.IsCompensatoryDay && c.OriginalHolidayDate == date))
+                        {
+                            dayHoliday = null;
+                        }
+
                         var calc = AttendanceCalculationEngine.CalculateDaily(new AttendanceDailyCalculationInput(
                             date,
                             shift,
                             sched?.IsDayOff == true || outsideEmployment,
                             isWeeklyOff || outsideEmployment,
-                            outsideEmployment ? null : holidays.GetValueOrDefault(date),
+                            dayHoliday,
                             outsideEmployment ? Array.Empty<AttendancePunchInput>() : dayPunches,
                             outsideEmployment ? Array.Empty<AttendanceApprovedLeaveInput>() : dayLeaves,
                             outsideEmployment ? Array.Empty<AttendanceApprovedOvertimeInput>() : dayOts,

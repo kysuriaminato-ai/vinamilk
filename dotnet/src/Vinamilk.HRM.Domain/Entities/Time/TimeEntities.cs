@@ -55,8 +55,12 @@ public class Holiday : BaseAuditableEntity
     public decimal OvertimeMultiplier { get; set; } = 3.0m;
     public bool IsCompensatoryDay { get; set; } = false;
     public DateOnly? OriginalHolidayDate { get; set; }
+    public DateOnly? EffectiveFrom { get; set; }
+    public int? PolicyGroupId { get; set; }
     public string? LegalReference { get; set; }
     public bool NeedsHrVerification { get; set; } = true;
+
+    public PolicyGroup? PolicyGroup { get; set; }
 }
 
 public class AttendanceLog : BaseLongAuditableEntity

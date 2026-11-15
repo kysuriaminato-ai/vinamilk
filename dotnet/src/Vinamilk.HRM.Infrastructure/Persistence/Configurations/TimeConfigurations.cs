@@ -60,9 +60,14 @@ public class HolidayConfiguration : IEntityTypeConfiguration<Holiday>
         builder.Property(x => x.OvertimeMultiplier).HasColumnType("decimal(5,2)");
         builder.Property(x => x.LegalReference).HasMaxLength(250);
 
-        builder.HasIndex(x => x.HolidayDate)
+        builder.HasOne(x => x.PolicyGroup)
+            .WithMany()
+            .HasForeignKey(x => x.PolicyGroupId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(x => new { x.HolidayDate, x.PolicyGroupId })
             .IsUnique()
-            .HasDatabaseName("UQ_Holidays_HolidayDate")
+            .HasDatabaseName("UQ_Holidays_HolidayDate_PolicyGroup")
             .HasFilter("[IsDeleted] = 0");
     }
 }

@@ -720,14 +720,16 @@ public class SubmitLeaveRequestCommandHandler : IRequestHandler<SubmitLeaveReque
         if (isHourlyRequest && !leaveType.AllowHourly)
             throw new InvalidOperationException($"Loại nghỉ '{leaveType.LeaveTypeName}' không hỗ trợ đăng ký nghỉ theo giờ.");
 
-        var holidays = await _context.Holidays
-            .AsNoTracking()
-            .Where(h => h.HolidayDate >= request.StartDate && h.HolidayDate <= request.EndDate)
-            .Select(h => h.HolidayDate)
-            .ToListAsync(cancellationToken);
-
         var resolvedPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(
             _context, request.EmployeeId, request.StartDate, cancellationToken);
+        var holidaysRaw = await _context.Holidays
+            .AsNoTracking()
+            .Where(h => h.HolidayDate >= request.StartDate && h.HolidayDate <= request.EndDate)
+            .ToListAsync(cancellationToken);
+        var holidays = AttendancePolicyAndShiftEngine
+            .FilterHolidaysForPolicyGroup(holidaysRaw, resolvedPolicy.Policy.PolicyGroupId)
+            .Keys
+            .ToList();
         var statutory = await AttendancePolicyAndShiftEngine.TryResolveStatutoryParameterAsync(
             _context, request.StartDate, cancellationToken);
         decimal dailyStdHours = statutory?.MaxNormalDailyHours > 0m ? statutory.MaxNormalDailyHours : 8m;
