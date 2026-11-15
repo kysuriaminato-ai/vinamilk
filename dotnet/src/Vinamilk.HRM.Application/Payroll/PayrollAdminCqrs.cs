@@ -520,10 +520,13 @@ public sealed class SavePayrollStatutoryParameterCommandHandler
             entity.LegalReference
         });
 
+        var actorUserId = _currentUser.RequireUserId();
+        var actorUsername = _currentUser.RequireUsername();
+
         await _context.AuditLogs.AddAsync(new AuditLog
         {
-            UserId = _currentUser.UserId,
-            Username = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username,
+            UserId = actorUserId,
+            Username = actorUsername,
             ModuleName = "Payroll",
             ActionType = $"PayrollStatutoryParameter_{actionType}",
             EntityName = nameof(PayrollStatutoryParameter),
@@ -534,7 +537,7 @@ public sealed class SavePayrollStatutoryParameterCommandHandler
             IpAddress = _currentUser.IpAddress ?? "127.0.0.1",
             UserAgent = _currentUser.UserAgent ?? "HR_Admin",
             CreatedAt = DateTime.UtcNow,
-            CreatedBy = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username
+            CreatedBy = actorUsername
         }, cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -627,10 +630,13 @@ public sealed class SavePitBracketGroupCommandHandler : IRequestHandler<SavePitB
         await _context.PitBrackets.AddRangeAsync(newEntities, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
 
+        var actorUserId = _currentUser.RequireUserId();
+        var actorUsername = _currentUser.RequireUsername();
+
         await _context.AuditLogs.AddAsync(new AuditLog
         {
-            UserId = _currentUser.UserId,
-            Username = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username,
+            UserId = actorUserId,
+            Username = actorUsername,
             ModuleName = "Payroll",
             ActionType = existing.Count > 0 ? "PitBracketGroup_Update" : "PitBracketGroup_Create",
             EntityName = nameof(PitBracket),
@@ -641,7 +647,7 @@ public sealed class SavePitBracketGroupCommandHandler : IRequestHandler<SavePitB
             IpAddress = _currentUser.IpAddress ?? "127.0.0.1",
             UserAgent = _currentUser.UserAgent ?? "HR_Admin",
             CreatedAt = DateTime.UtcNow,
-            CreatedBy = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username
+            CreatedBy = actorUsername
         }, cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);

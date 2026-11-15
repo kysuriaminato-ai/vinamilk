@@ -22,7 +22,7 @@ public sealed class CurrentUserService : ICurrentUserService
     }
 
     public string Username =>
-        _httpContextAccessor.HttpContext?.User?.Identity?.Name ?? "SYSTEM";
+        _httpContextAccessor.HttpContext?.User?.Identity?.Name ?? string.Empty;
 
     public int? EmployeeId
     {

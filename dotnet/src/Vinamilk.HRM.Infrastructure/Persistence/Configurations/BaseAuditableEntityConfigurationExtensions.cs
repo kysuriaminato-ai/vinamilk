@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Vinamilk.HRM.Application.Common.Interfaces;
 using Vinamilk.HRM.Domain.Common;
 
 namespace Vinamilk.HRM.Infrastructure.Persistence.Configurations;
@@ -23,7 +24,7 @@ public static class BaseAuditableEntityConfigurationExtensions
 
         builder.Property(x => x.CreatedBy)
             .HasMaxLength(100)
-            .HasDefaultValue("SYSTEM")
+            .HasDefaultValue(SystemJobAccount.Username)
             .IsRequired();
 
         builder.Property(x => x.UpdatedAt)

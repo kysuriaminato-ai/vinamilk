@@ -38,12 +38,15 @@ public class SystemApiController : ControllerBase
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> TriggerBackup(CancellationToken cancellationToken = default)
     {
+        var actorUserId = _currentUserService.RequireUserId();
+        var actorUsername = _currentUserService.RequireUsername();
+
         var result = await _backupService.RunScheduledBackupAsync(cancellationToken: cancellationToken);
 
         _context.AuditLogs.Add(new AuditLog
         {
-            UserId = _currentUserService.UserId,
-            Username = _currentUserService.Username ?? "SYSTEM",
+            UserId = actorUserId,
+            Username = actorUsername,
             ModuleName = "System",
             ActionType = "Backup",
             EntityName = "Database",

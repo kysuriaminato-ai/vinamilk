@@ -128,7 +128,14 @@ public class DomainAndPersistenceTests
         (await context.Employees.CountAsync()).Should().Be(55);
         (await context.LaborContracts.CountAsync()).Should().Be(55);
         (await context.PayrollRecords.CountAsync()).Should().Be(11);
-        (await context.Users.CountAsync()).Should().Be(10);
+        (await context.Users.CountAsync()).Should().Be(11);
+
+        var systemJobUser = await context.Users
+            .Include(u => u.UserRoles)
+            .FirstOrDefaultAsync(u => u.Username == Vinamilk.HRM.Application.Common.Interfaces.SystemJobAccount.Username);
+        systemJobUser.Should().NotBeNull();
+        systemJobUser!.IsActive.Should().BeTrue();
+        systemJobUser.UserRoles.Should().BeEmpty();
     }
 }
 

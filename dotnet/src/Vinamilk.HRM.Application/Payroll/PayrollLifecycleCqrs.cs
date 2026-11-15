@@ -29,6 +29,9 @@ public sealed class SubmitPayrollPeriodCommandHandler : IRequestHandler<SubmitPa
 
     public async Task<int> Handle(SubmitPayrollPeriodCommand request, CancellationToken cancellationToken)
     {
+        var actorUserId = _currentUser.RequireUserId();
+        var actorUsername = _currentUser.RequireUsername();
+
         var period = await _context.PayrollPeriods
             .Include(p => p.PayrollRecords)
             .FirstOrDefaultAsync(p => p.Id == request.PayrollPeriodId, cancellationToken)
@@ -63,9 +66,6 @@ public sealed class SubmitPayrollPeriodCommandHandler : IRequestHandler<SubmitPa
             DocumentTitle: $"Bảng lương {period.PeriodTitle} ({period.PeriodCode})",
             TargetUrl: $"/Payroll?periodId={period.Id}"), cancellationToken);
 
-        var actorUserId = _currentUser.UserId ?? 1;
-        var actorUsername = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username;
-
         period.Status = PayrollPeriodStatuses.Submitted;
         period.SubmittedByUserId = actorUserId;
         period.SubmittedAt = DateTime.UtcNow;
@@ -73,7 +73,7 @@ public sealed class SubmitPayrollPeriodCommandHandler : IRequestHandler<SubmitPa
 
         await _context.AuditLogs.AddAsync(new AuditLog
         {
-            UserId = _currentUser.UserId,
+            UserId = actorUserId,
             Username = actorUsername,
             ModuleName = "Payroll",
             ActionType = "PayrollPeriod_Submit",
@@ -123,6 +123,9 @@ public sealed class ApprovePayrollPeriodCommandHandler : IRequestHandler<Approve
 
     public async Task<string> Handle(ApprovePayrollPeriodCommand request, CancellationToken cancellationToken)
     {
+        var actorUserId = _currentUser.RequireUserId();
+        var actorUsername = _currentUser.RequireUsername();
+
         var period = await _context.PayrollPeriods
             .FirstOrDefaultAsync(p => p.Id == request.PayrollPeriodId, cancellationToken)
             ?? throw new KeyNotFoundException($"Không tìm thấy kỳ lương #{request.PayrollPeriodId}.");
@@ -133,13 +136,6 @@ public sealed class ApprovePayrollPeriodCommandHandler : IRequestHandler<Approve
                 $"Chỉ có thể phê duyệt/từ chối khi kỳ lương ở trạng thái 'Submitted' (hiện tại: '{period.Status}').");
         }
 
-        if (!_currentUser.UserId.HasValue || _currentUser.UserId.Value <= 0)
-        {
-            throw new InvalidOperationException(
-                "Không xác định được danh tính người phê duyệt (UserId trống). Vui lòng đăng nhập hợp lệ trước khi phê duyệt kỳ lương.");
-        }
-
-        var actorUserId = _currentUser.UserId.Value;
         if (period.CalculatedByUserId == actorUserId || period.SubmittedByUserId == actorUserId)
         {
             throw new InvalidOperationException(
@@ -162,7 +158,6 @@ public sealed class ApprovePayrollPeriodCommandHandler : IRequestHandler<Approve
             }
         }
 
-        var actorUsername = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username;
         var nextStatus = request.Approve ? PayrollPeriodStatuses.Approved : PayrollPeriodStatuses.Calculated;
         period.Status = nextStatus;
         if (request.Approve)
@@ -173,7 +168,7 @@ public sealed class ApprovePayrollPeriodCommandHandler : IRequestHandler<Approve
 
         await _context.AuditLogs.AddAsync(new AuditLog
         {
-            UserId = _currentUser.UserId,
+            UserId = actorUserId,
             Username = actorUsername,
             ModuleName = "Payroll",
             ActionType = request.Approve ? "PayrollPeriod_Approve" : "PayrollPeriod_Reject",
@@ -208,6 +203,9 @@ public sealed class UnlockPayrollPeriodCommandHandler : IRequestHandler<UnlockPa
 
     public async Task<bool> Handle(UnlockPayrollPeriodCommand request, CancellationToken cancellationToken)
     {
+        var actorUserId = _currentUser.RequireUserId();
+        var actorUsername = _currentUser.RequireUsername();
+
         if (string.IsNullOrWhiteSpace(request.Reason))
             throw new InvalidOperationException("Bắt buộc phải nhập lý do khi mở khóa kỳ lương.");
 
@@ -223,17 +221,16 @@ public sealed class UnlockPayrollPeriodCommandHandler : IRequestHandler<UnlockPa
 
         var oldStatus = period.Status;
         var reason = request.Reason.Trim();
-        var actorUsername = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username;
 
         period.IsLocked = false;
         period.Status = PayrollPeriodStatuses.Calculated;
-        period.UnlockedByUserId = _currentUser.UserId ?? 1;
+        period.UnlockedByUserId = actorUserId;
         period.UnlockedAt = DateTime.UtcNow;
         period.LastUnlockReason = reason;
 
         await _context.AuditLogs.AddAsync(new AuditLog
         {
-            UserId = _currentUser.UserId,
+            UserId = actorUserId,
             Username = actorUsername,
             ModuleName = "Payroll",
             ActionType = "PayrollPeriod_Unlock",
@@ -268,6 +265,9 @@ public sealed class MarkPayrollPeriodPaidCommandHandler : IRequestHandler<MarkPa
 
     public async Task<bool> Handle(MarkPayrollPeriodPaidCommand request, CancellationToken cancellationToken)
     {
+        var actorUserId = _currentUser.RequireUserId();
+        var actorUsername = _currentUser.RequireUsername();
+
         var period = await _context.PayrollPeriods
             .Include(p => p.PayrollRecords)
             .FirstOrDefaultAsync(p => p.Id == request.PayrollPeriodId, cancellationToken)
@@ -280,11 +280,10 @@ public sealed class MarkPayrollPeriodPaidCommandHandler : IRequestHandler<MarkPa
         }
 
         var now = DateTime.UtcNow;
-        var actorUsername = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username;
 
         period.Status = PayrollPeriodStatuses.Paid;
         period.IsLocked = true;
-        period.PaidByUserId = _currentUser.UserId ?? 1;
+        period.PaidByUserId = actorUserId;
         period.PaidAt = now;
 
         foreach (var rec in period.PayrollRecords)
@@ -295,7 +294,7 @@ public sealed class MarkPayrollPeriodPaidCommandHandler : IRequestHandler<MarkPa
 
         await _context.AuditLogs.AddAsync(new AuditLog
         {
-            UserId = _currentUser.UserId,
+            UserId = actorUserId,
             Username = actorUsername,
             ModuleName = "Payroll",
             ActionType = "PayrollPeriod_MarkPaid",
@@ -341,6 +340,9 @@ public sealed class SendPayslipsBatchCommandHandler : IRequestHandler<SendPaysli
 
     public async Task<PayslipDispatchBatchReportDto> Handle(SendPayslipsBatchCommand request, CancellationToken cancellationToken)
     {
+        var actorUserId = _currentUser.RequireUserId();
+        var actorUsername = _currentUser.RequireUsername();
+
         var period = await _context.PayrollPeriods
             .FirstOrDefaultAsync(p => p.Id == request.PayrollPeriodId, cancellationToken)
             ?? throw new KeyNotFoundException($"Không tìm thấy kỳ lương #{request.PayrollPeriodId}.");
@@ -378,10 +380,9 @@ public sealed class SendPayslipsBatchCommandHandler : IRequestHandler<SendPaysli
         await _context.PayslipDispatchLogs.AddRangeAsync(logs, cancellationToken);
         period.PayslipSentAt = DateTime.UtcNow;
 
-        var actorUsername = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username;
         await _context.AuditLogs.AddAsync(new AuditLog
         {
-            UserId = _currentUser.UserId,
+            UserId = actorUserId,
             Username = actorUsername,
             ModuleName = "Payroll",
             ActionType = "PayrollPeriod_DispatchPayslips",

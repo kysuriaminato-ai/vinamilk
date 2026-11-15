@@ -242,6 +242,9 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
 
     public async Task<int> Handle(CalculateMonthlyPayrollCommand request, CancellationToken cancellationToken)
     {
+        var actorUserId = _currentUser.RequireUserId();
+        var actorUsername = _currentUser.RequireUsername();
+
         var period = await _context.PayrollPeriods
             .FirstOrDefaultAsync(p => p.Id == request.PayrollPeriodId, cancellationToken)
             ?? throw new KeyNotFoundException($"Không tìm thấy kỳ lương #{request.PayrollPeriodId}.");
@@ -435,10 +438,9 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
 
         period.CalculationVersion += 1;
         period.Status = PayrollPeriodStatuses.Calculated;
-        period.CalculatedByUserId = _currentUser?.UserId ?? period.CalculatedByUserId ?? 1;
+        period.CalculatedByUserId = actorUserId;
         period.CalculatedAt = DateTime.UtcNow;
 
-        var actorUsername = string.IsNullOrWhiteSpace(_currentUser?.Username) ? "SYSTEM" : _currentUser.Username;
         var revision = new PayrollCalculationRevision
         {
             PayrollPeriodId = period.Id,
@@ -460,7 +462,7 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
 
         await _context.AuditLogs.AddAsync(new AuditLog
         {
-            UserId = _currentUser?.UserId,
+            UserId = actorUserId,
             Username = actorUsername,
             ModuleName = "Payroll",
             ActionType = request.EmployeeId.HasValue ? "PayrollPeriod_RecalculateEmployee" : "PayrollPeriod_Calculate",
@@ -507,6 +509,9 @@ public class LockPayrollPeriodCommandHandler : IRequestHandler<LockPayrollPeriod
 
     public async Task<bool> Handle(LockPayrollPeriodCommand request, CancellationToken cancellationToken)
     {
+        var actorUserId = _currentUser.RequireUserId();
+        var actorUsername = _currentUser.RequireUsername();
+
         var period = await _context.PayrollPeriods
             .FirstOrDefaultAsync(p => p.Id == request.PayrollPeriodId, cancellationToken)
             ?? throw new KeyNotFoundException($"Không tìm thấy kỳ lương #{request.PayrollPeriodId}.");
@@ -520,13 +525,12 @@ public class LockPayrollPeriodCommandHandler : IRequestHandler<LockPayrollPeriod
         var oldStatus = period.Status;
         period.IsLocked = true;
         period.Status = PayrollPeriodStatuses.Locked;
-        period.LockedByUserId = _currentUser?.UserId ?? 1;
+        period.LockedByUserId = actorUserId;
         period.LockedAt = DateTime.UtcNow;
 
-        var actorUsername = string.IsNullOrWhiteSpace(_currentUser?.Username) ? "SYSTEM" : _currentUser.Username;
         await _context.AuditLogs.AddAsync(new AuditLog
         {
-            UserId = _currentUser?.UserId,
+            UserId = actorUserId,
             Username = actorUsername,
             ModuleName = "Payroll",
             ActionType = "PayrollPeriod_Lock",

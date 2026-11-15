@@ -35,7 +35,13 @@ public sealed class PayslipEmailHangfireJob : IPayslipEmailJob
         if (log is null)
             return;
 
+        var systemJobUser = await _context.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Username == SystemJobAccount.Username, cancellationToken);
+        var jobUsername = systemJobUser?.Username ?? SystemJobAccount.Username;
+
         log.AttemptCount += 1;
+        log.UpdatedBy = jobUsername;
 
         var record = await _context.PayrollRecords
             .AsNoTracking()
@@ -96,12 +102,28 @@ public sealed class PayslipEmailHangfireJob : IPayslipEmailJob
             log.Status = "Sent";
             log.ErrorMessage = null;
             log.SentAt = DateTime.UtcNow;
+            log.UpdatedBy = jobUsername;
+            await _context.AuditLogs.AddAsync(new Domain.Entities.SystemEntities.AuditLog
+            {
+                UserId = systemJobUser?.Id,
+                Username = jobUsername,
+                ModuleName = "Payroll",
+                ActionType = "PayslipEmail_Sent",
+                EntityName = nameof(Domain.Entities.Payroll.PayslipDispatchLog),
+                EntityId = log.Id.ToString(),
+                NewValuesJson = $"{{\"PayrollPeriodId\":{log.PayrollPeriodId},\"EmployeeCode\":\"{log.EmployeeCode}\",\"Status\":\"Sent\"}}",
+                IpAddress = "127.0.0.1",
+                UserAgent = "HangfireJob",
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = jobUsername
+            }, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
             log.Status = "Failed";
             log.ErrorMessage = ex.Message;
+            log.UpdatedBy = jobUsername;
             await _context.SaveChangesAsync(cancellationToken);
             _logger.LogWarning(ex, "[PayslipEmailHangfireJob] Gửi phiếu lương thất bại (lần {Attempt}) cho {Email}",
                 log.AttemptCount, log.RecipientEmail);

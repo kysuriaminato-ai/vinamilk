@@ -302,10 +302,12 @@ public class PayrollCalculationTests
         });
         await db.SaveChangesAsync();
 
+        var currentUser = new FakeCurrentUserService();
+
         var periodId = await new CreatePayrollPeriodCommandHandler(db)
             .Handle(new CreatePayrollPeriodCommand(2026, 11, 26m), CancellationToken.None);
 
-        var count = await new CalculateMonthlyPayrollCommandHandler(db)
+        var count = await new CalculateMonthlyPayrollCommandHandler(db, currentUser)
             .Handle(new CalculateMonthlyPayrollCommand(periodId), CancellationToken.None);
         count.Should().Be(1);
 
@@ -317,7 +319,7 @@ public class PayrollCalculationTests
         rec.NetSalary.Should().Be(22_031_250m);
 
         // Chưa qua bước Approved -> không được phép khóa kỳ lương
-        Func<Task> lockBeforeApproved = () => new LockPayrollPeriodCommandHandler(db)
+        Func<Task> lockBeforeApproved = () => new LockPayrollPeriodCommandHandler(db, currentUser)
             .Handle(new LockPayrollPeriodCommand(periodId), CancellationToken.None);
         await lockBeforeApproved.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Approved*");
 
@@ -326,14 +328,13 @@ public class PayrollCalculationTests
         await db.SaveChangesAsync();
 
         // Khóa kỳ lương 11/2026
-        await new LockPayrollPeriodCommandHandler(db).Handle(new LockPayrollPeriodCommand(periodId), CancellationToken.None);
+        await new LockPayrollPeriodCommandHandler(db, currentUser).Handle(new LockPayrollPeriodCommand(periodId), CancellationToken.None);
 
-        Func<Task> recalcLocked = () => new CalculateMonthlyPayrollCommandHandler(db)
+        Func<Task> recalcLocked = () => new CalculateMonthlyPayrollCommandHandler(db, currentUser)
             .Handle(new CalculateMonthlyPayrollCommand(periodId), CancellationToken.None);
         await recalcLocked.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Locked*");
 
         // Cố sửa tham số hoặc biểu thuế bao trùm kỳ lương 11/2026 đã khóa -> phải bị chặn
-        var currentUser = new FakeCurrentUserService();
         var activeParam2026Jul = await db.PayrollStatutoryParameters
             .FirstAsync(p => p.EffectiveFrom == new DateOnly(2026, 7, 1));
 

@@ -42,7 +42,7 @@ public sealed class AuditableEntityInterceptor : SaveChangesInterceptor
 
         var utcNow = DateTime.UtcNow;
         var username = string.IsNullOrWhiteSpace(_currentUserService.Username)
-            ? "SYSTEM"
+            ? SystemJobAccount.Username
             : _currentUserService.Username;
 
         var auditEntries = new List<AuditLog>();
@@ -54,7 +54,10 @@ public sealed class AuditableEntityInterceptor : SaveChangesInterceptor
                 if (entry.State == EntityState.Added)
                 {
                     entry.Entity.CreatedAt = utcNow;
-                    entry.Entity.CreatedBy = username;
+                    if (string.IsNullOrWhiteSpace(entry.Entity.CreatedBy))
+                    {
+                        entry.Entity.CreatedBy = username;
+                    }
                 }
                 continue;
             }
@@ -62,7 +65,7 @@ public sealed class AuditableEntityInterceptor : SaveChangesInterceptor
             if (entry.State == EntityState.Added)
             {
                 entry.Entity.CreatedAt = utcNow;
-                if (string.IsNullOrWhiteSpace(entry.Entity.CreatedBy) || entry.Entity.CreatedBy == "SYSTEM")
+                if (string.IsNullOrWhiteSpace(entry.Entity.CreatedBy))
                     entry.Entity.CreatedBy = username;
 
                 auditEntries.Add(CreateAuditLog(entry, "Create", utcNow, username));

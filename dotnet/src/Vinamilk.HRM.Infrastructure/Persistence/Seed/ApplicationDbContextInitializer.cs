@@ -685,6 +685,17 @@ public sealed class ApplicationDbContextInitializer
                 await _context.Users.AddAsync(user, cancellationToken);
             }
 
+            // Seed tài khoản hệ thống riêng cho background job (Hangfire) với 0 Role -> không có quyền duyệt/mở khóa kỳ lương
+            var nonInteractiveSecret = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+            await _context.Users.AddAsync(new User
+            {
+                Username = Vinamilk.HRM.Application.Common.Interfaces.SystemJobAccount.Username,
+                Email = Vinamilk.HRM.Application.Common.Interfaces.SystemJobAccount.Email,
+                PasswordHash = ComputeSha256Hash(nonInteractiveSecret),
+                EmployeeId = null,
+                IsActive = true
+            }, cancellationToken);
+
             await _context.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Đã Seed thành công 55 nhân viên Vinamilk HRM cùng toàn bộ danh mục và nghiệp vụ.");
         }

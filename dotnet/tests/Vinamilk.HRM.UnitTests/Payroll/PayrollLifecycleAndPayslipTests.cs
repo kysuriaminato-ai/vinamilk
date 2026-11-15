@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using PdfSharp.Pdf.IO;
 using QuestPDF.Infrastructure;
 using Vinamilk.HRM.Application.Common.Interfaces;
+using Vinamilk.HRM.Application.CoreHR.ContractsAndTransfers;
 using Vinamilk.HRM.Application.Payroll;
 using Vinamilk.HRM.Application.Workflows;
 using Vinamilk.HRM.Domain.Entities.Core;
@@ -270,7 +271,7 @@ public class PayrollLifecycleAndPayslipTests
         var nullUser = new StubCurrentUser { UserId = null, Username = "anonymous", EmployeeId = 999 };
         Func<Task> approveWithNullUser = () => new ApprovePayrollPeriodCommandHandler(db, nullUser, wfSender)
             .Handle(new ApprovePayrollPeriodCommand(periodId, Approve: true), CancellationToken.None);
-        await approveWithNullUser.Should().ThrowAsync<InvalidOperationException>().WithMessage("*UserId trống*");
+        await approveWithNullUser.Should().ThrowAsync<UnauthorizedAccessException>().WithMessage("*UserId*");
 
         Func<Task> wfApproveWithNullUser = () => new ProcessWorkflowActionCommandHandler(
                 db,
@@ -278,7 +279,7 @@ public class PayrollLifecycleAndPayslipTests
                 new NoOpRealtimeDispatcher(),
                 new CapturingEmailNotificationService())
             .Handle(new ProcessWorkflowActionCommand(wfId, "Approved", "Thử duyệt không UserId"), CancellationToken.None);
-        await wfApproveWithNullUser.Should().ThrowAsync<InvalidOperationException>().WithMessage("*UserId trống*");
+        await wfApproveWithNullUser.Should().ThrowAsync<UnauthorizedAccessException>().WithMessage("*UserId*");
 
         // Trả lại (Reject) -> quay về Calculated
         activeActor = approverUser;
@@ -661,5 +662,153 @@ public class PayrollLifecycleAndPayslipTests
             .Build();
         Action parseInvalid = () => DependencyInjection.ResolveQuestPdfLicense(invalidCfg);
         parseInvalid.Should().Throw<InvalidOperationException>().WithMessage("*QuestPDF:LicenseType*");
+    }
+
+    [Fact]
+    public async Task All_Payroll_And_Workflow_User_Operations_Should_Throw_When_UserId_Is_Null_Or_Invalid()
+    {
+        await using var db = await CreateSeededDbContextAsync();
+        db.Employees.Add(new Employee
+        {
+            Id = 1,
+            EmployeeCode = "VNM-9001",
+            FullName = "Nguyễn Test",
+            OrganizationUnitId = 1,
+            PositionId = 1,
+            BaseSalary = 20_000_000m,
+            WorkStatus = "Official"
+        });
+        db.Users.Add(new User
+        {
+            Id = 10,
+            Username = "acc.t1",
+            Email = "acc@vinamilk.com.vn",
+            PasswordHash = "hash",
+            EmployeeId = 1,
+            IsActive = true
+        });
+        db.MonthlyAttendanceSummaries.Add(new MonthlyAttendanceSummary
+        {
+            Id = 1,
+            EmployeeId = 1,
+            Month = 8,
+            Year = 2026,
+            StandardWorkdays = 26m,
+            TotalPayableWorkdays = 26m
+        });
+        await db.SaveChangesAsync();
+
+        var validUser = new StubCurrentUser { UserId = 10, Username = "acc.t1", EmployeeId = 1 };
+        var periodId = await new CreatePayrollPeriodCommandHandler(db)
+            .Handle(new CreatePayrollPeriodCommand(2026, 8, 26m), CancellationToken.None);
+
+        var nullUsers = new[]
+        {
+            new StubCurrentUser { UserId = null, Username = "anon", EmployeeId = 1 },
+            new StubCurrentUser { UserId = 0, Username = "zero", EmployeeId = 1 },
+            new StubCurrentUser { UserId = 10, Username = "   ", EmployeeId = 1 }
+        };
+
+        foreach (var badActor in nullUsers)
+        {
+            var wfSender = new TestWorkflowSender(db, () => badActor);
+
+            Func<Task> calc = () => new CalculateMonthlyPayrollCommandHandler(db, badActor)
+                .Handle(new CalculateMonthlyPayrollCommand(periodId), CancellationToken.None);
+            await calc.Should().ThrowAsync<UnauthorizedAccessException>();
+
+            Func<Task> submit = () => new SubmitPayrollPeriodCommandHandler(db, badActor, wfSender)
+                .Handle(new SubmitPayrollPeriodCommand(periodId), CancellationToken.None);
+            await submit.Should().ThrowAsync<UnauthorizedAccessException>();
+
+            Func<Task> approve = () => new ApprovePayrollPeriodCommandHandler(db, badActor, wfSender)
+                .Handle(new ApprovePayrollPeriodCommand(periodId, Approve: true), CancellationToken.None);
+            await approve.Should().ThrowAsync<UnauthorizedAccessException>();
+
+            Func<Task> @lock = () => new LockPayrollPeriodCommandHandler(db, badActor)
+                .Handle(new LockPayrollPeriodCommand(periodId), CancellationToken.None);
+            await @lock.Should().ThrowAsync<UnauthorizedAccessException>();
+
+            Func<Task> unlock = () => new UnlockPayrollPeriodCommandHandler(db, badActor)
+                .Handle(new UnlockPayrollPeriodCommand(periodId, "Lý do hợp lệ"), CancellationToken.None);
+            await unlock.Should().ThrowAsync<UnauthorizedAccessException>();
+
+            Func<Task> markPaid = () => new MarkPayrollPeriodPaidCommandHandler(db, badActor)
+                .Handle(new MarkPayrollPeriodPaidCommand(periodId), CancellationToken.None);
+            await markPaid.Should().ThrowAsync<UnauthorizedAccessException>();
+
+            Func<Task> sendPayslips = () => new SendPayslipsBatchCommandHandler(db, badActor,
+                    new InProcessPayslipBatchDispatcher(new ServiceCollection().BuildServiceProvider(), NullLogger<InProcessPayslipBatchDispatcher>.Instance))
+                .Handle(new SendPayslipsBatchCommand(periodId), CancellationToken.None);
+            await sendPayslips.Should().ThrowAsync<UnauthorizedAccessException>();
+
+            Func<Task> startWf = () => new StartWorkflowInstanceCommandHandler(
+                    db, badActor, new NoOpRealtimeDispatcher(), new CapturingEmailNotificationService())
+                .Handle(new StartWorkflowInstanceCommand("PayrollPeriod", periodId, 1, "Test WF", TargetUrl: "/Payroll"), CancellationToken.None);
+            await startWf.Should().ThrowAsync<UnauthorizedAccessException>();
+
+            Func<Task> actWf = () => new ProcessWorkflowActionCommandHandler(
+                    db, badActor, new NoOpRealtimeDispatcher(), new CapturingEmailNotificationService())
+                .Handle(new ProcessWorkflowActionCommand(999, "Approved", "Test"), CancellationToken.None);
+            await actWf.Should().ThrowAsync<UnauthorizedAccessException>();
+        }
+
+        // Kiểm tra thêm: Submit thành công với validUser, nhưng calcUser tự ProcessWorkflowAction phải bị chặn
+        await new CalculateMonthlyPayrollCommandHandler(db, validUser)
+            .Handle(new CalculateMonthlyPayrollCommand(periodId), CancellationToken.None);
+        var validSender = new TestWorkflowSender(db, () => validUser);
+        var wfId = await new SubmitPayrollPeriodCommandHandler(db, validUser, validSender)
+            .Handle(new SubmitPayrollPeriodCommand(periodId), CancellationToken.None);
+
+        Func<Task> selfApproveViaWorkflow = () => new ProcessWorkflowActionCommandHandler(
+                db, validUser, new NoOpRealtimeDispatcher(), new CapturingEmailNotificationService())
+            .Handle(new ProcessWorkflowActionCommand(wfId, "Approved", "Tự duyệt"), CancellationToken.None);
+        await selfApproveViaWorkflow.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task BackgroundJobs_Should_Use_Dedicated_SystemJob_Account_And_Exclude_From_HR_Alerts()
+    {
+        await using var db = await CreateSeededDbContextAsync();
+        db.Employees.Add(new Employee
+        {
+            Id = 1,
+            EmployeeCode = "VNM-9002",
+            FullName = "Trần Thị Hợp Đồng",
+            OrganizationUnitId = 1,
+            PositionId = 1,
+            WorkStatus = "Official"
+        });
+
+        // system.job đứng trước (Id = 1) nhưng PHẢI bị loại khỏi danh sách HR nhận thông báo
+        db.Users.AddRange(
+            new User { Id = 1, Username = SystemJobAccount.Username, Email = SystemJobAccount.Email, PasswordHash = "hash", IsActive = true },
+            new User { Id = 2, Username = "hr.receiver", Email = "hr.receiver@vinamilk.com.vn", PasswordHash = "hash", EmployeeId = 1, IsActive = true });
+        db.LaborContracts.Add(new LaborContract
+        {
+            Id = 1,
+            EmployeeId = 1,
+            ContractNumber = "HDLD-EXP-01",
+            ContractType = "FixedTerm12M",
+            StartDate = DateOnly.FromDateTime(DateTime.Today.AddMonths(-11)),
+            EndDate = DateOnly.FromDateTime(DateTime.Today.AddDays(10)),
+            BaseSalary = 18_000_000m,
+            Status = "Active"
+        });
+        await db.SaveChangesAsync();
+
+        var scanned = await new ScanExpiringContractsCommandHandler(db)
+            .Handle(new ScanExpiringContractsCommand(), CancellationToken.None);
+
+        scanned.Should().Be(1);
+        var notifications = await db.Notifications.ToListAsync();
+        notifications.Should().HaveCount(1);
+        notifications[0].RecipientUserId.Should().Be(2);
+        notifications[0].CreatedBy.Should().Be(SystemJobAccount.Username);
+
+        var jobAudit = await db.AuditLogs.FirstOrDefaultAsync(a => a.ActionType == "ContractExpirationScan_Job");
+        jobAudit.Should().NotBeNull();
+        jobAudit!.UserId.Should().Be(1);
+        jobAudit.Username.Should().Be(SystemJobAccount.Username);
     }
 }

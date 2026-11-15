@@ -94,7 +94,7 @@ public class AiRecommendation : BaseAuditableEntity
 public class AuditLog : BaseLongAuditableEntity
 {
     public int? UserId { get; set; }
-    public string Username { get; set; } = "SYSTEM";
+    public string Username { get; set; } = string.Empty;
     public string ModuleName { get; set; } = "System";
     public string ActionType { get; set; } = "Update";
     public string EntityName { get; set; } = string.Empty;

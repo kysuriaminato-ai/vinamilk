@@ -315,14 +315,16 @@ public static class WorkflowSeederHelper
         if (step.ApproverUserId.HasValue)
             return step.ApproverUserId.Value;
 
-        // Fallback về tài khoản Line Manager hoặc HR Manager
+        // Fallback về tài khoản Line Manager hoặc HR Manager (loại trừ tài khoản job hệ thống)
         var fallbackUser = await context.Users
             .AsNoTracking()
+            .Where(u => u.IsActive && u.Username != SystemJobAccount.Username)
             .OrderByDescending(u => u.Username == "hung.nv")
             .ThenByDescending(u => u.Username == "huyen.ntt")
-            .FirstOrDefaultAsync(u => u.IsActive, cancellationToken);
+            .FirstOrDefaultAsync(cancellationToken);
 
-        return fallbackUser?.Id ?? 1;
+        return fallbackUser?.Id
+            ?? throw new InvalidOperationException("Không tìm thấy người phê duyệt khả dụng cho bước quy trình.");
     }
 
     public static bool EvaluateStepCondition(string? conditionExpression, decimal numericMetric)
@@ -741,6 +743,9 @@ public class StartWorkflowInstanceCommandHandler : IRequestHandler<StartWorkflow
 
     public async Task<int> Handle(StartWorkflowInstanceCommand request, CancellationToken cancellationToken)
     {
+        var submitterUserId = _currentUser.RequireUserId();
+        _ = _currentUser.RequireUsername();
+
         await WorkflowSeederHelper.EnsureDefaultWorkflowsAsync(_context, cancellationToken);
 
         var definition = await _context.WorkflowDefinitions
@@ -757,8 +762,6 @@ public class StartWorkflowInstanceCommandHandler : IRequestHandler<StartWorkflow
         var initiatorEmp = await _context.Employees
             .AsNoTracking()
             .FirstOrDefaultAsync(e => e.Id == request.InitiatorEmployeeId, cancellationToken);
-
-        var submitterUserId = _currentUser.UserId ?? approverUserId;
 
         var instance = new WorkflowInstance
         {
@@ -860,6 +863,9 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
 
     public async Task<string> Handle(ProcessWorkflowActionCommand request, CancellationToken cancellationToken)
     {
+        var actorUserId = _currentUser.RequireUserId();
+        var actorUsername = _currentUser.RequireUsername();
+
         var instance = await _context.WorkflowInstances
             .Include(i => i.WorkflowDefinition)
                 .ThenInclude(d => d.Steps)
@@ -881,25 +887,18 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
         if (instance.EntityType == "PayrollPeriod" &&
             !request.Action.Equals("Cancelled", StringComparison.OrdinalIgnoreCase))
         {
-            if (!_currentUser.UserId.HasValue || _currentUser.UserId.Value <= 0)
-            {
-                throw new InvalidOperationException(
-                    "Không xác định được danh tính người phê duyệt kỳ lương (UserId trống).");
-            }
-
             var payrollPeriodGuard = await _context.PayrollPeriods
                 .AsNoTracking()
                 .FirstOrDefaultAsync(p => p.Id == instance.EntityId, cancellationToken);
 
             if (payrollPeriodGuard is not null &&
-                (payrollPeriodGuard.CalculatedByUserId == _currentUser.UserId.Value ||
-                 payrollPeriodGuard.SubmittedByUserId == _currentUser.UserId.Value))
+                (payrollPeriodGuard.CalculatedByUserId == actorUserId ||
+                 payrollPeriodGuard.SubmittedByUserId == actorUserId))
             {
                 throw new InvalidOperationException("Vi phạm phân tách nhiệm vụ: người tính hoặc trình bảng lương không được tự phê duyệt kỳ lương.");
             }
         }
 
-        var actorUserId = _currentUser.UserId ?? instance.CurrentApproverUserId ?? 1;
         var orderedSteps = instance.WorkflowDefinition.Steps.OrderBy(s => s.StepOrder).ToList();
         var currentStep = orderedSteps.FirstOrDefault(s => s.StepOrder == instance.CurrentStepOrder)
                           ?? orderedSteps.First();
@@ -980,7 +979,7 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
                 ActionAt = DateTime.UtcNow
             });
 
-            await ApplyEntityRejectionAsync(instance, request.Comment, cancellationToken);
+            await ApplyEntityRejectionAsync(instance, actorUserId, actorUsername, request.Comment, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
 
             await NotifyInitiatorAsync(
@@ -1059,7 +1058,7 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
         instance.Status = "Approved";
         instance.CompletedAt = DateTime.UtcNow;
 
-        await ApplyEntityFinalApprovalAsync(instance, actorUserId, request.Comment, cancellationToken);
+        await ApplyEntityFinalApprovalAsync(instance, actorUserId, actorUsername, request.Comment, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
 
         await NotifyInitiatorAsync(
@@ -1089,6 +1088,7 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
     private async Task ApplyEntityFinalApprovalAsync(
         WorkflowInstance instance,
         int approverUserId,
+        string approverUsername,
         string? comment,
         CancellationToken cancellationToken)
     {
@@ -1241,8 +1241,8 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
                     approvedPeriod.ApprovedAt = DateTime.UtcNow;
                     await _context.AuditLogs.AddAsync(new AuditLog
                     {
-                        UserId = _currentUser.UserId ?? approverUserId,
-                        Username = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username,
+                        UserId = approverUserId,
+                        Username = approverUsername,
                         ModuleName = "Payroll",
                         ActionType = "PayrollPeriod_Approve",
                         EntityName = nameof(Domain.Entities.Payroll.PayrollPeriod),
@@ -1253,7 +1253,7 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
                         IpAddress = _currentUser.IpAddress ?? "127.0.0.1",
                         UserAgent = _currentUser.UserAgent ?? "WorkflowEngine",
                         CreatedAt = DateTime.UtcNow,
-                        CreatedBy = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username
+                        CreatedBy = approverUsername
                     }, cancellationToken);
                 }
                 break;
@@ -1262,6 +1262,8 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
 
     private async Task ApplyEntityRejectionAsync(
         WorkflowInstance instance,
+        int actorUserId,
+        string actorUsername,
         string? comment,
         CancellationToken cancellationToken)
     {
@@ -1317,8 +1319,8 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
                     rejectedPeriod.Status = "Calculated";
                     await _context.AuditLogs.AddAsync(new AuditLog
                     {
-                        UserId = _currentUser.UserId,
-                        Username = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username,
+                        UserId = actorUserId,
+                        Username = actorUsername,
                         ModuleName = "Payroll",
                         ActionType = "PayrollPeriod_Reject",
                         EntityName = nameof(Domain.Entities.Payroll.PayrollPeriod),
@@ -1329,7 +1331,7 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
                         IpAddress = _currentUser.IpAddress ?? "127.0.0.1",
                         UserAgent = _currentUser.UserAgent ?? "WorkflowEngine",
                         CreatedAt = DateTime.UtcNow,
-                        CreatedBy = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username
+                        CreatedBy = actorUsername
                     }, cancellationToken);
                 }
                 break;
@@ -1344,9 +1346,12 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
     {
         var initiatorUser = await _context.Users
             .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.EmployeeId == instance.InitiatorEmployeeId, cancellationToken);
+            .FirstOrDefaultAsync(u => u.EmployeeId == instance.InitiatorEmployeeId && u.IsActive, cancellationToken);
 
-        var recipientUserId = initiatorUser?.Id ?? 1;
+        if (initiatorUser is null)
+            return;
+
+        var recipientUserId = initiatorUser.Id;
         var title = $"[{statusText}] {instance.WorkflowDefinition.WorkflowName} (#{instance.EntityId})";
 
         await _context.Notifications.AddAsync(new Notification

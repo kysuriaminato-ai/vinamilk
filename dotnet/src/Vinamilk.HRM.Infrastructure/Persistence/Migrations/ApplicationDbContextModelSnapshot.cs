@@ -53,7 +53,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<DateOnly>("EffectiveDate")
                         .HasColumnType("date");
@@ -122,7 +122,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -217,7 +217,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("CurrentAddress")
                         .HasMaxLength(300)
@@ -420,7 +420,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
@@ -487,7 +487,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<DateOnly?>("DateOfBirth")
                         .HasColumnType("date");
@@ -574,7 +574,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("DocumentCategory")
                         .IsRequired()
@@ -648,7 +648,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("DepartmentName")
                         .HasMaxLength(200)
@@ -729,7 +729,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
@@ -834,7 +834,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -935,7 +935,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<DateOnly>("DecisionDate")
                         .HasColumnType("date");
@@ -1036,7 +1036,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<decimal>("DefaultPositionAllowance")
                         .HasColumnType("decimal(18,2)");
@@ -1118,7 +1118,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<DateOnly>("DecisionDate")
                         .HasColumnType("date");
@@ -1217,7 +1217,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<decimal>("DefaultAmount")
                         .HasColumnType("decimal(18,2)");
@@ -1272,7 +1272,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("DecisionNumber")
                         .IsRequired()
@@ -1367,7 +1367,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("Description")
                         .HasMaxLength(500)
@@ -1434,7 +1434,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -1506,7 +1506,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
@@ -1571,7 +1571,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("DisplayName")
                         .IsRequired()
@@ -1635,7 +1635,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("DefaultDataScope")
                         .IsRequired()
@@ -1705,7 +1705,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -1764,7 +1764,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -1861,7 +1861,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<bool>("IncludeSubUnits")
                         .HasColumnType("bit");
@@ -1920,7 +1920,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -1976,7 +1976,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("datetime2");
@@ -2052,7 +2052,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int?>("EmployeeId")
                         .HasColumnType("int");
@@ -2133,7 +2133,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<DateOnly>("EffectiveFrom")
                         .HasColumnType("date");
@@ -2222,7 +2222,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("date");
@@ -2363,7 +2363,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int>("DependentCount")
                         .HasColumnType("int");
@@ -2552,7 +2552,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -2618,7 +2618,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<decimal>("DependentDeduction")
                         .HasColumnType("decimal(18,2)");
@@ -2720,7 +2720,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("EmployeeCode")
                         .IsRequired()
@@ -2808,7 +2808,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<DateOnly>("EffectiveFrom")
                         .HasColumnType("date");
@@ -2888,7 +2888,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("FormulaExpression")
                         .HasMaxLength(500)
@@ -2958,7 +2958,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<DateOnly>("EffectiveFrom")
                         .HasColumnType("date");
@@ -3028,7 +3028,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int?>("EmployeeId")
                         .HasColumnType("int");
@@ -3121,7 +3121,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("EntityId")
                         .IsRequired()
@@ -3200,7 +3200,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("Icon")
                         .HasColumnType("varchar(50)");
@@ -3276,7 +3276,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -3363,7 +3363,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -3422,7 +3422,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("Description")
                         .HasMaxLength(500)
@@ -3493,7 +3493,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int?>("CurrentApproverUserId")
                         .HasColumnType("int");
@@ -3582,7 +3582,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -3657,7 +3657,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -3730,7 +3730,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<DateOnly?>("DateOfBirth")
                         .HasColumnType("date");
@@ -3853,7 +3853,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
@@ -3919,7 +3919,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("EmployeeComment")
                         .HasMaxLength(1000)
@@ -4016,7 +4016,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int>("EmployeeKpiEvaluationId")
                         .HasColumnType("int");
@@ -4098,7 +4098,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<DateOnly>("DueDate")
                         .HasColumnType("date");
@@ -4176,7 +4176,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("CycleCode")
                         .IsRequired()
@@ -4264,7 +4264,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<decimal>("CultureFitScore")
                         .HasColumnType("decimal(5,2)");
@@ -4365,7 +4365,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<DateOnly>("ExpectedStartDate")
                         .HasColumnType("date");
@@ -4453,7 +4453,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -4557,7 +4557,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int>("DueDaysOffset")
                         .HasColumnType("int");
@@ -4627,7 +4627,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("EmploymentType")
                         .IsRequired()
@@ -4734,7 +4734,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("date");
@@ -4829,7 +4829,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("Description")
                         .HasMaxLength(1000)
@@ -4897,7 +4897,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
@@ -4972,7 +4972,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<string>("DeviceId")
                         .HasColumnType("varchar(50)");
@@ -5058,7 +5058,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int>("EarlyLeaveMinutes")
                         .HasColumnType("int");
@@ -5148,7 +5148,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<DateOnly>("HolidayDate")
                         .HasColumnType("date");
@@ -5219,7 +5219,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
@@ -5307,7 +5307,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
@@ -5405,7 +5405,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -5474,7 +5474,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
@@ -5583,7 +5583,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
@@ -5661,7 +5661,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
@@ -5733,7 +5733,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
-                        .HasDefaultValue("SYSTEM");
+                        .HasDefaultValue("system.job");
 
                     b.Property<TimeOnly>("EndTime")
                         .HasColumnType("time");

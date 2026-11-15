@@ -180,7 +180,12 @@ public sealed class ScanExpiringContractsCommandHandler : IRequestHandler<ScanEx
             }
         }
 
+        var systemJobUser = await _context.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Username == SystemJobAccount.Username, cancellationToken);
+
         var hrUsers = await _context.Users
+            .Where(u => u.IsActive && u.Username != SystemJobAccount.Username)
             .OrderBy(u => u.Id)
             .Take(2)
             .ToListAsync(cancellationToken);
@@ -201,10 +206,29 @@ public sealed class ScanExpiringContractsCommandHandler : IRequestHandler<ScanEx
                     Message = $"Nhân sự {c.Employee.EmployeeCode} - {c.Employee.FullName} sẽ hết hạn hợp đồng vào ngày {c.EndDate:dd/MM/yyyy}. Vui lòng đánh giá tái ký.",
                     NotificationType = "ContractExpiryWarning",
                     TargetUrl = "/Contracts/Index",
-                    IsRead = false
+                    IsRead = false,
+                    CreatedBy = systemJobUser?.Username ?? SystemJobAccount.Username
                 }, cancellationToken);
                 createdAlerts++;
             }
+        }
+
+        if (createdAlerts > 0)
+        {
+            await _context.AuditLogs.AddAsync(new AuditLog
+            {
+                UserId = systemJobUser?.Id,
+                Username = systemJobUser?.Username ?? SystemJobAccount.Username,
+                ModuleName = "CoreHR",
+                ActionType = "ContractExpirationScan_Job",
+                EntityName = nameof(LaborContract),
+                EntityId = today.ToString("yyyy-MM-dd"),
+                NewValuesJson = $"{{\"ExpiringContracts\":{expiringContracts.Count},\"CreatedAlerts\":{createdAlerts}}}",
+                IpAddress = "127.0.0.1",
+                UserAgent = "HangfireJob",
+                CreatedAt = DateTime.UtcNow,
+                CreatedBy = systemJobUser?.Username ?? SystemJobAccount.Username
+            }, cancellationToken);
         }
 
         await _context.SaveChangesAsync(cancellationToken);
