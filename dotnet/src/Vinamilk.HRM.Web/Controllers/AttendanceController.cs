@@ -384,6 +384,142 @@ public class AttendanceController : Controller
     }
 
     [HttpGet]
+    public async Task<IActionResult> CellDetails(
+        int employeeId,
+        DateOnly date,
+        CancellationToken cancellationToken = default)
+    {
+        var detail = await _sender.Send(new GetAttendanceCellDetailsQuery(employeeId, date), cancellationToken);
+        return detail == null ? NotFound() : Json(detail);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> StartRecalculationBatch(
+        int month,
+        int year,
+        int? unitId = null,
+        int? employeeId = null,
+        DateOnly? fromDate = null,
+        DateOnly? toDate = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var batchId = await _sender.Send(new StartAttendanceRecalculationCommand(
+                month, year, unitId, employeeId, fromDate, toDate), cancellationToken);
+            TempData["ActiveBatchId"] = batchId;
+            TempData["SuccessMessage"] = $"Đã chạy lô tính công #{batchId} qua AttendanceCalculationEngine cho tháng {month:D2}/{year}.";
+        }
+        catch (Exception ex)
+        {
+            TempData["ErrorMessage"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index), new { month, year, unitId, tab = "matrix" });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> RecalculationProgress(
+        int batchId,
+        CancellationToken cancellationToken = default)
+    {
+        var status = await _sender.Send(new GetRecalculationBatchStatusQuery(batchId), cancellationToken);
+        return status == null ? NotFound() : Json(status);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AdvanceClosingStep(
+        int month,
+        int year,
+        string actionStep,
+        int? unitId = null,
+        bool forceLock = false,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var msg = await _sender.Send(new AdvanceAttendanceClosingCommand(
+                month, year, actionStep, unitId, forceLock), cancellationToken);
+            TempData["SuccessMessage"] = msg;
+        }
+        catch (Exception ex)
+        {
+            TempData["ErrorMessage"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index), new { month, year, unitId, tab = "matrix" });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreatePostLockAdjustment(
+        int employeeId,
+        int targetMonth,
+        int targetYear,
+        DateOnly adjustmentDate,
+        int appliedPayrollMonth,
+        int appliedPayrollYear,
+        string adjustmentType,
+        decimal workdayDelta,
+        decimal otHours150Delta,
+        decimal otHours200Delta,
+        decimal otHours300Delta,
+        decimal nightHoursDelta,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var id = await _sender.Send(new CreatePostLockAdjustmentCommand(
+                employeeId,
+                targetMonth,
+                targetYear,
+                adjustmentDate,
+                appliedPayrollMonth,
+                appliedPayrollYear,
+                adjustmentType,
+                workdayDelta,
+                otHours150Delta,
+                otHours200Delta,
+                otHours300Delta,
+                nightHoursDelta,
+                reason), cancellationToken);
+            TempData["SuccessMessage"] = $"Đã tạo phiếu điều chỉnh công kỳ sau #{id} (chỉ áp dụng kỳ {appliedPayrollMonth:D2}/{appliedPayrollYear}, giữ nguyên kỳ đã khóa).";
+        }
+        catch (Exception ex)
+        {
+            TempData["ErrorMessage"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index), new { month = targetMonth, year = targetYear, tab = "matrix" });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DecidePostLockAdjustment(
+        long adjustmentId,
+        bool approve,
+        int month,
+        int year,
+        string? comment = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var msg = await _sender.Send(new DecidePostLockAdjustmentCommand(adjustmentId, approve, comment), cancellationToken);
+            TempData["SuccessMessage"] = msg;
+        }
+        catch (Exception ex)
+        {
+            TempData["ErrorMessage"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index), new { month, year, tab = "matrix" });
+    }
+
+    [HttpGet]
     public async Task<IActionResult> ExportExcel(
         int? month = null,
         int? year = null,

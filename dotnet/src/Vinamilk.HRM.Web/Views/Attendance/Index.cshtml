@@ -191,16 +191,100 @@
 
             <!-- Chú giải ký hiệu chấm công -->
             <div class="d-flex flex-wrap gap-2 mt-3 pt-2 border-top fs-7 align-items-center">
-                <span class="fw-semibold text-muted">Ký hiệu chuẩn:</span>
-                <span class="badge bg-success-subtle text-success">X : Đủ công (1.0)</span>
-                <span class="badge bg-info-subtle text-info-emphasis">CT : Đi công tác (1.0)</span>
-                <span class="badge bg-primary-subtle text-primary">P : Nghỉ phép năm (1.0)</span>
-                <span class="badge bg-danger text-white">L : Nghỉ Lễ Tết (1.0)</span>
-                <span class="badge bg-warning text-dark">Om / TS : Ốm / Thai sản (BHXH)</span>
-                <span class="badge bg-danger-subtle text-danger">Đỏ : Đi muộn / Về sớm</span>
-                <span class="badge bg-secondary-subtle text-secondary">CGD : Ngoài vùng GPS chờ duyệt</span>
-                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning">Vàng đậm + ✎ : HR nhập tay/sửa</span>
+                <span class="fw-semibold text-muted">Ký hiệu:</span>
+                <span class="badge bg-success-subtle text-success">X : Đi làm (1.0)</span>
+                <span class="badge bg-warning-subtle text-warning-emphasis">½ : Nửa công (0.5)</span>
+                <span class="badge bg-info-subtle text-info-emphasis">CT : Công tác (1.0)</span>
+                <span class="badge bg-primary-subtle text-primary">P : Phép năm (1.0)</span>
+                <span class="badge bg-info-subtle text-dark">R : Nghỉ riêng (1.0)</span>
+                <span class="badge bg-danger text-white">L : Lễ Tết (1.0)</span>
+                <span class="badge bg-warning text-dark">Ô / TS : Ốm / Thai sản</span>
+                <span class="badge bg-secondary-subtle text-secondary">Ro : Không lương</span>
+                <span class="badge bg-dark-subtle text-dark">KL : Vắng không phép</span>
+                <span class="badge bg-danger-subtle text-danger border border-danger">TC : Thiếu chấm</span>
+                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning">Vàng đậm + ✎ : HR sửa tay</span>
                 <span class="badge bg-light text-muted border">OFF : Nghỉ tuần</span>
+            </div>
+
+            <!-- Thanh Quy trình Chốt công 3 bước & Tính lại có tiến độ -->
+            <div class="row g-2 mt-3 pt-3 border-top align-items-center">
+                <div class="col-lg-7">
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <span class="fw-bold fs-7 text-primary"><i class="ti ti-shield-lock me-1"></i>Chốt công 3 bước (@Model.ClosingStatus):</span>
+                        <form asp-action="AdvanceClosingStep" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="month" value="@Model.Month" />
+                            <input type="hidden" name="year" value="@Model.Year" />
+                            <input type="hidden" name="unitId" value="@Model.SelectedUnitId" />
+                            <input type="hidden" name="actionStep" value="UnitSubmit" />
+                            <button type="submit" class="btn btn-sm @(Model.ClosingStatus == "Open" ? "btn-outline-primary" : "btn-primary")" @(Model.IsMonthLocked ? "disabled" : "")>
+                                1. HR đơn vị chốt
+                            </button>
+                        </form>
+                        <form asp-action="AdvanceClosingStep" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="month" value="@Model.Month" />
+                            <input type="hidden" name="year" value="@Model.Year" />
+                            <input type="hidden" name="unitId" value="@Model.SelectedUnitId" />
+                            <input type="hidden" name="actionStep" value="ManagerConfirm" />
+                            <button type="submit" class="btn btn-sm @(Model.ClosingStatus == "ManagerConfirmed" || Model.ClosingStatus == "Locked" ? "btn-info text-white" : "btn-outline-info")" @(Model.IsMonthLocked ? "disabled" : "")>
+                                2. Quản lý xác nhận
+                            </button>
+                        </form>
+                        <form asp-action="AdvanceClosingStep" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="month" value="@Model.Month" />
+                            <input type="hidden" name="year" value="@Model.Year" />
+                            <input type="hidden" name="unitId" value="@Model.SelectedUnitId" />
+                            <input type="hidden" name="actionStep" value="FinalLock" />
+                            <input type="hidden" name="forceLock" value="true" />
+                            <button type="submit" class="btn btn-sm @(Model.IsMonthLocked ? "btn-danger" : "btn-outline-danger")" @(Model.IsMonthLocked ? "disabled" : "")>
+                                3. HR tổng khóa
+                            </button>
+                        </form>
+                        @if (Model.IsMonthLocked)
+                        {
+                            <button type="button" class="btn btn-sm btn-warning fw-bold" data-bs-toggle="modal" data-bs-target="#modalPostLockAdjustment">
+                                <i class="ti ti-adjustments-plus me-1"></i>Điều chỉnh kỳ sau
+                            </button>
+                        }
+                        @if (Model.ReviewDeadlineAt.HasValue)
+                        {
+                            <span class="badge bg-info-subtle text-info-emphasis fs-7">
+                                Hạn NV xem/giải trình: @Model.ReviewDeadlineAt.Value.ToString("dd/MM HH:mm") UTC
+                            </span>
+                        }
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <form asp-action="StartRecalculationBatch" method="post" class="d-flex flex-wrap gap-1 justify-content-lg-end align-items-center">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="month" value="@Model.Month" />
+                        <input type="hidden" name="year" value="@Model.Year" />
+                        <input type="hidden" name="unitId" value="@Model.SelectedUnitId" />
+                        <select name="employeeId" class="form-select form-select-sm" style="max-width: 170px;">
+                            <option value="">Tất cả NV (theo ĐV)</option>
+                            @foreach (var emp in Model.ActiveEmployees)
+                            {
+                                <option value="@emp.Id">@emp.Name</option>
+                            }
+                        </select>
+                        <input type="date" name="fromDate" class="form-control form-control-sm" style="max-width: 125px;" value="@(new DateOnly(Model.Year, Model.Month, 1).ToString("yyyy-MM-dd"))" />
+                        <input type="date" name="toDate" class="form-control form-control-sm" style="max-width: 125px;" value="@(new DateOnly(Model.Year, Model.Month, Model.DaysInMonth).ToString("yyyy-MM-dd"))" />
+                        <button type="submit" class="btn btn-sm btn-outline-success fw-semibold" @(Model.IsMonthLocked ? "disabled" : "")>
+                            <i class="ti ti-calculator me-1"></i>Tính lại Engine
+                        </button>
+                    </form>
+                    @if (Model.RecalculationBatches != null && Model.RecalculationBatches.Count > 0)
+                    {
+                        var latestBatch = Model.RecalculationBatches[0];
+                        <div class="progress mt-1" style="height: 14px;" title="@latestBatch.Message">
+                            <div class="progress-bar @(latestBatch.Status == "Completed" ? "bg-success" : "bg-primary progress-bar-striped progress-bar-animated")" role="progressbar" style="width: @latestBatch.ProgressPercent%;">
+                                @latestBatch.BatchCode (@latestBatch.ProgressPercent% - @latestBatch.ProcessedEmployees/@latestBatch.TotalEmployees)
+                            </div>
+                        </div>
+                    }
+                </div>
             </div>
         </div>
 
@@ -219,9 +303,9 @@
                                 </th>
                             }
                             <th class="bg-primary-subtle text-primary">Thực tế</th>
-                            <th class="bg-info-subtle text-info-emphasis">Phép/Lễ</th>
-                            <th class="bg-danger-subtle text-danger">Phút trễ</th>
-                            <th class="bg-warning-subtle text-warning-emphasis">Tổng OT</th>
+                            <th class="bg-info-subtle text-info-emphasis">Phép/Lễ/R</th>
+                            <th class="bg-danger-subtle text-danger">Trễ/Sớm/Quên</th>
+                            <th class="bg-warning-subtle text-warning-emphasis">OT / Đêm</th>
                             <th class="bg-success-subtle text-success fw-bold">Công tính lương</th>
                         </tr>
                     </thead>
@@ -241,7 +325,7 @@
                                                   (cell.LateMinutes > 0 ? $" | Đi muộn {cell.LateMinutes} phút" : "") +
                                                   (cell.OvertimeHours > 0 ? $" | OT {cell.OvertimeHours:0.#}h" : "") +
                                                   (cell.EditReason != null ? $" | {cell.EditReason}" : "");
-                                    <td class="@cell.CssClass" title="@tooltip" style="cursor: pointer; @(cell.IsManualEdited ? "outline: 2px solid #f59e0b; outline-offset: -2px;" : "")">
+                                    <td class="@cell.CssClass" title="@tooltip" style="cursor: pointer; @(cell.IsManualEdited ? "outline: 2px solid #f59e0b; outline-offset: -2px;" : "")" onclick="openAttendanceCellModal(@row.EmployeeId, '@cell.Date.ToString("yyyy-MM-dd")')">
                                         <div>@cell.Symbol@(cell.IsManualEdited ? "✎" : "")</div>
                                         @if (cell.LateMinutes > 0)
                                         {
@@ -253,13 +337,13 @@
                                         }
                                     </td>
                                 }
-                                <td class="fw-bold">@row.ActualWorkdays.ToString("0.#")</td>
-                                <td>@((row.PaidLeaveDays + row.HolidayDays).ToString("0.#"))</td>
-                                <td class="@(row.TotalLateMinutes > 0 ? "text-danger fw-bold" : "text-muted")">
-                                    @(row.TotalLateMinutes > 0 ? $"{row.TotalLateMinutes}p ({row.TotalLateCount}l)" : "0")
+                                <td class="fw-bold">@row.ActualWorkdays.ToString("0.#")/@row.StandardWorkdays.ToString("0.#")</td>
+                                <td>@((row.PaidLeaveDays + row.HolidayDays + row.TotalPaidPersonalLeaveDays).ToString("0.#"))</td>
+                                <td class="@(row.TotalLateMinutes > 0 || row.TotalMissedPunchCount > 0 ? "text-danger fw-bold" : "text-muted")">
+                                    @(row.TotalLateMinutes > 0 ? $"{row.TotalLateMinutes}p({row.TotalLateCount})" : "0") / @(row.TotalEarlyLeaveMinutes)s / Q:@row.TotalMissedPunchCount
                                 </td>
-                                <td class="@(totalOt > 0 ? "text-warning-emphasis fw-bold" : "text-muted")">
-                                    @totalOt.ToString("0.#")h
+                                <td class="@(totalOt > 0 || row.TotalNightHours > 0 ? "text-warning-emphasis fw-bold" : "text-muted")">
+                                    @totalOt.ToString("0.#")h / Đ:@row.TotalNightHours.ToString("0.#")h
                                 </td>
                                 <td class="fw-bold text-success bg-success-subtle">@row.TotalPayableWorkdays.ToString("0.#")</td>
                             </tr>
@@ -880,8 +964,126 @@
     </div>
 </div>
 
+<!-- Modal Chi tiết Ô công (Click ô xem log + đơn liên quan) -->
+<div class="modal fade" id="modalAttendanceCellDetail" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="ti ti-calendar-event text-primary me-2"></i>Chi tiết Chấm công & Log nguồn</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="attendanceCellDetailBody">
+                <div class="text-center text-muted py-4">Đang tải chi tiết...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Điều chỉnh công kỳ sau (Truy lĩnh / Truy thu sau khi khóa) -->
+<div class="modal fade" id="modalPostLockAdjustment" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="CreatePostLockAdjustment" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="targetMonth" value="@Model.Month" />
+            <input type="hidden" name="targetYear" value="@Model.Year" />
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="ti ti-adjustments-plus text-warning me-2"></i>Phiếu Điều chỉnh Công Kỳ Sau (Kỳ đã khóa @Model.Month.ToString("D2")/@Model.Year)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning fs-7 border-0">
+                    Bảng công tháng @Model.Month.ToString("D2")/@Model.Year đã khóa cứng. Mọi chênh lệch công/OT sẽ được lập phiếu điều chỉnh truy lĩnh/truy thu áp dụng vào kỳ lương tiếp theo và ghi AuditLog.
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Nhân viên (*)</label>
+                    <select name="employeeId" class="form-select form-select-sm" required>
+                        @foreach (var emp in Model.ActiveEmployees)
+                        {
+                            <option value="@emp.Id">@emp.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold fs-7">Ngày phát sinh điều chỉnh</label>
+                        <input type="date" name="adjustmentDate" class="form-control form-control-sm" value="@(new DateOnly(Model.Year, Model.Month, 1).ToString("yyyy-MM-dd"))" required />
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label fw-semibold fs-7">Áp dụng Tháng</label>
+                        <input type="number" name="appliedPayrollMonth" min="1" max="12" class="form-control form-control-sm" value="@(Model.Month == 12 ? 1 : Model.Month + 1)" required />
+                    </div>
+                    <div class="col-3">
+                        <label class="form-label fw-semibold fs-7">Năm</label>
+                        <input type="number" name="appliedPayrollYear" class="form-control form-control-sm" value="@(Model.Month == 12 ? Model.Year + 1 : Model.Year)" required />
+                    </div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-4">
+                        <label class="form-label fw-semibold fs-7">Loại điều chỉnh</label>
+                        <select name="adjustmentType" class="form-select form-select-sm">
+                            <option value="WorkdayDelta">Chênh lệch ngày công</option>
+                            <option value="OtHoursDelta">Chênh lệch giờ OT</option>
+                            <option value="NightHoursDelta">Chênh lệch giờ đêm</option>
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label fw-semibold fs-7">+/- Ngày công</label>
+                        <input type="number" step="0.5" name="workdayDelta" class="form-control form-control-sm" value="1.0" required />
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label fw-semibold fs-7">+/- OT 150% (h)</label>
+                        <input type="number" step="0.5" name="otHours150Delta" class="form-control form-control-sm" value="0" />
+                    </div>
+                </div>
+                <input type="hidden" name="otHours200Delta" value="0" />
+                <input type="hidden" name="otHours300Delta" value="0" />
+                <input type="hidden" name="nightHoursDelta" value="0" />
+                <div class="mb-2">
+                    <label class="form-label fw-semibold fs-7">Lý do điều chỉnh kỳ sau (*)</label>
+                    <input type="text" name="reason" class="form-control form-control-sm" placeholder="VD: Bổ sung xác nhận công tác bị sót sau chốt công..." required />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button>
+                <button type="submit" class="btn btn-warning fw-bold">Tạo phiếu điều chỉnh</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 @section Scripts {
     <script>
+        async function openAttendanceCellModal(employeeId, dateStr) {
+            const modalEl = document.getElementById('modalAttendanceCellDetail');
+            const bodyEl = document.getElementById('attendanceCellDetailBody');
+            bodyEl.innerHTML = '<div class="text-center text-muted py-4">Đang tải chi tiết công & log...</div>';
+            if (window.bootstrap) {
+                window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            }
+            try {
+                const resp = await fetch(`/Attendance/CellDetails?employeeId=${employeeId}&date=${dateStr}`);
+                if (!resp.ok) throw new Error('Không tải được chi tiết ô công.');
+                const d = await resp.json();
+                let logsHtml = d.logs && d.logs.length
+                    ? d.logs.map(l => `<li><code>${l.punchTime}</code> | <b>${l.punchType}</b> | Nguồn: ${l.sourceType} (${l.deviceId || '-'}) ${l.manualReason ? '— ' + l.manualReason : ''}</li>`).join('')
+                    : '<li class="text-muted">Không có log quét máy/GPS</li>';
+                let reqsHtml = d.relatedRequests && d.relatedRequests.length
+                    ? d.relatedRequests.map(r => `<li>${r}</li>`).join('')
+                    : '<li class="text-muted">Không có đơn nghỉ / OT liên quan</li>';
+                bodyEl.innerHTML = `
+                    <div class="mb-2"><strong>${d.fullName}</strong> (${d.employeeCode}) • Ngày <strong>${d.workDate}</strong> • Ca: <span class="badge bg-primary-subtle text-primary">${d.shiftCode || 'HC'}</span> • Ký hiệu: <span class="badge bg-success">${d.statusCode}</span></div>
+                    <div class="row g-2 mb-3 fs-7">
+                        <div class="col-4 border rounded p-2">Công chuẩn: <b>${d.standardHours}h</b><br/>Giờ làm: <b>${d.workingHours}h</b><br/>Số công: <b>${d.workdayCount}</b></div>
+                        <div class="col-4 border rounded p-2">Đi muộn: <b>${d.lateMinutes}p</b><br/>Về sớm: <b>${d.earlyLeaveMinutes}p</b><br/>Giờ đêm: <b>${d.nightShiftHours}h</b></div>
+                        <div class="col-4 border rounded p-2">OT150: <b>${d.overtimeHours150Day}/${d.overtimeHours150Night}h</b><br/>OT200: <b>${d.overtimeHours200Day}/${d.overtimeHours200Night}h</b><br/>OT300: <b>${d.overtimeHours300Day}/${d.overtimeHours300Night}h</b></div>
+                    </div>
+                    <div class="mb-2"><strong>Nhật ký log nguồn:</strong><ul class="fs-7 mb-2">${logsHtml}</ul></div>
+                    <div class="mb-2"><strong>Đơn nghỉ / OT liên quan:</strong><ul class="fs-7 mb-2">${reqsHtml}</ul></div>
+                    <div class="text-muted fs-7">Ghi chú tính công: ${d.editReason || '-'}</div>`;
+            } catch (err) {
+                bodyEl.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
+            }
+        }
         function applyPresetLocation(selectEl) {
             if (!selectEl.value) return;
             const parts = selectEl.value.split(',');

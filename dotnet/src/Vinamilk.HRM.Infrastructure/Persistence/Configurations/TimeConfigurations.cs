@@ -109,12 +109,21 @@ public class DailyAttendanceConfiguration : IEntityTypeConfiguration<DailyAttend
     {
         builder.ConfigureBaseAuditable<DailyAttendance, long>("DailyAttendances", "time");
 
-        builder.Property(x => x.AttendanceSymbol).HasColumnType("varchar(10)").IsRequired();
+        builder.Property(x => x.AttendanceSymbol).HasColumnType("nvarchar(20)").IsRequired();
+        builder.Property(x => x.StandardHours).HasColumnType("decimal(5,2)");
         builder.Property(x => x.WorkingHours).HasColumnType("decimal(5,2)");
         builder.Property(x => x.WorkdayCount).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.PaidLeaveDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.UnpaidLeaveDays).HasColumnType("decimal(5,2)");
         builder.Property(x => x.OvertimeHours150).HasColumnType("decimal(5,2)");
         builder.Property(x => x.OvertimeHours200).HasColumnType("decimal(5,2)");
         builder.Property(x => x.OvertimeHours300).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.OvertimeHours150Day).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.OvertimeHours150Night).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.OvertimeHours200Day).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.OvertimeHours200Night).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.OvertimeHours300Day).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.OvertimeHours300Night).HasColumnType("decimal(5,2)");
         builder.Property(x => x.NightShiftHours).HasColumnType("decimal(5,2)");
         builder.Property(x => x.EditReason).HasMaxLength(500);
 
@@ -150,11 +159,23 @@ public class MonthlyAttendanceSummaryConfiguration : IEntityTypeConfiguration<Mo
         builder.Property(x => x.HolidayDays).HasColumnType("decimal(5,2)");
         builder.Property(x => x.SocialInsuranceLeaveDays).HasColumnType("decimal(5,2)");
         builder.Property(x => x.UnpaidLeaveDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.TotalPaidPersonalLeaveDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.TotalUnpaidPersonalLeaveDays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.TotalUnexcusedAbsentDays).HasColumnType("decimal(5,2)");
         builder.Property(x => x.TotalOtHours150).HasColumnType("decimal(5,2)");
         builder.Property(x => x.TotalOtHours200).HasColumnType("decimal(5,2)");
         builder.Property(x => x.TotalOtHours300).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.TotalOtHours150Day).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.TotalOtHours150Night).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.TotalOtHours200Day).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.TotalOtHours200Night).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.TotalOtHours300Day).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.TotalOtHours300Night).HasColumnType("decimal(5,2)");
         builder.Property(x => x.TotalNightHours).HasColumnType("decimal(5,2)");
         builder.Property(x => x.TotalPayableWorkdays).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.ClosingStatus).HasColumnType("varchar(30)").HasDefaultValue("Open");
+        builder.Property(x => x.UnitSubmittedBy).HasMaxLength(100);
+        builder.Property(x => x.ManagerConfirmedBy).HasMaxLength(100);
         builder.Property(x => x.LockedBy).HasMaxLength(100);
         builder.Property(x => x.MissedPunchPenaltyAmount).HasColumnType("decimal(18,0)");
 
@@ -352,6 +373,8 @@ public class AttendancePolicyConfiguration : IEntityTypeConfiguration<Attendance
         builder.Property(x => x.MissedPunchPenaltyAmount).HasColumnType("decimal(18,0)");
         builder.Property(x => x.WeeklyWorkdaysMask).HasColumnType("varchar(80)").HasDefaultValue("Mon,Tue,Wed,Thu,Fri");
         builder.Property(x => x.MaxWeeklyWorkingHoursOverride).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.PunchPairingMode).HasColumnType("varchar(30)").HasDefaultValue("FirstLast");
+        builder.Property(x => x.MissedPunchCreditWorkdays).HasColumnType("decimal(4,2)").HasDefaultValue(0m);
 
         builder.HasIndex(x => x.PolicyGroupId)
             .IsUnique()
@@ -503,6 +526,72 @@ public class EmployeeDeviceBindingConfiguration : IEntityTypeConfiguration<Emplo
             .WithMany()
             .HasForeignKey(x => x.EmployeeId)
             .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class AttendanceSymbolDefinitionConfiguration : IEntityTypeConfiguration<AttendanceSymbolDefinition>
+{
+    public void Configure(EntityTypeBuilder<AttendanceSymbolDefinition> builder)
+    {
+        builder.ConfigureBaseAuditable<AttendanceSymbolDefinition, int>("AttendanceSymbolDefinitions", "time");
+
+        builder.Property(x => x.SymbolTypeCode).HasColumnType("varchar(40)").IsRequired();
+        builder.Property(x => x.SymbolCode).HasColumnType("nvarchar(20)").IsRequired();
+        builder.Property(x => x.SymbolName).HasMaxLength(120).IsRequired();
+        builder.Property(x => x.Category).HasColumnType("varchar(30)").IsRequired();
+        builder.Property(x => x.WorkdayMultiplier).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.ColorHex).HasColumnType("varchar(20)").HasDefaultValue("#198754");
+        builder.Property(x => x.CssClass).HasMaxLength(150);
+
+        builder.HasIndex(x => x.SymbolTypeCode)
+            .IsUnique()
+            .HasDatabaseName("UQ_AttendanceSymbolDefinitions_TypeCode")
+            .HasFilter("[IsDeleted] = 0");
+    }
+}
+
+public class PostLockAttendanceAdjustmentConfiguration : IEntityTypeConfiguration<PostLockAttendanceAdjustment>
+{
+    public void Configure(EntityTypeBuilder<PostLockAttendanceAdjustment> builder)
+    {
+        builder.ConfigureBaseAuditable<PostLockAttendanceAdjustment, long>("PostLockAttendanceAdjustments", "time");
+
+        builder.Property(x => x.AdjustmentType).HasColumnType("varchar(30)").IsRequired();
+        builder.Property(x => x.WorkdayDelta).HasColumnType("decimal(6,2)");
+        builder.Property(x => x.OtHours150Delta).HasColumnType("decimal(6,2)");
+        builder.Property(x => x.OtHours200Delta).HasColumnType("decimal(6,2)");
+        builder.Property(x => x.OtHours300Delta).HasColumnType("decimal(6,2)");
+        builder.Property(x => x.NightHoursDelta).HasColumnType("decimal(6,2)");
+        builder.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+        builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("Pending");
+        builder.Property(x => x.ApprovedByUsername).HasMaxLength(100);
+        builder.Property(x => x.ApproverComment).HasMaxLength(500);
+
+        builder.HasIndex(x => new { x.TargetYear, x.TargetMonth, x.EmployeeId })
+            .HasDatabaseName("IX_PostLockAdjustments_TargetPeriod_Emp");
+
+        builder.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class AttendanceRecalculationBatchConfiguration : IEntityTypeConfiguration<AttendanceRecalculationBatch>
+{
+    public void Configure(EntityTypeBuilder<AttendanceRecalculationBatch> builder)
+    {
+        builder.ConfigureBaseAuditable<AttendanceRecalculationBatch, int>("AttendanceRecalculationBatches", "time");
+
+        builder.Property(x => x.BatchCode).HasColumnType("varchar(60)").IsRequired();
+        builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("Queued");
+        builder.Property(x => x.RequestedByUsername).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.Message).HasMaxLength(500);
+
+        builder.HasIndex(x => x.BatchCode)
+            .IsUnique()
+            .HasDatabaseName("UQ_AttendanceRecalculationBatches_Code")
+            .HasFilter("[IsDeleted] = 0");
     }
 }
 

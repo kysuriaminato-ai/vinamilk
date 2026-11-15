@@ -779,7 +779,31 @@ public sealed class ApplicationDbContextInitializer
             await _context.AttendanceDevices.AddRangeAsync(BuildDefaultAttendanceDevices(), cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
         }
+
+        // Idempotent seed cho CL3: Danh mục ký hiệu công chuẩn hóa cấu hình được
+        if (!await _context.AttendanceSymbolDefinitions.AnyAsync(cancellationToken))
+        {
+            await _context.AttendanceSymbolDefinitions.AddRangeAsync(BuildDefaultAttendanceSymbols(), cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
     }
+
+    public static List<AttendanceSymbolDefinition> BuildDefaultAttendanceSymbols() =>
+    [
+        new() { SymbolTypeCode = "Work", SymbolCode = "X", SymbolName = "Đi làm đủ công", Category = "Work", WorkdayMultiplier = 1.0m, IsPaidByCompany = true, IsPaidBySocialInsurance = false, ColorHex = "#198754", CssClass = "bg-success-subtle text-success fw-semibold", DisplayOrder = 1 },
+        new() { SymbolTypeCode = "HalfWork", SymbolCode = "½", SymbolName = "Đi làm nửa công", Category = "Work", WorkdayMultiplier = 0.5m, IsPaidByCompany = true, IsPaidBySocialInsurance = false, ColorHex = "#f59e0b", CssClass = "bg-warning-subtle text-warning-emphasis fw-semibold", DisplayOrder = 2 },
+        new() { SymbolTypeCode = "AnnualLeave", SymbolCode = "P", SymbolName = "Nghỉ phép năm hưởng lương", Category = "PaidLeave", WorkdayMultiplier = 1.0m, IsPaidByCompany = true, IsPaidBySocialInsurance = false, ColorHex = "#0d6efd", CssClass = "bg-primary-subtle text-primary fw-bold", DisplayOrder = 3 },
+        new() { SymbolTypeCode = "Holiday", SymbolCode = "L", SymbolName = "Nghỉ Lễ / Tết hưởng nguyên lương", Category = "Holiday", WorkdayMultiplier = 1.0m, IsPaidByCompany = true, IsPaidBySocialInsurance = false, ColorHex = "#dc3545", CssClass = "bg-danger text-white fw-bold", DisplayOrder = 4 },
+        new() { SymbolTypeCode = "Sick", SymbolCode = "Ô", SymbolName = "Nghỉ ốm hưởng BHXH", Category = "SocialInsurance", WorkdayMultiplier = 1.0m, IsPaidByCompany = false, IsPaidBySocialInsurance = true, ColorHex = "#ffc107", CssClass = "bg-warning text-dark fw-semibold", DisplayOrder = 5 },
+        new() { SymbolTypeCode = "Maternity", SymbolCode = "TS", SymbolName = "Nghỉ thai sản hưởng BHXH", Category = "SocialInsurance", WorkdayMultiplier = 1.0m, IsPaidByCompany = false, IsPaidBySocialInsurance = true, ColorHex = "#fd7e14", CssClass = "bg-warning text-dark fw-semibold", DisplayOrder = 6 },
+        new() { SymbolTypeCode = "BusinessTrip", SymbolCode = "CT", SymbolName = "Đi công tác (hưởng nguyên công)", Category = "Work", WorkdayMultiplier = 1.0m, IsPaidByCompany = true, IsPaidBySocialInsurance = false, ColorHex = "#0dcaf0", CssClass = "bg-info-subtle text-info-emphasis fw-bold", DisplayOrder = 7 },
+        new() { SymbolTypeCode = "PersonalPaid", SymbolCode = "R", SymbolName = "Nghỉ việc riêng có lương (hiếu/hỷ)", Category = "PersonalPaid", WorkdayMultiplier = 1.0m, IsPaidByCompany = true, IsPaidBySocialInsurance = false, ColorHex = "#20c997", CssClass = "bg-info-subtle text-dark fw-semibold", DisplayOrder = 8 },
+        new() { SymbolTypeCode = "PersonalUnpaid", SymbolCode = "Ro", SymbolName = "Nghỉ việc riêng không lương", Category = "UnpaidLeave", WorkdayMultiplier = 0m, IsPaidByCompany = false, IsPaidBySocialInsurance = false, ColorHex = "#6c757d", CssClass = "bg-secondary-subtle text-secondary fw-semibold", DisplayOrder = 9 },
+        new() { SymbolTypeCode = "UnexcusedAbsent", SymbolCode = "KL", SymbolName = "Nghỉ không phép / Vắng không lý do", Category = "Absent", WorkdayMultiplier = 0m, IsPaidByCompany = false, IsPaidBySocialInsurance = false, ColorHex = "#212529", CssClass = "bg-dark-subtle text-dark fw-bold", DisplayOrder = 10 },
+        new() { SymbolTypeCode = "WeeklyOff", SymbolCode = "OFF", SymbolName = "Nghỉ tuần theo lịch ca", Category = "Off", WorkdayMultiplier = 0m, IsPaidByCompany = false, IsPaidBySocialInsurance = false, ColorHex = "#adb5bd", CssClass = "bg-light text-muted", DisplayOrder = 11 },
+        new() { SymbolTypeCode = "MissedPunch", SymbolCode = "TC", SymbolName = "Thiếu chấm vào/ra chưa giải trình", Category = "Missing", WorkdayMultiplier = 0m, IsPaidByCompany = false, IsPaidBySocialInsurance = false, ColorHex = "#dc3545", CssClass = "bg-danger-subtle text-danger fw-bold border border-danger", DisplayOrder = 12 },
+        new() { SymbolTypeCode = "PendingGeofence", SymbolCode = "CGD", SymbolName = "Chấm ngoài vùng GPS chờ duyệt", Category = "Missing", WorkdayMultiplier = 0m, IsPaidByCompany = false, IsPaidBySocialInsurance = false, ColorHex = "#ffc107", CssClass = "bg-warning text-dark fw-bold", DisplayOrder = 13 }
+    ];
 
     public static List<GeofenceLocation> BuildDefaultGeofenceLocations() =>
     [

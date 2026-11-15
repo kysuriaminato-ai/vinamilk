@@ -68,6 +68,9 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<EmployeeDeviceMapping> EmployeeDeviceMappings => Set<EmployeeDeviceMapping>();
     public DbSet<UnmappedAttendanceLog> UnmappedAttendanceLogs => Set<UnmappedAttendanceLog>();
     public DbSet<EmployeeDeviceBinding> EmployeeDeviceBindings => Set<EmployeeDeviceBinding>();
+    public DbSet<AttendanceSymbolDefinition> AttendanceSymbolDefinitions => Set<AttendanceSymbolDefinition>();
+    public DbSet<PostLockAttendanceAdjustment> PostLockAttendanceAdjustments => Set<PostLockAttendanceAdjustment>();
+    public DbSet<AttendanceRecalculationBatch> AttendanceRecalculationBatches => Set<AttendanceRecalculationBatch>();
 
     // Payroll Schema
     public DbSet<PayrollStatutoryParameter> PayrollStatutoryParameters => Set<PayrollStatutoryParameter>();

@@ -79,6 +79,7 @@ public static class DependencyInjection
         services.AddScoped<ContractExpirationAlertJob>();
         services.AddScoped<Vinamilk.HRM.Application.TimeAttendance.IAttendanceDeviceConnector, Vinamilk.HRM.Application.TimeAttendance.FileAttendanceDeviceConnector>();
         services.AddScoped<Vinamilk.HRM.Application.TimeAttendance.IAttendanceDeviceSyncJob, AttendanceDeviceSyncJob>();
+        services.AddScoped<Vinamilk.HRM.Application.TimeAttendance.IAttendanceRecalculationJob, Vinamilk.HRM.Application.TimeAttendance.AttendanceRecalculationService>();
 
         var useHangfireSql = configuration.GetValue<bool>("Hangfire:UseSqlServerStorage");
         if (useHangfireSql)
@@ -97,10 +98,12 @@ public static class DependencyInjection
                 }));
             services.AddHangfireServer();
             services.AddScoped<IPayslipBatchDispatcher, HangfirePayslipBatchDispatcher>();
+            services.AddScoped<Vinamilk.HRM.Application.TimeAttendance.IAttendanceRecalculationDispatcher, HangfireAttendanceRecalculationDispatcher>();
         }
         else
         {
             services.AddScoped<IPayslipBatchDispatcher, InProcessPayslipBatchDispatcher>();
+            services.AddScoped<Vinamilk.HRM.Application.TimeAttendance.IAttendanceRecalculationDispatcher, Vinamilk.HRM.Application.TimeAttendance.InProcessAttendanceRecalculationDispatcher>();
         }
 
         return services;

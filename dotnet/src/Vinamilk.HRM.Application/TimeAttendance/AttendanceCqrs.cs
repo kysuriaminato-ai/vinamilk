@@ -109,7 +109,21 @@ public record MonthlyAttendanceEmployeeRowDto(
     decimal TotalNightHours,
     decimal TotalPayableWorkdays,
     bool IsLocked,
-    IReadOnlyList<DailyCellSummaryDto> Days);
+    IReadOnlyList<DailyCellSummaryDto> Days,
+    int TotalEarlyLeaveCount = 0,
+    int TotalEarlyLeaveMinutes = 0,
+    int TotalMissedPunchCount = 0,
+    decimal TotalPaidPersonalLeaveDays = 0m,
+    decimal TotalUnpaidPersonalLeaveDays = 0m,
+    decimal TotalUnexcusedAbsentDays = 0m,
+    decimal TotalSocialInsuranceLeaveDays = 0m,
+    decimal TotalOtHours150Day = 0m,
+    decimal TotalOtHours150Night = 0m,
+    decimal TotalOtHours200Day = 0m,
+    decimal TotalOtHours200Night = 0m,
+    decimal TotalOtHours300Day = 0m,
+    decimal TotalOtHours300Night = 0m,
+    string ClosingStatus = "Open");
 
 public record OvertimeRequestItemDto(
     int Id,
@@ -215,7 +229,16 @@ public record MonthlyAttendanceBoardDto(
     int TotalBusinessTripDays,
     IReadOnlyList<AttendanceDeviceDto>? Devices = null,
     IReadOnlyList<EmployeeDeviceMappingDto>? DeviceMappings = null,
-    IReadOnlyList<UnmappedAttendanceLogDto>? UnmappedLogs = null);
+    IReadOnlyList<UnmappedAttendanceLogDto>? UnmappedLogs = null,
+    string ClosingStatus = "Open",
+    string? UnitSubmittedBy = null,
+    DateTime? UnitSubmittedAt = null,
+    string? ManagerConfirmedBy = null,
+    DateTime? ManagerConfirmedAt = null,
+    DateTime? ReviewDeadlineAt = null,
+    IReadOnlyList<AttendanceSymbolDefinitionDto>? Symbols = null,
+    IReadOnlyList<PostLockAdjustmentDto>? PostLockAdjustments = null,
+    IReadOnlyList<AttendanceRecalculationBatchDto>? RecalculationBatches = null);
 
 // ============================================================================
 // 2. AUTO-SEED DỮ LIỆU CHẤM CÔNG THÁNG & TỔNG HỢP BẢNG CÔNG
@@ -436,18 +459,69 @@ public static class AttendanceBoardSeeder
             if (existingSummaries.TryGetValue(empId, out var existing) && existing.IsLocked)
                 continue;
 
-            decimal actualDays = group.Where(x => x.AttendanceSymbol is "X" or "X/2" or "CT" or "M").Sum(x => x.WorkdayCount);
-            decimal paidLeave = group.Where(x => x.AttendanceSymbol is "P" or "P/2").Sum(x => x.WorkdayCount);
-            decimal holidayDays = group.Where(x => x.AttendanceSymbol == "L").Sum(x => x.WorkdayCount);
-            decimal siLeave = group.Where(x => x.AttendanceSymbol is "Om" or "TS").Count();
-            decimal unpaidLeave = group.Where(x => x.AttendanceSymbol is "KL" or "V").Count();
+            decimal actualDays = 0m;
+            decimal paidLeave = 0m;
+            decimal paidPersonal = 0m;
+            decimal holidayDays = 0m;
+            decimal siLeave = 0m;
+            decimal unpaidPersonal = 0m;
+            decimal unexcusedAbsent = 0m;
+
+            foreach (var d in group)
+            {
+                var sym = d.AttendanceSymbol.Trim();
+                if (sym.Equals("L", StringComparison.OrdinalIgnoreCase))
+                {
+                    holidayDays += d.WorkdayCount > 0m ? d.WorkdayCount : 1.0m;
+                }
+                else if (sym.Equals("P", StringComparison.OrdinalIgnoreCase) || sym.Equals("P/2", StringComparison.OrdinalIgnoreCase))
+                {
+                    paidLeave += d.PaidLeaveDays > 0m ? d.PaidLeaveDays : d.WorkdayCount;
+                }
+                else if (sym.Equals("R", StringComparison.OrdinalIgnoreCase))
+                {
+                    paidPersonal += d.PaidLeaveDays > 0m ? d.PaidLeaveDays : (d.WorkdayCount > 0m ? d.WorkdayCount : 1.0m);
+                }
+                else if (sym.Equals("Ô", StringComparison.OrdinalIgnoreCase) || sym.Equals("Om", StringComparison.OrdinalIgnoreCase) || sym.Equals("TS", StringComparison.OrdinalIgnoreCase))
+                {
+                    siLeave += 1.0m;
+                }
+                else if (sym.Equals("Ro", StringComparison.OrdinalIgnoreCase))
+                {
+                    unpaidPersonal += 1.0m;
+                }
+                else if (sym.Equals("KL", StringComparison.OrdinalIgnoreCase) || sym.Equals("V", StringComparison.OrdinalIgnoreCase))
+                {
+                    unexcusedAbsent += 1.0m;
+                }
+                else
+                {
+                    actualDays += d.WorkdayCount;
+                    paidLeave += d.PaidLeaveDays;
+                    if (sym.Contains("+Ro", StringComparison.OrdinalIgnoreCase)) unpaidPersonal += 0.5m;
+                    else if (sym.Contains("+R", StringComparison.OrdinalIgnoreCase)) paidPersonal += 0.5m;
+                    else if (sym.Contains("+KL", StringComparison.OrdinalIgnoreCase)) unexcusedAbsent += 0.5m;
+                    else if (d.UnpaidLeaveDays > 0m) unpaidPersonal += d.UnpaidLeaveDays;
+                }
+            }
+
+            decimal unpaidLeave = unpaidPersonal + unexcusedAbsent;
             int lateCount = group.Count(x => x.LateMinutes > 0);
             int lateMinutes = group.Sum(x => x.LateMinutes);
+            int earlyCount = group.Count(x => x.EarlyLeaveMinutes > 0);
+            int earlyMinutes = group.Sum(x => x.EarlyLeaveMinutes);
+            int totalMissedCount = group.Count(x => x.IsMissedPunch);
+            decimal ot150D = group.Sum(x => x.OvertimeHours150Day);
+            decimal ot150N = group.Sum(x => x.OvertimeHours150Night);
+            decimal ot200D = group.Sum(x => x.OvertimeHours200Day);
+            decimal ot200N = group.Sum(x => x.OvertimeHours200Night);
+            decimal ot300D = group.Sum(x => x.OvertimeHours300Day);
+            decimal ot300N = group.Sum(x => x.OvertimeHours300Night);
             decimal ot150 = group.Sum(x => x.OvertimeHours150);
             decimal ot200 = group.Sum(x => x.OvertimeHours200);
             decimal ot300 = group.Sum(x => x.OvertimeHours300);
             decimal nightHours = group.Sum(x => x.NightShiftHours);
-            decimal payable = actualDays + paidLeave + holidayDays;
+            decimal payable = actualDays + paidLeave + paidPersonal + holidayDays;
 
             var resolvedPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(context, empId, monthStart, cancellationToken);
             int missedPunchCount = group.Count(x => !string.IsNullOrEmpty(x.EditReason) && x.EditReason.Contains("Đề xuất giờ:", StringComparison.OrdinalIgnoreCase));
@@ -464,11 +538,23 @@ public static class AttendanceBoardSeeder
                 existing.HolidayDays = holidayDays;
                 existing.SocialInsuranceLeaveDays = siLeave;
                 existing.UnpaidLeaveDays = unpaidLeave;
+                existing.TotalPaidPersonalLeaveDays = paidPersonal;
+                existing.TotalUnpaidPersonalLeaveDays = unpaidPersonal;
+                existing.TotalUnexcusedAbsentDays = unexcusedAbsent;
                 existing.TotalLateCount = lateCount;
                 existing.TotalLateMinutes = lateMinutes;
+                existing.TotalEarlyLeaveCount = earlyCount;
+                existing.TotalEarlyLeaveMinutes = earlyMinutes;
+                existing.TotalMissedPunchCount = totalMissedCount;
                 existing.TotalOtHours150 = ot150;
                 existing.TotalOtHours200 = ot200;
                 existing.TotalOtHours300 = ot300;
+                existing.TotalOtHours150Day = ot150D;
+                existing.TotalOtHours150Night = ot150N;
+                existing.TotalOtHours200Day = ot200D;
+                existing.TotalOtHours200Night = ot200N;
+                existing.TotalOtHours300Day = ot300D;
+                existing.TotalOtHours300Night = ot300N;
                 existing.TotalNightHours = nightHours;
                 existing.TotalPayableWorkdays = payable;
                 existing.MissedPunchOverQuotaCount = overQuotaCount;
@@ -487,16 +573,29 @@ public static class AttendanceBoardSeeder
                     HolidayDays = holidayDays,
                     SocialInsuranceLeaveDays = siLeave,
                     UnpaidLeaveDays = unpaidLeave,
+                    TotalPaidPersonalLeaveDays = paidPersonal,
+                    TotalUnpaidPersonalLeaveDays = unpaidPersonal,
+                    TotalUnexcusedAbsentDays = unexcusedAbsent,
                     TotalLateCount = lateCount,
                     TotalLateMinutes = lateMinutes,
+                    TotalEarlyLeaveCount = earlyCount,
+                    TotalEarlyLeaveMinutes = earlyMinutes,
+                    TotalMissedPunchCount = totalMissedCount,
                     TotalOtHours150 = ot150,
                     TotalOtHours200 = ot200,
                     TotalOtHours300 = ot300,
+                    TotalOtHours150Day = ot150D,
+                    TotalOtHours150Night = ot150N,
+                    TotalOtHours200Day = ot200D,
+                    TotalOtHours200Night = ot200N,
+                    TotalOtHours300Day = ot300D,
+                    TotalOtHours300Night = ot300N,
                     TotalNightHours = nightHours,
                     TotalPayableWorkdays = payable,
                     MissedPunchOverQuotaCount = overQuotaCount,
                     MissedPunchPenaltyAmount = missedPunchPenalty,
-                    IsLocked = false
+                    IsLocked = false,
+                    ClosingStatus = "Open"
                 }, cancellationToken);
             }
         }
@@ -509,15 +608,21 @@ public static class AttendanceBoardSeeder
         if (isManualEdited)
             return "bg-warning-subtle text-dark fw-bold border border-2 border-warning vnm-manual-edited-cell";
         if (lateMinutes > 0) return "bg-danger-subtle text-danger fw-bold border-danger-subtle";
+        if (symbol.Contains('+'))
+            return "bg-info-subtle text-primary fw-bold";
+
         return symbol switch
         {
             "X" => "bg-success-subtle text-success fw-semibold",
-            "X/2" => "bg-warning-subtle text-warning-emphasis fw-semibold",
+            "½" or "X/2" => "bg-warning-subtle text-warning-emphasis fw-semibold",
             "CT" => "bg-info-subtle text-info-emphasis fw-bold",
+            "R" => "bg-info-subtle text-dark fw-semibold",
             "CGD" => "bg-warning text-dark fw-bold",
+            "TC" => "bg-danger-subtle text-danger fw-bold border border-danger",
             "P" or "P/2" => "bg-primary-subtle text-primary fw-bold",
             "L" => "bg-danger text-white fw-bold",
-            "Om" or "TS" => "bg-warning text-dark fw-semibold",
+            "Ô" or "Om" or "TS" => "bg-warning text-dark fw-semibold",
+            "Ro" => "bg-secondary-subtle text-secondary fw-semibold",
             "KL" or "V" => "bg-dark-subtle text-dark fw-bold",
             "OFF" => "bg-light text-muted",
             _ => "bg-light text-secondary"
@@ -676,7 +781,21 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
                 sum.TotalNightHours,
                 sum.TotalPayableWorkdays,
                 sum.IsLocked,
-                dayCells));
+                dayCells,
+                sum.TotalEarlyLeaveCount,
+                sum.TotalEarlyLeaveMinutes,
+                sum.TotalMissedPunchCount,
+                sum.TotalPaidPersonalLeaveDays,
+                sum.TotalUnpaidPersonalLeaveDays,
+                sum.TotalUnexcusedAbsentDays,
+                sum.SocialInsuranceLeaveDays,
+                sum.TotalOtHours150Day,
+                sum.TotalOtHours150Night,
+                sum.TotalOtHours200Day,
+                sum.TotalOtHours200Night,
+                sum.TotalOtHours300Day,
+                sum.TotalOtHours300Night,
+                sum.ClosingStatus));
         }
 
         // Lấy danh sách đơn OT kèm tính tổng trần OT tháng/năm
@@ -812,6 +931,47 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
             .ToListAsync(cancellationToken);
 
         var firstLocked = summaries.FirstOrDefault(s => s.IsLocked);
+        var closingStatus = summaries.Any(s => s.IsLocked) ? "Locked"
+            : summaries.Any(s => s.ClosingStatus == "ManagerConfirmed") ? "ManagerConfirmed"
+            : summaries.Any(s => s.ClosingStatus == "UnitSubmitted") ? "UnitSubmitted"
+            : "Open";
+        var submittedSample = summaries.FirstOrDefault(s => !string.IsNullOrEmpty(s.UnitSubmittedBy));
+        var confirmedSample = summaries.FirstOrDefault(s => !string.IsNullOrEmpty(s.ManagerConfirmedBy));
+        var reviewDeadline = summaries.Select(s => s.ReviewDeadlineAt).Where(d => d.HasValue).Max();
+
+        var symbolDefs = await _context.AttendanceSymbolDefinitions
+            .AsNoTracking()
+            .Where(s => s.IsActive)
+            .OrderBy(s => s.DisplayOrder)
+            .Select(s => new AttendanceSymbolDefinitionDto(
+                s.Id, s.SymbolTypeCode, s.SymbolCode, s.SymbolName, s.Category,
+                s.WorkdayMultiplier, s.IsPaidByCompany, s.IsPaidBySocialInsurance, s.ColorHex, s.CssClass))
+            .ToListAsync(cancellationToken);
+
+        var postLockAdjs = await _context.PostLockAttendanceAdjustments
+            .AsNoTracking()
+            .Include(a => a.Employee)
+            .Where(a => a.TargetMonth == month && a.TargetYear == year)
+            .OrderByDescending(a => a.CreatedAt)
+            .Take(30)
+            .Select(a => new PostLockAdjustmentDto(
+                a.Id, a.EmployeeId, a.Employee.EmployeeCode, a.Employee.FullName,
+                a.TargetMonth, a.TargetYear, a.AdjustmentDate,
+                a.AppliedPayrollMonth, a.AppliedPayrollYear, a.AdjustmentType,
+                a.WorkdayDelta, a.OtHours150Delta, a.OtHours200Delta, a.OtHours300Delta, a.NightHoursDelta,
+                a.Reason, a.Status, a.ApprovedByUsername, a.ApprovedAt))
+            .ToListAsync(cancellationToken);
+
+        var recalcBatches = await _context.AttendanceRecalculationBatches
+            .AsNoTracking()
+            .Where(b => b.Month == month && b.Year == year)
+            .OrderByDescending(b => b.Id)
+            .Take(5)
+            .Select(b => new AttendanceRecalculationBatchDto(
+                b.Id, b.BatchCode, b.Month, b.Year, b.OrganizationUnitId, b.EmployeeId,
+                b.FromDate, b.ToDate, b.Status, b.TotalEmployees, b.ProcessedEmployees, b.ProgressPercent,
+                b.RequestedByUsername, b.StartedAt, b.CompletedAt, b.Message))
+            .ToListAsync(cancellationToken);
 
         return new MonthlyAttendanceBoardDto(
             month,
@@ -837,7 +997,16 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
             totalBusinessTripDays,
             devices,
             deviceMappings,
-            unmappedLogs);
+            unmappedLogs,
+            closingStatus,
+            submittedSample?.UnitSubmittedBy,
+            submittedSample?.UnitSubmittedAt,
+            confirmedSample?.ManagerConfirmedBy,
+            confirmedSample?.ManagerConfirmedAt,
+            reviewDeadline,
+            symbolDefs,
+            postLockAdjs,
+            recalcBatches);
     }
 }
 
@@ -1168,12 +1337,21 @@ public class SubmitAttendanceExplanationCommandHandler : IRequestHandler<SubmitA
 
     public async Task<int> Handle(SubmitAttendanceExplanationCommand request, CancellationToken cancellationToken)
     {
-        var isLocked = await _context.MonthlyAttendanceSummaries
+        var monthSummary = await _context.MonthlyAttendanceSummaries
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.EmployeeId == request.EmployeeId
+                && m.Month == request.AttendanceDate.Month
+                && m.Year == request.AttendanceDate.Year, cancellationToken);
+
+        var isLocked = monthSummary?.IsLocked == true || await _context.MonthlyAttendanceSummaries
             .AsNoTracking()
             .AnyAsync(m => m.Month == request.AttendanceDate.Month && m.Year == request.AttendanceDate.Year && m.IsLocked, cancellationToken);
 
         if (isLocked)
-            throw new InvalidOperationException($"Bảng công tháng {request.AttendanceDate.Month:D2}/{request.AttendanceDate.Year} đã khóa, không thể gửi giải trình.");
+            throw new InvalidOperationException($"Bảng công tháng {request.AttendanceDate.Month:D2}/{request.AttendanceDate.Year} đã khóa, không thể gửi giải trình (chỉ điều chỉnh kỳ sau).");
+
+        if (monthSummary?.ReviewDeadlineAt.HasValue == true && DateTime.UtcNow > monthSummary.ReviewDeadlineAt.Value)
+            throw new InvalidOperationException($"Đã quá thời hạn {monthSummary.ReviewWindowDays} ngày nhân viên xem & giải trình công (hạn {monthSummary.ReviewDeadlineAt.Value:dd/MM/yyyy HH:mm}).");
 
         var resolvedPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(
             _context, request.EmployeeId, request.AttendanceDate, cancellationToken);
@@ -1309,6 +1487,7 @@ public class ToggleLockMonthlyAttendanceCommandHandler : IRequestHandler<ToggleL
         foreach (var s in summaries)
         {
             s.IsLocked = request.LockState;
+            s.ClosingStatus = request.LockState ? "Locked" : "Open";
             s.LockedAt = request.LockState ? DateTime.UtcNow : null;
             s.LockedBy = request.LockState ? actor : null;
         }

@@ -436,7 +436,7 @@ public class TimeAttendanceDocumentService
     }
 
     // ========================================================================
-    // 3. XUẤT BẢNG CHẤM CÔNG THÁNG 31 NGÀY RA EXCEL (.XLSX)
+    // 3. XUẤT BẢNG CHẤM CÔNG THÁNG 31 NGÀY RA EXCEL (.XLSX) CÓ KÝ HIỆU, TỔNG HỢP & CHỮ KÝ
     // ========================================================================
     public byte[] ExportMonthlyTimesheetToExcel(MonthlyAttendanceBoardDto board)
     {
@@ -447,6 +447,13 @@ public class TimeAttendanceDocumentService
         ws.Cell(1, 1).Style.Font.Bold = true;
         ws.Cell(1, 1).Style.Font.FontSize = 13;
         ws.Cell(1, 1).Style.Font.FontColor = XLColor.FromHtml("#003DA5");
+
+        var legendText = board.Symbols != null && board.Symbols.Count > 0
+            ? string.Join(" | ", board.Symbols.Select(s => $"{s.SymbolCode}: {s.SymbolName}"))
+            : "X: Đi làm (1.0) | ½: Nửa công (0.5) | P: Phép năm | L: Nghỉ lễ | Ô: Ốm BHXH | TS: Thai sản | CT: Công tác | R: Nghỉ riêng có lương | Ro: Nghỉ không lương | KL: Vắng không phép | OFF: Nghỉ tuần | TC: Thiếu chấm công";
+        ws.Cell(2, 1).Value = $"Ký hiệu: {legendText} | Trạng thái chốt: {board.ClosingStatus}";
+        ws.Cell(2, 1).Style.Font.Italic = true;
+        ws.Cell(2, 1).Style.Font.FontSize = 9;
 
         int col = 1;
         ws.Cell(3, col++).Value = "STT";
@@ -461,16 +468,27 @@ public class TimeAttendanceDocumentService
 
         ws.Cell(3, col++).Value = "Công chuẩn";
         ws.Cell(3, col++).Value = "Công thực tế";
-        ws.Cell(3, col++).Value = "Nghỉ phép (P)";
+        ws.Cell(3, col++).Value = "Phép năm (P)";
         ws.Cell(3, col++).Value = "Nghỉ lễ (L)";
+        ws.Cell(3, col++).Value = "Nghỉ riêng có lương (R)";
+        ws.Cell(3, col++).Value = "Ốm/TS (Ô/TS)";
+        ws.Cell(3, col++).Value = "Không lương (Ro)";
+        ws.Cell(3, col++).Value = "Vắng KP (KL)";
         ws.Cell(3, col++).Value = "Số lần trễ";
         ws.Cell(3, col++).Value = "Phút trễ";
-        ws.Cell(3, col++).Value = "OT 150%";
-        ws.Cell(3, col++).Value = "OT 200%";
-        ws.Cell(3, col++).Value = "OT 300%";
+        ws.Cell(3, col++).Value = "Về sớm (lần)";
+        ws.Cell(3, col++).Value = "Quên chấm";
+        ws.Cell(3, col++).Value = "Giờ đêm";
+        ws.Cell(3, col++).Value = "OT 150% Ngày";
+        ws.Cell(3, col++).Value = "OT 150% Đêm";
+        ws.Cell(3, col++).Value = "OT 200% Ngày";
+        ws.Cell(3, col++).Value = "OT 200% Đêm";
+        ws.Cell(3, col++).Value = "OT 300% Ngày";
+        ws.Cell(3, col++).Value = "OT 300% Đêm";
         ws.Cell(3, col++).Value = "Tổng công tính lương";
 
-        var headerRange = ws.Range(3, 1, 3, col - 1);
+        int totalCols = col - 1;
+        var headerRange = ws.Range(3, 1, 3, totalCols);
         headerRange.Style.Font.Bold = true;
         headerRange.Style.Font.FontColor = XLColor.White;
         headerRange.Style.Fill.BackgroundColor = XLColor.FromHtml("#003DA5");
@@ -497,15 +515,45 @@ public class TimeAttendanceDocumentService
             ws.Cell(rowIdx, c++).Value = empRow.ActualWorkdays;
             ws.Cell(rowIdx, c++).Value = empRow.PaidLeaveDays;
             ws.Cell(rowIdx, c++).Value = empRow.HolidayDays;
+            ws.Cell(rowIdx, c++).Value = empRow.TotalPaidPersonalLeaveDays;
+            ws.Cell(rowIdx, c++).Value = empRow.TotalSocialInsuranceLeaveDays;
+            ws.Cell(rowIdx, c++).Value = empRow.TotalUnpaidPersonalLeaveDays;
+            ws.Cell(rowIdx, c++).Value = empRow.TotalUnexcusedAbsentDays;
             ws.Cell(rowIdx, c++).Value = empRow.TotalLateCount;
             ws.Cell(rowIdx, c++).Value = empRow.TotalLateMinutes;
-            ws.Cell(rowIdx, c++).Value = empRow.TotalOtHours150;
-            ws.Cell(rowIdx, c++).Value = empRow.TotalOtHours200;
-            ws.Cell(rowIdx, c++).Value = empRow.TotalOtHours300;
+            ws.Cell(rowIdx, c++).Value = empRow.TotalEarlyLeaveCount;
+            ws.Cell(rowIdx, c++).Value = empRow.TotalMissedPunchCount;
+            ws.Cell(rowIdx, c++).Value = empRow.TotalNightHours;
+            ws.Cell(rowIdx, c++).Value = empRow.TotalOtHours150Day > 0m ? empRow.TotalOtHours150Day : empRow.TotalOtHours150;
+            ws.Cell(rowIdx, c++).Value = empRow.TotalOtHours150Night;
+            ws.Cell(rowIdx, c++).Value = empRow.TotalOtHours200Day > 0m ? empRow.TotalOtHours200Day : empRow.TotalOtHours200;
+            ws.Cell(rowIdx, c++).Value = empRow.TotalOtHours200Night;
+            ws.Cell(rowIdx, c++).Value = empRow.TotalOtHours300Day > 0m ? empRow.TotalOtHours300Day : empRow.TotalOtHours300;
+            ws.Cell(rowIdx, c++).Value = empRow.TotalOtHours300Night;
             ws.Cell(rowIdx, c++).Value = empRow.TotalPayableWorkdays;
 
             rowIdx++;
         }
+
+        var bodyRange = ws.Range(3, 1, Math.Max(3, rowIdx - 1), totalCols);
+        bodyRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+        bodyRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+
+        // Khối chữ ký 3 cấp chốt công ở cuối bảng công
+        int sigRow = rowIdx + 2;
+        ws.Cell(sigRow, 2).Value = "NGƯỜI LẬP BIỂU / HR ĐƠN VỊ";
+        ws.Cell(sigRow, 2).Style.Font.Bold = true;
+        ws.Cell(sigRow + 1, 2).Value = !string.IsNullOrWhiteSpace(board.UnitSubmittedBy) ? $"(Đã chốt: {board.UnitSubmittedBy})" : "(Ký, ghi rõ họ tên)";
+
+        int midCol = Math.Max(6, totalCols / 2);
+        ws.Cell(sigRow, midCol).Value = "TRƯỞNG BỘ PHẬN XÁC NHẬN";
+        ws.Cell(sigRow, midCol).Style.Font.Bold = true;
+        ws.Cell(sigRow + 1, midCol).Value = !string.IsNullOrWhiteSpace(board.ManagerConfirmedBy) ? $"(Đã duyệt: {board.ManagerConfirmedBy})" : "(Ký, ghi rõ họ tên)";
+
+        int rightCol = Math.Max(10, totalCols - 4);
+        ws.Cell(sigRow, rightCol).Value = "HR TỔNG HỢP / KHÓA CÔNG";
+        ws.Cell(sigRow, rightCol).Style.Font.Bold = true;
+        ws.Cell(sigRow + 1, rightCol).Value = !string.IsNullOrWhiteSpace(board.LockedBy) ? $"(Đã khóa: {board.LockedBy})" : "(Ký, ghi rõ họ tên)";
 
         ws.Columns().AdjustToContents();
 

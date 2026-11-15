@@ -60,6 +60,9 @@ public interface IApplicationDbContext
     DbSet<EmployeeDeviceMapping> EmployeeDeviceMappings { get; }
     DbSet<UnmappedAttendanceLog> UnmappedAttendanceLogs { get; }
     DbSet<EmployeeDeviceBinding> EmployeeDeviceBindings { get; }
+    DbSet<AttendanceSymbolDefinition> AttendanceSymbolDefinitions { get; }
+    DbSet<PostLockAttendanceAdjustment> PostLockAttendanceAdjustments { get; }
+    DbSet<AttendanceRecalculationBatch> AttendanceRecalculationBatches { get; }
 
     // Payroll Schema
     DbSet<PayrollStatutoryParameter> PayrollStatutoryParameters { get; }

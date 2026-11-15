@@ -96,14 +96,24 @@ public class DailyAttendance : BaseLongAuditableEntity
     public DateTime? CheckInTime { get; set; }
     public DateTime? CheckOutTime { get; set; }
     public string AttendanceSymbol { get; set; } = "X";
+    public decimal StandardHours { get; set; } = 8.0m;
     public decimal WorkingHours { get; set; } = 8.0m;
     public decimal WorkdayCount { get; set; } = 1.0m;
+    public decimal PaidLeaveDays { get; set; } = 0m;
+    public decimal UnpaidLeaveDays { get; set; } = 0m;
     public int LateMinutes { get; set; } = 0;
     public int EarlyLeaveMinutes { get; set; } = 0;
     public decimal OvertimeHours150 { get; set; } = 0m;
     public decimal OvertimeHours200 { get; set; } = 0m;
     public decimal OvertimeHours300 { get; set; } = 0m;
+    public decimal OvertimeHours150Day { get; set; } = 0m;
+    public decimal OvertimeHours150Night { get; set; } = 0m;
+    public decimal OvertimeHours200Day { get; set; } = 0m;
+    public decimal OvertimeHours200Night { get; set; } = 0m;
+    public decimal OvertimeHours300Day { get; set; } = 0m;
+    public decimal OvertimeHours300Night { get; set; } = 0m;
     public decimal NightShiftHours { get; set; } = 0m;
+    public bool IsMissedPunch { get; set; } = false;
     public bool IsManualEdited { get; set; } = false;
     public string? EditReason { get; set; }
 
@@ -122,13 +132,33 @@ public class MonthlyAttendanceSummary : BaseAuditableEntity
     public decimal HolidayDays { get; set; }
     public decimal SocialInsuranceLeaveDays { get; set; }
     public decimal UnpaidLeaveDays { get; set; }
+    public decimal TotalPaidPersonalLeaveDays { get; set; } = 0m;
+    public decimal TotalUnpaidPersonalLeaveDays { get; set; } = 0m;
+    public decimal TotalUnexcusedAbsentDays { get; set; } = 0m;
     public int TotalLateCount { get; set; }
     public int TotalLateMinutes { get; set; }
+    public int TotalEarlyLeaveCount { get; set; } = 0;
+    public int TotalEarlyLeaveMinutes { get; set; } = 0;
+    public int TotalMissedPunchCount { get; set; } = 0;
     public decimal TotalOtHours150 { get; set; }
     public decimal TotalOtHours200 { get; set; }
     public decimal TotalOtHours300 { get; set; }
+    public decimal TotalOtHours150Day { get; set; } = 0m;
+    public decimal TotalOtHours150Night { get; set; } = 0m;
+    public decimal TotalOtHours200Day { get; set; } = 0m;
+    public decimal TotalOtHours200Night { get; set; } = 0m;
+    public decimal TotalOtHours300Day { get; set; } = 0m;
+    public decimal TotalOtHours300Night { get; set; } = 0m;
     public decimal TotalNightHours { get; set; }
     public decimal TotalPayableWorkdays { get; set; }
+    /// <summary>Quy trình chốt công: Open | UnitSubmitted | ManagerConfirmed | Locked</summary>
+    public string ClosingStatus { get; set; } = "Open";
+    public string? UnitSubmittedBy { get; set; }
+    public DateTime? UnitSubmittedAt { get; set; }
+    public string? ManagerConfirmedBy { get; set; }
+    public DateTime? ManagerConfirmedAt { get; set; }
+    public int ReviewWindowDays { get; set; } = 3;
+    public DateTime? ReviewDeadlineAt { get; set; }
     public bool IsLocked { get; set; } = false;
     public DateTime? LockedAt { get; set; }
     public string? LockedBy { get; set; }
@@ -289,6 +319,12 @@ public class AttendancePolicy : BaseAuditableEntity
     /// <summary>Ngày làm việc trong tuần (Mon,Tue,Wed,Thu,Fri hoặc Rotating...).</summary>
     public string WeeklyWorkdaysMask { get; set; } = "Mon,Tue,Wed,Thu,Fri";
     public decimal? MaxWeeklyWorkingHoursOverride { get; set; }
+    /// <summary>Xử lý nhiều lần chấm trong ngày: FirstLast | PairedSegments</summary>
+    public string PunchPairingMode { get; set; } = "FirstLast";
+    /// <summary>Số công mặc định nếu thiếu vào/ra khi chưa có giải trình được duyệt (0 hoặc 0.5).</summary>
+    public decimal MissedPunchCreditWorkdays { get; set; } = 0m;
+    /// <summary>Số ngày X cho phép nhân viên xem & gửi giải trình trước khi khóa bảng công.</summary>
+    public int EmployeeReviewWindowDays { get; set; } = 3;
 
     public PolicyGroup PolicyGroup { get; set; } = null!;
 }
@@ -410,6 +446,75 @@ public class EmployeeDeviceBinding : BaseAuditableEntity
     public bool IsActive { get; set; } = true;
 
     public Employee Employee { get; set; } = null!;
+}
+
+/// <summary>
+/// Danh mục ký hiệu công chuẩn hóa & cấu hình được (X, P, L, Ô, TS, CT, R, Ro, KL, ½...).
+/// </summary>
+public class AttendanceSymbolDefinition : BaseAuditableEntity
+{
+    /// <summary>Mã loại nghiệp vụ chuẩn cho engine: Work | HalfWork | AnnualLeave | Holiday | Sick | Maternity | BusinessTrip | PersonalPaid | PersonalUnpaid | UnexcusedAbsent | WeeklyOff | MissedPunch | PendingGeofence</summary>
+    public string SymbolTypeCode { get; set; } = string.Empty;
+    public string SymbolCode { get; set; } = string.Empty;
+    public string SymbolName { get; set; } = string.Empty;
+    public string Category { get; set; } = "Work";
+    public decimal WorkdayMultiplier { get; set; } = 1.0m;
+    public bool IsPaidByCompany { get; set; } = true;
+    public bool IsPaidBySocialInsurance { get; set; } = false;
+    public string ColorHex { get; set; } = "#198754";
+    public string CssClass { get; set; } = "bg-success-subtle text-success fw-semibold";
+    public int DisplayOrder { get; set; } = 1;
+    public bool IsActive { get; set; } = true;
+}
+
+/// <summary>
+/// Điều chỉnh công kỳ sau (truy lĩnh/truy thu) sau khi bảng công tháng đã bị khóa.
+/// </summary>
+public class PostLockAttendanceAdjustment : BaseLongAuditableEntity
+{
+    public int EmployeeId { get; set; }
+    public int TargetMonth { get; set; }
+    public int TargetYear { get; set; }
+    public DateOnly AdjustmentDate { get; set; }
+    public int AppliedPayrollMonth { get; set; }
+    public int AppliedPayrollYear { get; set; }
+    public string AdjustmentType { get; set; } = "WorkdayDelta";
+    public decimal WorkdayDelta { get; set; } = 0m;
+    public decimal OtHours150Delta { get; set; } = 0m;
+    public decimal OtHours200Delta { get; set; } = 0m;
+    public decimal OtHours300Delta { get; set; } = 0m;
+    public decimal NightHoursDelta { get; set; } = 0m;
+    public string Reason { get; set; } = string.Empty;
+    /// <summary>Pending | Approved | Rejected</summary>
+    public string Status { get; set; } = "Pending";
+    public string? ApprovedByUsername { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public string? ApproverComment { get; set; }
+
+    public Employee Employee { get; set; } = null!;
+}
+
+/// <summary>
+/// Lô tính lại bảng công chạy nền có theo dõi tiến độ theo nhân viên / đơn vị / khoảng ngày.
+/// </summary>
+public class AttendanceRecalculationBatch : BaseAuditableEntity
+{
+    public string BatchCode { get; set; } = string.Empty;
+    public int Month { get; set; }
+    public int Year { get; set; }
+    public int? OrganizationUnitId { get; set; }
+    public int? EmployeeId { get; set; }
+    public DateOnly FromDate { get; set; }
+    public DateOnly ToDate { get; set; }
+    /// <summary>Queued | Running | Completed | Failed</summary>
+    public string Status { get; set; } = "Queued";
+    public int TotalEmployees { get; set; }
+    public int ProcessedEmployees { get; set; }
+    public int ProgressPercent { get; set; }
+    public string RequestedByUsername { get; set; } = string.Empty;
+    public DateTime? StartedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public string? Message { get; set; }
 }
 
 
