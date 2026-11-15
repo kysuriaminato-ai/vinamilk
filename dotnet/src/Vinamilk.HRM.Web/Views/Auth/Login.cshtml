@@ -1,7 +1,9 @@
+@inject Microsoft.AspNetCore.Hosting.IWebHostEnvironment HostEnv
 @{
     Layout = "~/Views/Shared/_LayoutAuth.cshtml";
     ViewData["Title"] = "Đăng nhập & Xác thực Đa yếu tố (2FA)";
     var returnUrl = (string)(ViewData["ReturnUrl"] ?? "/");
+    var isDev = HostEnv.IsDevelopment();
 }
 
 <div class="vnm-card overflow-hidden shadow-lg w-100" style="max-width: 1000px; border-radius: var(--vnm-radius-xl);">
@@ -85,24 +87,31 @@
                         <span class="text-muted fs-7 font-monospace">PBKDF2 / Cookie Auth</span>
                     </div>
                     <h2 class="fw-extrabold mb-1" style="font-size: var(--vnm-fs-xl);">Đăng nhập Hệ thống</h2>
-                    <p class="text-secondary fs-6 mb-3">
-                        Mật khẩu mặc định của 10 tài khoản Seeded: <code class="fw-bold text-primary">Vinamilk@2026</code>
-                    </p>
+                    @if (isDev)
+                    {
+                        <p class="text-secondary fs-6 mb-3">
+                            Chế độ Development: mật khẩu mẫu ban đầu <code class="fw-bold text-primary">Vinamilk@2026</code> (bắt buộc đổi sau khi đăng nhập).
+                        </p>
 
-                    <!-- Quick Role Demo Selector -->
-                    <div class="mb-3 p-3 rounded-3 border" style="background: var(--vnm-bg-subtle); border-color: var(--vnm-border-subtle) !important;">
-                        <div class="text-uppercase text-muted fw-bold fs-7 mb-2">
-                            <i class="ti ti-bolt text-warning me-1"></i>Chọn nhanh 6 Tài khoản Vai trò trong SQL Server
+                        <!-- Quick Role Demo Selector -->
+                        <div class="mb-3 p-3 rounded-3 border" style="background: var(--vnm-bg-subtle); border-color: var(--vnm-border-subtle) !important;">
+                            <div class="text-uppercase text-muted fw-bold fs-7 mb-2">
+                                <i class="ti ti-bolt text-warning me-1"></i>Chọn nhanh 6 Tài khoản Vai trò trong SQL Server
+                            </div>
+                            <div class="d-flex flex-wrap gap-1">
+                                <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('admin@vinamilk.com.vn', 'SuperAdmin (62/62 quyền - Scope: Toàn công ty)')">SuperAdmin</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('huyen.ntt@vinamilk.com.vn', 'HR Manager (VNM-0020 - Giám đốc Nhân sự)')">HR Manager</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('dung.la@vinamilk.com.vn', 'HR Staff (VNM-0021 - Chuyên viên Nhân sự)')">HR Staff</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('hung.nv@vinamilk.com.vn', 'Line Manager (VNM-0001 - Scope: Đơn vị/Nhà máy)')">Line Manager</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('tri.dm@vinamilk.com.vn', 'Accountant (VNM-0024 - Kế toán Tiền lương)')">Accountant</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('tung.pt@vinamilk.com.vn', 'Employee (VNM-0016 - Scope: Bản thân ESS)')">Employee</button>
+                            </div>
                         </div>
-                        <div class="d-flex flex-wrap gap-1">
-                            <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('admin@vinamilk.com.vn', 'SuperAdmin (62/62 quyền - Scope: Toàn công ty)')">SuperAdmin</button>
-                            <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('huyen.ntt@vinamilk.com.vn', 'HR Manager (VNM-0020 - Giám đốc Nhân sự)')">HR Manager</button>
-                            <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('dung.la@vinamilk.com.vn', 'HR Staff (VNM-0021 - Chuyên viên Nhân sự)')">HR Staff</button>
-                            <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('hung.nv@vinamilk.com.vn', 'Line Manager (VNM-0001 - Scope: Đơn vị/Nhà máy)')">Line Manager</button>
-                            <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('tri.dm@vinamilk.com.vn', 'Accountant (VNM-0024 - Kế toán Tiền lương)')">Accountant</button>
-                            <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('tung.pt@vinamilk.com.vn', 'Employee (VNM-0016 - Scope: Bản thân ESS)')">Employee</button>
-                        </div>
-                    </div>
+                    }
+                    else
+                    {
+                        <p class="text-secondary fs-6 mb-3">Vui lòng nhập thông tin tài khoản doanh nghiệp để tiếp tục.</p>
+                    }
 
                     <div class="mb-3">
                         <label for="loginEmail" class="form-label fw-semibold fs-6">Username, Email hoặc Mã NV <span class="text-danger">*</span></label>
@@ -112,7 +121,7 @@
                                    id="loginEmail"
                                    name="usernameOrEmail"
                                    class="form-control"
-                                   value="admin@vinamilk.com.vn"
+                                   value="@(isDev ? "admin@vinamilk.com.vn" : "")"
                                    required
                                    placeholder="VD: admin@vinamilk.com.vn, huyen.ntt hoặc VNM-0020" />
                         </div>
@@ -133,7 +142,7 @@
                                    id="loginPassword"
                                    name="password"
                                    class="form-control"
-                                   value="Vinamilk@2026"
+                                   value="@(isDev ? "Vinamilk@2026" : "")"
                                    required />
                             <button class="btn btn-outline-secondary" type="button" onclick="togglePassVisibility()" aria-label="Hiện/Ẩn mật khẩu">
                                 <i class="ti ti-eye" id="togglePassIcon"></i>

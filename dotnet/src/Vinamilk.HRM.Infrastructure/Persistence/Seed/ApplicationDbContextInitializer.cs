@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
-using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Vinamilk.HRM.Application.Common.Interfaces;
 using Vinamilk.HRM.Application.Payroll;
@@ -11,23 +12,35 @@ using Vinamilk.HRM.Domain.Entities.SystemEntities;
 using Vinamilk.HRM.Domain.Entities.Talent;
 using Vinamilk.HRM.Domain.Entities.Time;
 using Vinamilk.HRM.Infrastructure.Persistence.SqlObjects;
+using Vinamilk.HRM.Infrastructure.Security;
 
 namespace Vinamilk.HRM.Infrastructure.Persistence.Seed;
 
 public sealed class ApplicationDbContextInitializer
 {
+    public const string InitialSuperAdminPasswordEnvVar = "VINAMILK_INITIAL_SUPERADMIN_PASSWORD";
+
     private readonly ILogger<ApplicationDbContextInitializer> _logger;
     private readonly ApplicationDbContext _context;
     private readonly IPiiEncryptionService _encryptionService;
+    private readonly PasswordSecurityService _passwordService;
+    private readonly IHostEnvironment? _hostEnvironment;
+    private readonly IConfiguration? _configuration;
 
     public ApplicationDbContextInitializer(
         ILogger<ApplicationDbContextInitializer> logger,
         ApplicationDbContext context,
-        IPiiEncryptionService encryptionService)
+        IPiiEncryptionService encryptionService,
+        PasswordSecurityService? passwordService = null,
+        IHostEnvironment? hostEnvironment = null,
+        IConfiguration? configuration = null)
     {
         _logger = logger;
         _context = context;
         _encryptionService = encryptionService;
+        _passwordService = passwordService ?? new PasswordSecurityService();
+        _hostEnvironment = hostEnvironment;
+        _configuration = configuration;
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -653,9 +666,30 @@ public sealed class ApplicationDbContextInitializer
                 await _context.PayrollRecords.AddAsync(record, cancellationToken);
             }
 
-            // Seed Tài khoản đăng nhập mặc định (Mật khẩu: Vinamilk@2026)
+            // Seed Tài khoản đăng nhập (PBKDF2-HMACSHA256, bắt buộc đổi mật khẩu ở lần đầu)
             var rolesByCode = await _context.Roles.ToDictionaryAsync(r => r.RoleCode, r => r.Id, cancellationToken);
-            var defaultPassHash = ComputeSha256Hash("Vinamilk@2026");
+            var isDevelopment = _hostEnvironment?.IsDevelopment() == true;
+            string? initialSuperAdminPassword = null;
+            string? devSamplePassword = null;
+
+            if (isDevelopment)
+            {
+                devSamplePassword = _configuration?["Security:DemoSeedPassword"];
+                if (string.IsNullOrWhiteSpace(devSamplePassword))
+                    devSamplePassword = "Vinamilk@2026";
+            }
+            else
+            {
+                initialSuperAdminPassword =
+                    Environment.GetEnvironmentVariable(InitialSuperAdminPasswordEnvVar)
+                    ?? Environment.GetEnvironmentVariable("Security__InitialSuperAdminPassword");
+
+                if (string.IsNullOrWhiteSpace(initialSuperAdminPassword))
+                {
+                    throw new InvalidOperationException(
+                        $"LỖI KHỞI ĐỘNG BẢO MẬT (Production): Thiếu biến môi trường '{InitialSuperAdminPasswordEnvVar}' cho mật khẩu SuperAdmin ban đầu.");
+                }
+            }
 
             var userSpecs = new (string Username, string Email, string? EmpCode, string RoleCode)[]
             {
@@ -673,27 +707,37 @@ public sealed class ApplicationDbContextInitializer
 
             foreach (var u in userSpecs)
             {
+                var rawPassword = isDevelopment
+                    ? devSamplePassword!
+                    : (u.RoleCode == "SUPER_ADMIN"
+                        ? initialSuperAdminPassword!
+                        : Convert.ToHexString(RandomNumberGenerator.GetBytes(32)));
+
                 var user = new User
                 {
                     Username = u.Username,
                     Email = u.Email,
-                    PasswordHash = defaultPassHash,
+                    PasswordHash = _passwordService.HashPassword(rawPassword),
                     EmployeeId = u.EmpCode != null ? empMap[u.EmpCode].Id : null,
-                    IsActive = true
+                    IsActive = true,
+                    MustChangePassword = true,
+                    IsSystemAccount = false
                 };
                 user.UserRoles.Add(new UserRole { RoleId = rolesByCode[u.RoleCode] });
                 await _context.Users.AddAsync(user, cancellationToken);
             }
 
-            // Seed tài khoản hệ thống riêng cho background job (Hangfire) với 0 Role -> không có quyền duyệt/mở khóa kỳ lương
-            var nonInteractiveSecret = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+            // Seed tài khoản hệ thống riêng cho background job (Hangfire) với 0 Role & IsSystemAccount = true
+            var nonInteractiveSecret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
             await _context.Users.AddAsync(new User
             {
-                Username = Vinamilk.HRM.Application.Common.Interfaces.SystemJobAccount.Username,
-                Email = Vinamilk.HRM.Application.Common.Interfaces.SystemJobAccount.Email,
-                PasswordHash = ComputeSha256Hash(nonInteractiveSecret),
+                Username = SystemJobAccount.Username,
+                Email = SystemJobAccount.Email,
+                PasswordHash = _passwordService.HashPassword(nonInteractiveSecret),
                 EmployeeId = null,
-                IsActive = true
+                IsActive = true,
+                MustChangePassword = true,
+                IsSystemAccount = true
             }, cancellationToken);
 
             await _context.SaveChangesAsync(cancellationToken);
@@ -792,11 +836,5 @@ public sealed class ApplicationDbContextInitializer
         new() { BracketLevel = 4, LowerBound = 60_000_000m, UpperBound = 100_000_000m, TaxRate = 0.30m, EffectiveFrom = new DateOnly(2026, 1, 1), EffectiveTo = null, LegalReference = "Luật 109/2025/QH15 (Biểu 5 bậc)" },
         new() { BracketLevel = 5, LowerBound = 100_000_000m, UpperBound = null, TaxRate = 0.35m, EffectiveFrom = new DateOnly(2026, 1, 1), EffectiveTo = null, LegalReference = "Luật 109/2025/QH15 (Biểu 5 bậc)" }
     ];
-
-    private static string ComputeSha256Hash(string rawPassword)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes("VinamilkHRM_Salt_2026::" + rawPassword));
-        return Convert.ToBase64String(bytes);
-    }
 }
 

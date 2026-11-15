@@ -150,8 +150,22 @@ public class PermissionAuthorizationHandlerTests
         // Act & Assert PBKDF2 Hash
         var hash = service.HashPassword("Vinamilk@2026#Secure");
         hash.Should().StartWith("PBKDF2$");
-        service.VerifyPassword("Vinamilk@2026#Secure", hash).Should().BeTrue();
+        service.IsPbkdf2Hash(hash).Should().BeTrue();
+        service.VerifyPassword("Vinamilk@2026#Secure", hash, out var pbkdf2Legacy).Should().BeTrue();
+        pbkdf2Legacy.Should().BeFalse();
         service.VerifyPassword("WrongPassword@123", hash).Should().BeFalse();
+
+        // Act & Assert: biến thể "Vinamilk@2026!" PHẢI bị từ chối với cả PBKDF2 lẫn hash legacy của "Vinamilk@2026"
+        var pbkdf2Sample = service.HashPassword("Vinamilk@2026");
+        service.VerifyPassword("Vinamilk@2026!", pbkdf2Sample).Should().BeFalse();
+
+        var legacySha256Bytes = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes("VinamilkHRM_Salt_2026::Vinamilk@2026"));
+        var legacySampleHash = Convert.ToBase64String(legacySha256Bytes);
+        service.IsPbkdf2Hash(legacySampleHash).Should().BeFalse();
+        service.VerifyPassword("Vinamilk@2026!", legacySampleHash).Should().BeFalse();
+        service.VerifyPassword("Vinamilk@2026", legacySampleHash, out var matchedLegacy).Should().BeTrue();
+        matchedLegacy.Should().BeTrue();
     }
 
     [Fact]

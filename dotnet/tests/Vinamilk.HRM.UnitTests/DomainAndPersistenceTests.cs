@@ -1,6 +1,8 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Vinamilk.HRM.Application.Common.Interfaces;
 using Vinamilk.HRM.Domain.Entities.Core;
@@ -11,6 +13,14 @@ using Vinamilk.HRM.Infrastructure.Security;
 using Xunit;
 
 namespace Vinamilk.HRM.UnitTests;
+
+public sealed class StubHostEnvironment : IHostEnvironment
+{
+    public string EnvironmentName { get; set; } = Environments.Development;
+    public string ApplicationName { get; set; } = "Vinamilk.HRM.UnitTests";
+    public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+    public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+}
 
 public sealed class FakeCurrentUserService : ICurrentUserService
 {
@@ -113,10 +123,15 @@ public class DomainAndPersistenceTests
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Security:PiiEncryptionKey"] = "SeedTest_Key_32Chars_Vinamilk!" })
             .Build();
         var encryption = new PiiEncryptionService(config);
+        var passwordService = new PasswordSecurityService();
+        var devEnv = new StubHostEnvironment { EnvironmentName = Environments.Development };
         var initializer = new ApplicationDbContextInitializer(
             NullLogger<ApplicationDbContextInitializer>.Instance,
             context,
-            encryption);
+            encryption,
+            passwordService,
+            devEnv,
+            config);
 
         await initializer.SeedAsync();
 
@@ -128,14 +143,79 @@ public class DomainAndPersistenceTests
         (await context.Employees.CountAsync()).Should().Be(55);
         (await context.LaborContracts.CountAsync()).Should().Be(55);
         (await context.PayrollRecords.CountAsync()).Should().Be(11);
-        (await context.Users.CountAsync()).Should().Be(11);
 
-        var systemJobUser = await context.Users
-            .Include(u => u.UserRoles)
-            .FirstOrDefaultAsync(u => u.Username == Vinamilk.HRM.Application.Common.Interfaces.SystemJobAccount.Username);
-        systemJobUser.Should().NotBeNull();
-        systemJobUser!.IsActive.Should().BeTrue();
+        var allUsers = await context.Users.Include(u => u.UserRoles).ToListAsync();
+        allUsers.Should().HaveCount(11);
+        allUsers.Should().OnlyContain(u => u.MustChangePassword);
+        allUsers.Should().OnlyContain(u => u.PasswordHash.StartsWith("PBKDF2$"));
+
+        var adminUser = allUsers.Single(u => u.Username == "admin");
+        adminUser.IsSystemAccount.Should().BeFalse();
+        passwordService.VerifyPassword("Vinamilk@2026", adminUser.PasswordHash).Should().BeTrue();
+        passwordService.VerifyPassword("Vinamilk@2026!", adminUser.PasswordHash).Should().BeFalse();
+
+        var systemJobUser = allUsers.Single(u => u.Username == SystemJobAccount.Username);
+        systemJobUser.IsActive.Should().BeTrue();
+        systemJobUser.IsSystemAccount.Should().BeTrue();
         systemJobUser.UserRoles.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Production_Seed_Should_Require_SuperAdmin_EnvVar_And_Not_Use_DemoPassword()
+    {
+        var prevEnv = Environment.GetEnvironmentVariable(ApplicationDbContextInitializer.InitialSuperAdminPasswordEnvVar);
+        try
+        {
+            Environment.SetEnvironmentVariable(ApplicationDbContextInitializer.InitialSuperAdminPasswordEnvVar, null);
+
+            using var contextNoEnv = CreateInMemoryContext(Guid.NewGuid().ToString());
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?> { ["Security:PiiEncryptionKey"] = "SeedTest_Key_32Chars_Vinamilk!" })
+                .Build();
+            var encryption = new PiiEncryptionService(config);
+            var passwordService = new PasswordSecurityService();
+            var prodEnv = new StubHostEnvironment { EnvironmentName = Environments.Production };
+
+            var initializerMissing = new ApplicationDbContextInitializer(
+                NullLogger<ApplicationDbContextInitializer>.Instance,
+                contextNoEnv,
+                encryption,
+                passwordService,
+                prodEnv,
+                config);
+
+            Func<Task> seedWithoutEnv = () => initializerMissing.SeedAsync();
+            await seedWithoutEnv.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage($"*{ApplicationDbContextInitializer.InitialSuperAdminPasswordEnvVar}*");
+
+            // Khi có biến môi trường -> Seed thành công SuperAdmin bằng mật khẩu env, không dùng mật khẩu mẫu cho user khác
+            const string prodSecret = "Prod_Super@2026_Secure!";
+            Environment.SetEnvironmentVariable(ApplicationDbContextInitializer.InitialSuperAdminPasswordEnvVar, prodSecret);
+
+            using var contextWithEnv = CreateInMemoryContext(Guid.NewGuid().ToString());
+            var initializerWithEnv = new ApplicationDbContextInitializer(
+                NullLogger<ApplicationDbContextInitializer>.Instance,
+                contextWithEnv,
+                encryption,
+                passwordService,
+                prodEnv,
+                config);
+
+            await initializerWithEnv.SeedAsync();
+
+            var admin = await contextWithEnv.Users.SingleAsync(u => u.Username == "admin");
+            var hrUser = await contextWithEnv.Users.SingleAsync(u => u.Username == "huyen.ntt");
+
+            admin.MustChangePassword.Should().BeTrue();
+            hrUser.MustChangePassword.Should().BeTrue();
+            passwordService.VerifyPassword(prodSecret, admin.PasswordHash).Should().BeTrue();
+            passwordService.VerifyPassword("Vinamilk@2026", admin.PasswordHash).Should().BeFalse();
+            passwordService.VerifyPassword("Vinamilk@2026", hrUser.PasswordHash).Should().BeFalse();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ApplicationDbContextInitializer.InitialSuperAdminPasswordEnvVar, prevEnv);
+        }
     }
 }
 

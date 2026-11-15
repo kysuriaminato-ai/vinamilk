@@ -29,8 +29,16 @@ public sealed class PasswordSecurityService
         return $"{Prefix}{Iterations}${Convert.ToBase64String(salt)}${Convert.ToBase64String(hash)}";
     }
 
-    public bool VerifyPassword(string rawPassword, string storedHash)
+    public bool IsPbkdf2Hash(string? storedHash) =>
+        !string.IsNullOrWhiteSpace(storedHash) && storedHash.StartsWith(Prefix, StringComparison.Ordinal);
+
+    public bool VerifyPassword(string rawPassword, string storedHash) =>
+        VerifyPassword(rawPassword, storedHash, out _);
+
+    public bool VerifyPassword(string rawPassword, string storedHash, out bool isLegacyHash)
     {
+        isLegacyHash = false;
+
         if (string.IsNullOrWhiteSpace(rawPassword) || string.IsNullOrWhiteSpace(storedHash))
             return false;
 
@@ -53,21 +61,13 @@ public sealed class PasswordSecurityService
             return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
         }
 
-        // 2. Tương thích với dữ liệu Seeded (SHA256 + Salt cố định cho mật khẩu mẫu Vinamilk@2026 / Vinamilk@2026!)
+        // 2. Tương thích với dữ liệu legacy (SHA256 + Salt cũ) để tự động nâng cấp sang PBKDF2 khi đăng nhập
         var legacyHash = ComputeLegacySeededHash(rawPassword);
         if (CryptographicOperations.FixedTimeEquals(
                 Encoding.UTF8.GetBytes(legacyHash),
                 Encoding.UTF8.GetBytes(storedHash)))
         {
-            return true;
-        }
-
-        // Cho phép biến thể Vinamilk@2026! khớp với hash mặc định Vinamilk@2026 khi demo
-        if (rawPassword == "Vinamilk@2026!" &&
-            CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(ComputeLegacySeededHash("Vinamilk@2026")),
-                Encoding.UTF8.GetBytes(storedHash)))
-        {
+            isLegacyHash = true;
             return true;
         }
 

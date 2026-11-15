@@ -218,6 +218,9 @@ public class TestHeaderAuthHandler : AuthenticationHandler<AuthenticationSchemeO
         if (Request.Headers.TryGetValue("X-Test-EmployeeId", out var empIdVal))
             claims.Add(new Claim("EmployeeId", empIdVal.ToString()));
 
+        if (Request.Headers.TryGetValue("X-Test-MustChangePassword", out var mustChangeVal))
+            claims.Add(new Claim("MustChangePassword", mustChangeVal.ToString()));
+
         if (Request.Headers.TryGetValue("X-Test-Permission", out var perm))
         {
             foreach (var p in perm.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -400,6 +403,175 @@ public class WebIntegrationTests : IClassFixture<CustomWebApplicationFactory>
         var deptExcelResp = await hrManagerClient.GetAsync($"/Payroll/ExportDepartmentSummaryExcel?payrollPeriodId={approvedPeriodId}");
         deptExcelResp.StatusCode.Should().Be(HttpStatusCode.OK);
         deptExcelResp.Content.Headers.ContentType?.MediaType.Should().Be("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+
+    [Fact]
+    public async Task MustChangePasswordMiddleware_Should_BlockAllOtherPages_AndAllowChangePassword()
+    {
+        var forcedClient = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        forcedClient.DefaultRequestHeaders.Add("X-Test-Role", "SUPER_ADMIN");
+        forcedClient.DefaultRequestHeaders.Add("X-Test-UserId", "9999");
+        forcedClient.DefaultRequestHeaders.Add("X-Test-MustChangePassword", "true");
+
+        var homeResp = await forcedClient.GetAsync("/");
+        homeResp.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        homeResp.Headers.Location?.ToString().Should().Be("/Auth/ChangePassword?firstLogin=true");
+
+        var payrollResp = await forcedClient.GetAsync("/Payroll");
+        payrollResp.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        payrollResp.Headers.Location?.ToString().Should().Be("/Auth/ChangePassword?firstLogin=true");
+
+        var empResp = await forcedClient.GetAsync("/Employee");
+        empResp.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        empResp.Headers.Location?.ToString().Should().Be("/Auth/ChangePassword?firstLogin=true");
+
+        var apiResp = await forcedClient.GetAsync("/api/v1/restricted-check");
+        apiResp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var changePassResp = await forcedClient.GetAsync("/Auth/ChangePassword?firstLogin=true");
+        changePassResp.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task AuthController_Should_RejectSampleVariant_UpgradeLegacyHash_AndBlockSystemJobLogin()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var passwordService = scope.ServiceProvider.GetRequiredService<Vinamilk.HRM.Infrastructure.Security.PasswordSecurityService>();
+        var totpService = scope.ServiceProvider.GetRequiredService<Vinamilk.HRM.Infrastructure.Security.TotpAuthenticatorService>();
+        var dpProvider = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>();
+
+        var legacySha256Bytes = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes("VinamilkHRM_Salt_2026::Vinamilk@2026"));
+        var legacyHash = Convert.ToBase64String(legacySha256Bytes);
+
+        var role = await db.Roles.FirstOrDefaultAsync(r => r.RoleCode == "EMPLOYEE");
+        if (role is null)
+        {
+            role = new Vinamilk.HRM.Domain.Entities.Identity.Role { Id = 50, RoleCode = "EMPLOYEE", RoleName = "Nhân viên", DefaultDataScope = "SelfOnly" };
+            db.Roles.Add(role);
+        }
+
+        var legacyUser = new Vinamilk.HRM.Domain.Entities.Identity.User
+        {
+            Id = 501,
+            Username = "legacy.user",
+            Email = "legacy.user@vinamilk.com.vn",
+            PasswordHash = legacyHash,
+            IsActive = true,
+            MustChangePassword = false,
+            IsSystemAccount = false
+        };
+        legacyUser.UserRoles.Add(new Vinamilk.HRM.Domain.Entities.Identity.UserRole { RoleId = role.Id });
+
+        const string systemPass = "SystemJob_Secret@2026!";
+        var sysUser = new Vinamilk.HRM.Domain.Entities.Identity.User
+        {
+            Id = 502,
+            Username = SystemJobAccount.Username,
+            Email = SystemJobAccount.Email,
+            PasswordHash = passwordService.HashPassword(systemPass),
+            IsActive = true,
+            MustChangePassword = true,
+            IsSystemAccount = true
+        };
+
+        db.Users.AddRange(legacyUser, sysUser);
+        await db.SaveChangesAsync();
+
+        var httpServices = new ServiceCollection();
+        httpServices.AddSingleton<IAuthenticationService, StubCookieAuthService>();
+        var sp = httpServices.BuildServiceProvider();
+
+        var controller = new Vinamilk.HRM.Web.Controllers.AuthController(db, passwordService, totpService, dpProvider);
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext { RequestServices = sp };
+        httpContext.Connection.RemoteIpAddress = IPAddress.Loopback;
+        var actionContext = new Microsoft.AspNetCore.Mvc.ActionContext(
+            httpContext,
+            new Microsoft.AspNetCore.Routing.RouteData(),
+            new Microsoft.AspNetCore.Mvc.Controllers.ControllerActionDescriptor());
+        controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext(actionContext);
+        controller.Url = new StubUrlHelper(actionContext);
+        controller.TempData = new Microsoft.AspNetCore.Mvc.ViewFeatures.TempDataDictionary(
+            httpContext,
+            new StubTempDataProvider());
+
+        // 1. "Vinamilk@2026!" PHẢI bị từ chối với hash legacy của "Vinamilk@2026"
+        var variantResult = await controller.LoginSubmit("legacy.user", "Vinamilk@2026!", "826904");
+        variantResult.Should().BeOfType<Microsoft.AspNetCore.Mvc.ViewResult>();
+        (await db.Users.AsNoTracking().SingleAsync(u => u.Id == 501)).PasswordHash.Should().Be(legacyHash);
+
+        // 2. Đăng nhập thành công bằng hash legacy -> tự động nâng cấp PBKDF2 + bật MustChangePassword + redirect ChangePassword
+        var legacyLoginResult = await controller.LoginSubmit("legacy.user", "Vinamilk@2026", "826904");
+        var redirect = legacyLoginResult.Should().BeOfType<Microsoft.AspNetCore.Mvc.RedirectToActionResult>().Subject;
+        redirect.ActionName.Should().Be("ChangePassword");
+
+        var upgradedUser = await db.Users.AsNoTracking().SingleAsync(u => u.Id == 501);
+        upgradedUser.PasswordHash.Should().StartWith("PBKDF2$");
+        upgradedUser.MustChangePassword.Should().BeTrue();
+        passwordService.VerifyPassword("Vinamilk@2026", upgradedUser.PasswordHash).Should().BeTrue();
+
+        // 3. system.job PHẢI bị từ chối trong mọi trường hợp (kể cả đúng mật khẩu) và ghi AuditLog
+        var sysLoginResult = await controller.LoginSubmit(SystemJobAccount.Username, systemPass, "826904");
+        sysLoginResult.Should().BeOfType<Microsoft.AspNetCore.Mvc.ViewResult>();
+
+        var blockedAudit = await db.AuditLogs.FirstOrDefaultAsync(
+            a => a.UserId == 502 && a.ActionType == "SystemAccountLoginBlocked");
+        blockedAudit.Should().NotBeNull();
+        blockedAudit!.Username.Should().Be(SystemJobAccount.Username);
+
+        // 4. Người dùng đã đăng nhập với MustChangePassword = true đổi mật khẩu thành công -> tắt MustChangePassword & lưu PBKDF2 mới
+        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "501"),
+            new Claim(ClaimTypes.Name, "legacy.user"),
+            new Claim("SessionId", "1")
+        }, "Cookie"));
+
+        var changeResp = await controller.ChangePasswordSubmit(null, "Vinamilk@2026", "NewStrong@2026#Pass", "NewStrong@2026#Pass", CancellationToken.None);
+        var homeRedirect = changeResp.Should().BeOfType<Microsoft.AspNetCore.Mvc.RedirectToActionResult>().Subject;
+        homeRedirect.ControllerName.Should().Be("Home");
+
+        var updatedUser = await db.Users.AsNoTracking().SingleAsync(u => u.Id == 501);
+        updatedUser.MustChangePassword.Should().BeFalse();
+        updatedUser.PasswordHash.Should().StartWith("PBKDF2$");
+        passwordService.VerifyPassword("NewStrong@2026#Pass", updatedUser.PasswordHash).Should().BeTrue();
+    }
+}
+
+file sealed class StubUrlHelper : Microsoft.AspNetCore.Mvc.IUrlHelper
+{
+    public StubUrlHelper(Microsoft.AspNetCore.Mvc.ActionContext actionContext) => ActionContext = actionContext;
+    public Microsoft.AspNetCore.Mvc.ActionContext ActionContext { get; }
+    public string? Action(Microsoft.AspNetCore.Mvc.Routing.UrlActionContext actionContext) => $"/{actionContext.Controller}/{actionContext.Action}";
+    public string? Content(string? contentPath) => contentPath;
+    public bool IsLocalUrl(string? url) => !string.IsNullOrEmpty(url) && url.StartsWith('/');
+    public string? Link(string? routeName, object? values) => "/";
+    public string? RouteUrl(Microsoft.AspNetCore.Mvc.Routing.UrlRouteContext routeContext) => "/";
+}
+
+file sealed class StubCookieAuthService : IAuthenticationService
+{
+    public Task<AuthenticateResult> AuthenticateAsync(Microsoft.AspNetCore.Http.HttpContext context, string? scheme)
+        => Task.FromResult(AuthenticateResult.NoResult());
+    public Task ChallengeAsync(Microsoft.AspNetCore.Http.HttpContext context, string? scheme, AuthenticationProperties? properties)
+        => Task.CompletedTask;
+    public Task ForbidAsync(Microsoft.AspNetCore.Http.HttpContext context, string? scheme, AuthenticationProperties? properties)
+        => Task.CompletedTask;
+    public Task SignInAsync(Microsoft.AspNetCore.Http.HttpContext context, string? scheme, ClaimsPrincipal principal, AuthenticationProperties? properties)
+        => Task.CompletedTask;
+    public Task SignOutAsync(Microsoft.AspNetCore.Http.HttpContext context, string? scheme, AuthenticationProperties? properties)
+        => Task.CompletedTask;
+}
+
+file sealed class StubTempDataProvider : Microsoft.AspNetCore.Mvc.ViewFeatures.ITempDataProvider
+{
+    private readonly Dictionary<string, object?> _data = new();
+    public IDictionary<string, object?> LoadTempData(Microsoft.AspNetCore.Http.HttpContext context) => _data;
+    public void SaveTempData(Microsoft.AspNetCore.Http.HttpContext context, IDictionary<string, object?> values)
+    {
+        _data.Clear();
+        foreach (var kv in values) _data[kv.Key] = kv.Value;
     }
 }
 

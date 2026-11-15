@@ -85,6 +85,21 @@ public class AuthController : Controller
             return View("Login");
         }
 
+        if (user.IsSystemAccount ||
+            string.Equals(user.Username, SystemJobAccount.Username, StringComparison.OrdinalIgnoreCase))
+        {
+            await WriteSecurityAuditAsync(
+                user.Id,
+                user.Username,
+                "SystemAccountLoginBlocked",
+                $"Từ chối nỗ lực đăng nhập tương tác vào tài khoản hệ thống '{user.Username}'.",
+                ip,
+                ua,
+                cancellationToken);
+            TempData["AuthError"] = "Tài khoản dịch vụ hệ thống không được phép đăng nhập tương tác.";
+            return View("Login");
+        }
+
         if (!user.IsActive)
         {
             TempData["AuthError"] = "Tài khoản này đã bị vô hiệu hóa bởi Quản trị viên.";
@@ -100,7 +115,7 @@ public class AuthController : Controller
         }
 
         // Kiểm tra mật khẩu
-        if (!_passwordService.VerifyPassword(password ?? string.Empty, user.PasswordHash))
+        if (!_passwordService.VerifyPassword(password ?? string.Empty, user.PasswordHash, out var usedLegacyHash))
         {
             user.AccessFailedCount += 1;
             if (user.AccessFailedCount >= 5)
@@ -149,6 +164,15 @@ public class AuthController : Controller
             }
         }
 
+        // Tự động nâng cấp hash legacy (SHA256) sang PBKDF2 và bật bắt buộc đổi mật khẩu
+        var upgradedLegacyHash = false;
+        if (usedLegacyHash || !_passwordService.IsPbkdf2Hash(user.PasswordHash))
+        {
+            user.PasswordHash = _passwordService.HashPassword(password!);
+            user.MustChangePassword = true;
+            upgradedLegacyHash = true;
+        }
+
         // Đăng nhập thành công: Reset bộ đếm lỗi
         user.AccessFailedCount = 0;
         user.LockoutEnd = null;
@@ -175,11 +199,15 @@ public class AuthController : Controller
         // Khởi tạo ClaimsPrincipal với đầy đủ Role, Permission & DataScope
         await SignInUserWithClaimsAsync(user, session.Id, rememberDevice, expiresAt);
 
+        var auditDesc = upgradedLegacyHash
+            ? $"Đăng nhập thành công (Session #{session.Id}, đã tự động nâng cấp hash legacy sang PBKDF2 và bật MustChangePassword)."
+            : $"Đăng nhập thành công (Session #{session.Id}, 2FA Verified).";
+
         await WriteSecurityAuditAsync(
             user.Id,
             user.Username,
             "LoginSuccess",
-            $"Đăng nhập thành công (Session #{session.Id}, 2FA Verified).",
+            auditDesc,
             ip,
             ua,
             cancellationToken);
@@ -237,7 +265,9 @@ public class AuthController : Controller
         var user = await _context.Users
             .FirstOrDefaultAsync(u => u.Email == input || u.Username == input, cancellationToken);
 
-        if (user is not null)
+        if (user is not null &&
+            !user.IsSystemAccount &&
+            !string.Equals(user.Username, SystemJobAccount.Username, StringComparison.OrdinalIgnoreCase))
         {
             var payload = $"{user.Id}|{DateTimeOffset.UtcNow.AddMinutes(30).ToUnixTimeSeconds()}";
             var token = _resetTokenProtector.Protect(payload);
@@ -302,7 +332,9 @@ public class AuthController : Controller
             }
 
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
-            if (user is null)
+            if (user is null ||
+                user.IsSystemAccount ||
+                string.Equals(user.Username, SystemJobAccount.Username, StringComparison.OrdinalIgnoreCase))
             {
                 TempData["AuthError"] = "Tài khoản không hợp lệ.";
                 return View("ResetPassword");
@@ -363,19 +395,48 @@ public class AuthController : Controller
             var idStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (int.TryParse(idStr, out var uid))
             {
-                user = await _context.Users.FirstOrDefaultAsync(u => u.Id == uid, cancellationToken);
+                user = await _context.Users
+                    .Include(u => u.Employee)
+                        .ThenInclude(e => e!.OrganizationUnit)
+                    .Include(u => u.UserRoles)
+                        .ThenInclude(ur => ur.Role)
+                            .ThenInclude(r => r.RolePermissions)
+                                .ThenInclude(rp => rp.Permission)
+                    .FirstOrDefaultAsync(u => u.Id == uid, cancellationToken);
             }
         }
 
         if (user is null && !string.IsNullOrWhiteSpace(usernameOrEmail))
         {
             var input = usernameOrEmail.Trim();
-            user = await _context.Users.FirstOrDefaultAsync(u => u.Username == input || u.Email == input, cancellationToken);
+            user = await _context.Users
+                .Include(u => u.Employee)
+                    .ThenInclude(e => e!.OrganizationUnit)
+                .Include(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+                        .ThenInclude(r => r.RolePermissions)
+                            .ThenInclude(rp => rp.Permission)
+                .FirstOrDefaultAsync(u => u.Username == input || u.Email == input, cancellationToken);
         }
 
         if (user is null)
         {
             TempData["AuthError"] = "Không tìm thấy thông tin tài khoản.";
+            return View("ChangePassword");
+        }
+
+        if (user.IsSystemAccount ||
+            string.Equals(user.Username, SystemJobAccount.Username, StringComparison.OrdinalIgnoreCase))
+        {
+            await WriteSecurityAuditAsync(
+                user.Id,
+                user.Username,
+                "SystemAccountPasswordChangeBlocked",
+                $"Từ chối yêu cầu đổi mật khẩu tài khoản hệ thống '{user.Username}'.",
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                Request.Headers["User-Agent"].ToString(),
+                cancellationToken);
+            TempData["AuthError"] = "Tài khoản dịch vụ hệ thống không được phép thao tác mật khẩu tương tác.";
             return View("ChangePassword");
         }
 
@@ -402,6 +463,13 @@ public class AuthController : Controller
         user.PasswordChangedAt = DateTime.UtcNow;
         user.MustChangePassword = false;
         await _context.SaveChangesAsync(cancellationToken);
+
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            var sessionIdStr = User.FindFirstValue("SessionId");
+            long.TryParse(sessionIdStr, out var sessionId);
+            await SignInUserWithClaimsAsync(user, sessionId, isPersistent: true, expiresUtc: DateTime.UtcNow.AddDays(14));
+        }
 
         await WriteSecurityAuditAsync(
             user.Id,

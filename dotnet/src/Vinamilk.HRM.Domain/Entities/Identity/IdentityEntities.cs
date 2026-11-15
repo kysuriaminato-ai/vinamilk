@@ -17,6 +17,7 @@ public class User : BaseAuditableEntity
     public DateTime? LastLoginAt { get; set; }
     public DateTime? PasswordChangedAt { get; set; }
     public bool MustChangePassword { get; set; } = false;
+    public bool IsSystemAccount { get; set; } = false;
 
     public Employee? Employee { get; set; }
     public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();

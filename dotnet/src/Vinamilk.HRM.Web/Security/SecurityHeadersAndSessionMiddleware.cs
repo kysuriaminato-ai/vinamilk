@@ -45,11 +45,15 @@ public sealed class SecurityHeadersAndSessionMiddleware
                 path.StartsWith("/css", StringComparison.OrdinalIgnoreCase) ||
                 path.StartsWith("/js", StringComparison.OrdinalIgnoreCase) ||
                 path.StartsWith("/lib", StringComparison.OrdinalIgnoreCase) ||
+                path.Equals("/favicon.ico", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("/health/live", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("/Auth/Login", StringComparison.OrdinalIgnoreCase) ||
                 path.StartsWith("/Auth/Logout", StringComparison.OrdinalIgnoreCase) ||
                 path.StartsWith("/Auth/ChangePassword", StringComparison.OrdinalIgnoreCase);
 
             if (!isStaticOrAuthRoute)
             {
+                var isApiRequest = path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase);
                 var sessionIdStr = context.User.FindFirstValue("SessionId");
                 if (long.TryParse(sessionIdStr, out var sessionId) && sessionId > 0)
                 {
@@ -60,15 +64,60 @@ public sealed class SecurityHeadersAndSessionMiddleware
                     if (session is null || session.RevokedAt.HasValue || session.ExpiresAt <= DateTime.UtcNow)
                     {
                         await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                        if (isApiRequest)
+                        {
+                            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                            return;
+                        }
                         context.Response.Redirect("/Auth/Login?revoked=true");
                         return;
                     }
                 }
 
-                var mustChangePass = context.User.FindFirstValue("MustChangePassword");
-                if (string.Equals(mustChangePass, "true", StringComparison.OrdinalIgnoreCase) &&
-                    !path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
+                var mustChangePass = string.Equals(
+                    context.User.FindFirstValue("MustChangePassword"),
+                    "true",
+                    StringComparison.OrdinalIgnoreCase);
+
+                var userIdStr = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (int.TryParse(userIdStr, out var userId) && userId > 0)
                 {
+                    var dbUser = await dbContext.Users
+                        .AsNoTracking()
+                        .Where(u => u.Id == userId)
+                        .Select(u => new { u.IsActive, u.IsSystemAccount, u.MustChangePassword })
+                        .FirstOrDefaultAsync(context.RequestAborted);
+
+                    if (dbUser is not null)
+                    {
+                        if (!dbUser.IsActive || dbUser.IsSystemAccount)
+                        {
+                            await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                            if (isApiRequest)
+                            {
+                                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                                return;
+                            }
+                            context.Response.Redirect("/Auth/Login");
+                            return;
+                        }
+
+                        mustChangePass = dbUser.MustChangePassword;
+                    }
+                }
+
+                if (mustChangePass)
+                {
+                    if (isApiRequest)
+                    {
+                        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        context.Response.ContentType = "application/json; charset=utf-8";
+                        await context.Response.WriteAsync(
+                            "{\"error\":\"Tài khoản bắt buộc đổi mật khẩu trước khi truy cập hệ thống.\",\"redirectUrl\":\"/Auth/ChangePassword?firstLogin=true\"}",
+                            context.RequestAborted);
+                        return;
+                    }
+
                     context.Response.Redirect("/Auth/ChangePassword?firstLogin=true");
                     return;
                 }
