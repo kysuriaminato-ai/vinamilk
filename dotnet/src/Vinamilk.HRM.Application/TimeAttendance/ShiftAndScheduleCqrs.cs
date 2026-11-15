@@ -110,6 +110,14 @@ public record ShiftSwapRequestItemDto(
     string? ApproverComment,
     DateTime CreatedAt);
 
+public record GenerateHolidaysResultDto(
+    int Year,
+    int CreatedCount,
+    int SkippedCount,
+    int CompensatoryCount,
+    IReadOnlyList<string> PendingManualItems,
+    string SummaryMessage);
+
 public record AssignScheduleResultDto(
     int AffectedCount,
     IReadOnlyList<ShiftConflictWarningDto> Warnings);
@@ -139,6 +147,93 @@ public record ShiftAndScheduleOverviewDto(
 // 2. AUTO-SEED NGÀY LỄ VIỆT NAM & LỊCH PHÂN CA MẪU
 // ============================================================================
 
+public static class VietnamHolidayRuleBuilder
+{
+    public static List<Holiday> BuildDefaultHolidays2026() =>
+    [
+        new() { HolidayDate = new DateOnly(2026, 1, 1), HolidayName = "Tết Dương lịch 2026", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.a BLLĐ 45/2019/QH14", NeedsHrVerification = false },
+        new() { HolidayDate = new DateOnly(2026, 2, 16), HolidayName = "Nghỉ Tết Nguyên đán (29 Tết Âm lịch)", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 45/2019/QH14; Thông báo 9441/TB-BNV", NeedsHrVerification = true },
+        new() { HolidayDate = new DateOnly(2026, 2, 17), HolidayName = "Mùng 1 Tết Nguyên đán Bính Ngọ", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 45/2019/QH14; Thông báo 9441/TB-BNV", NeedsHrVerification = true },
+        new() { HolidayDate = new DateOnly(2026, 2, 18), HolidayName = "Mùng 2 Tết Nguyên đán Bính Ngọ", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 45/2019/QH14; Thông báo 9441/TB-BNV", NeedsHrVerification = true },
+        new() { HolidayDate = new DateOnly(2026, 2, 19), HolidayName = "Mùng 3 Tết Nguyên đán Bính Ngọ", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 45/2019/QH14; Thông báo 9441/TB-BNV", NeedsHrVerification = true },
+        new() { HolidayDate = new DateOnly(2026, 2, 20), HolidayName = "Mùng 4 Tết Nguyên đán Bính Ngọ", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 45/2019/QH14; Thông báo 9441/TB-BNV", NeedsHrVerification = true },
+        new() { HolidayDate = new DateOnly(2026, 4, 26), HolidayName = "Giỗ Tổ Hùng Vương (10/3 Âm lịch)", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.e BLLĐ 45/2019/QH14 (lịch Âm; trùng Chủ nhật - kiểm tra nghỉ bù)", NeedsHrVerification = true },
+        new() { HolidayDate = new DateOnly(2026, 4, 30), HolidayName = "Ngày Giải phóng miền Nam 30/4", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.c BLLĐ 45/2019/QH14", NeedsHrVerification = false },
+        new() { HolidayDate = new DateOnly(2026, 5, 1), HolidayName = "Ngày Quốc tế Lao động 1/5", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.d BLLĐ 45/2019/QH14", NeedsHrVerification = false },
+        new() { HolidayDate = new DateOnly(2026, 9, 1), HolidayName = "Nghỉ liền kề Quốc khánh 2/9 (01/09 theo TB 9441/TB-BNV)", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.đ BLLĐ 45/2019/QH14; Thông báo 9441/TB-BNV (mặc định 01/09, HR chọn 01/09 hoặc 03/09)", NeedsHrVerification = true },
+        new() { HolidayDate = new DateOnly(2026, 9, 2), HolidayName = "Quốc khánh nước CHXHCN Việt Nam (02/09)", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.đ BLLĐ 45/2019/QH14; Thông báo 9441/TB-BNV", NeedsHrVerification = false },
+        new() { HolidayDate = new DateOnly(2026, 11, 24), HolidayName = "Ngày Văn hóa Việt Nam (24/11)", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Nghị quyết 80-NQ/TW ngày 07/01/2026; BLLĐ 2019 sửa đổi bổ sung Điều 112 (áp dụng từ 2026)", NeedsHrVerification = true }
+    ];
+
+    public static List<Holiday> BuildHolidaysForYearFromRules(
+        int year,
+        DateOnly? tetStartDate,
+        DateOnly? hungKingsDate,
+        string nationalDayAdjacentChoice = "Before",
+        bool includeVietnamCultureDay = true)
+    {
+        bool chooseBefore = !string.Equals(nationalDayAdjacentChoice?.Trim(), "After", StringComparison.OrdinalIgnoreCase);
+        int adjacentDay = chooseBefore ? 1 : 3;
+
+        var list = new List<Holiday>
+        {
+            new() { HolidayDate = new DateOnly(year, 1, 1), HolidayName = $"Tết Dương lịch {year}", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.a BLLĐ 45/2019/QH14", NeedsHrVerification = false },
+            new() { HolidayDate = new DateOnly(year, 4, 30), HolidayName = "Ngày Giải phóng miền Nam 30/4", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.c BLLĐ 45/2019/QH14", NeedsHrVerification = false },
+            new() { HolidayDate = new DateOnly(year, 5, 1), HolidayName = "Ngày Quốc tế Lao động 1/5", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.d BLLĐ 45/2019/QH14", NeedsHrVerification = false },
+            new() { HolidayDate = new DateOnly(year, 9, 2), HolidayName = "Quốc khánh nước CHXHCN Việt Nam (02/09)", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.đ BLLĐ 45/2019/QH14", NeedsHrVerification = false },
+            new() { HolidayDate = new DateOnly(year, 9, adjacentDay), HolidayName = chooseBefore ? "Nghỉ liền kề trước Quốc khánh (01/09)" : "Nghỉ liền kề sau Quốc khánh (03/09)", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = $"Điều 112.1.đ BLLĐ 45/2019/QH14 (sinh tự động theo quy tắc {(chooseBefore ? "01/09" : "03/09")} - HR xác nhận)", NeedsHrVerification = true }
+        };
+
+        if (includeVietnamCultureDay && year >= 2026)
+        {
+            list.Add(new Holiday
+            {
+                HolidayDate = new DateOnly(year, 11, 24),
+                HolidayName = "Ngày Văn hóa Việt Nam (24/11)",
+                Year = year,
+                IsPaidHoliday = true,
+                OvertimeMultiplier = 3.0m,
+                LegalReference = "Nghị quyết 80-NQ/TW ngày 07/01/2026; BLLĐ 2019 sửa đổi bổ sung Điều 112 (áp dụng từ 2026)",
+                NeedsHrVerification = true
+            });
+        }
+
+        if (tetStartDate.HasValue)
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                var d = tetStartDate.Value.AddDays(i);
+                list.Add(new Holiday
+                {
+                    HolidayDate = d,
+                    HolidayName = $"Nghỉ Tết Nguyên đán {year} (Ngày {i + 1}/5)",
+                    Year = year,
+                    IsPaidHoliday = true,
+                    OvertimeMultiplier = 3.0m,
+                    LegalReference = "Điều 112.1.b BLLĐ 45/2019/QH14 (lịch Âm do HR nhập theo Thông báo Bộ Nội vụ)",
+                    NeedsHrVerification = true
+                });
+            }
+        }
+
+        if (hungKingsDate.HasValue)
+        {
+            list.Add(new Holiday
+            {
+                HolidayDate = hungKingsDate.Value,
+                HolidayName = $"Giỗ Tổ Hùng Vương {year} (10/3 Âm lịch)",
+                Year = year,
+                IsPaidHoliday = true,
+                OvertimeMultiplier = 3.0m,
+                LegalReference = "Điều 112.1.e BLLĐ 45/2019/QH14 (10/3 Âm lịch do HR nhập)",
+                NeedsHrVerification = true
+            });
+        }
+
+        return list.OrderBy(h => h.HolidayDate).ToList();
+    }
+}
+
 public static class ShiftAndHolidaySeeder
 {
     public static async Task EnsureHolidaysAndSampleSchedulesAsync(
@@ -147,23 +242,9 @@ public static class ShiftAndHolidaySeeder
         DateOnly weekStart,
         CancellationToken cancellationToken)
     {
-        if (!await context.Holidays.AnyAsync(h => h.Year == year, cancellationToken))
+        if (year == 2026 && !await context.Holidays.AnyAsync(h => h.Year == 2026, cancellationToken))
         {
-            var holidays = new List<Holiday>
-            {
-                new() { HolidayDate = new DateOnly(year, 1, 1), HolidayName = "Tết Dương lịch", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.a BLLĐ 2019", NeedsHrVerification = false },
-                new() { HolidayDate = new DateOnly(year, 2, 16), HolidayName = "Nghỉ Tết Nguyên đán (29 Tết)", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
-                new() { HolidayDate = new DateOnly(year, 2, 17), HolidayName = "Mùng 1 Tết Nguyên đán", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
-                new() { HolidayDate = new DateOnly(year, 2, 18), HolidayName = "Mùng 2 Tết Nguyên đán", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
-                new() { HolidayDate = new DateOnly(year, 2, 19), HolidayName = "Mùng 3 Tết Nguyên đán", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
-                new() { HolidayDate = new DateOnly(year, 2, 20), HolidayName = "Mùng 4 Tết Nguyên đán", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
-                new() { HolidayDate = new DateOnly(year, 4, 26), HolidayName = "Giỗ Tổ Hùng Vương (10/3 Âm lịch)", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.e BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
-                new() { HolidayDate = new DateOnly(year, 4, 30), HolidayName = "Ngày Giải phóng miền Nam 30/4", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.c BLLĐ 2019", NeedsHrVerification = false },
-                new() { HolidayDate = new DateOnly(year, 5, 1), HolidayName = "Ngày Quốc tế Lao động 1/5", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.d BLLĐ 2019", NeedsHrVerification = false },
-                new() { HolidayDate = new DateOnly(year, 9, 2), HolidayName = "Quốc khánh nước CHXHCN Việt Nam 2/9", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.đ BLLĐ 2019", NeedsHrVerification = false },
-                new() { HolidayDate = new DateOnly(year, 9, 3), HolidayName = "Nghỉ liền kề Quốc khánh 2/9 (Dự kiến sau - HR xác nhận 01/09 hoặc 03/09)", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.đ BLLĐ 2019 (chọn 01/09 trước hoặc 03/09 sau theo QĐ Thủ tướng)", NeedsHrVerification = true }
-            };
-            await context.Holidays.AddRangeAsync(holidays, cancellationToken);
+            await context.Holidays.AddRangeAsync(VietnamHolidayRuleBuilder.BuildDefaultHolidays2026(), cancellationToken);
             await context.SaveChangesAsync(cancellationToken);
         }
 
@@ -928,6 +1009,130 @@ public class SelectNationalDayAdjacentHolidayCommandHandler : IRequestHandler<Se
 
         await _context.SaveChangesAsync(cancellationToken);
         return selectedDate;
+    }
+}
+
+/// <summary>
+/// Sinh lịch ngày nghỉ lễ năm N từ quy tắc ngày Dương cố định kết hợp ngày Âm lịch (Tết Nguyên đán 5 ngày, Giỗ Tổ 10/3 ÂL) do HR nhập.
+/// </summary>
+public record GenerateHolidaysForYearCommand(
+    int Year,
+    DateOnly? TetStartDate = null,
+    DateOnly? HungKingsDate = null,
+    string NationalDayAdjacentChoice = "Before",
+    bool IncludeVietnamCultureDay = true,
+    bool AutoGenerateCompensatoryIfWeekend = false,
+    bool OverwriteExistingAutoGenerated = false) : IRequest<GenerateHolidaysResultDto>;
+
+public class GenerateHolidaysForYearCommandHandler : IRequestHandler<GenerateHolidaysForYearCommand, GenerateHolidaysResultDto>
+{
+    private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
+
+    public GenerateHolidaysForYearCommandHandler(IApplicationDbContext context, ICurrentUserService? currentUser = null)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
+
+    public async Task<GenerateHolidaysResultDto> Handle(GenerateHolidaysForYearCommand request, CancellationToken cancellationToken)
+    {
+        if (request.Year is < 2020 or > 2100)
+            throw new InvalidOperationException("Năm sinh lịch lễ phải nằm trong khoảng 2020–2100.");
+
+        if (request.TetStartDate.HasValue && Math.Abs(request.TetStartDate.Value.Year - request.Year) > 1)
+            throw new InvalidOperationException($"Ngày bắt đầu Tết Nguyên đán ({request.TetStartDate:dd/MM/yyyy}) không khớp năm {request.Year}.");
+
+        if (request.HungKingsDate.HasValue && request.HungKingsDate.Value.Year != request.Year)
+            throw new InvalidOperationException($"Ngày Giỗ Tổ Hùng Vương ({request.HungKingsDate:dd/MM/yyyy}) phải thuộc năm {request.Year}.");
+
+        var generated = VietnamHolidayRuleBuilder.BuildHolidaysForYearFromRules(
+            request.Year,
+            request.TetStartDate,
+            request.HungKingsDate,
+            request.NationalDayAdjacentChoice,
+            request.IncludeVietnamCultureDay);
+
+        var targetDates = generated.Select(g => g.HolidayDate).ToList();
+        var existingByDate = await _context.Holidays
+            .IgnoreQueryFilters()
+            .Where(h => targetDates.Contains(h.HolidayDate))
+            .ToDictionaryAsync(h => h.HolidayDate, cancellationToken);
+
+        int createdCount = 0;
+        int skippedCount = 0;
+        var addedHolidays = new List<Holiday>();
+
+        foreach (var item in generated)
+        {
+            if (existingByDate.TryGetValue(item.HolidayDate, out var existing))
+            {
+                if (!existing.IsDeleted && !request.OverwriteExistingAutoGenerated)
+                {
+                    skippedCount++;
+                    continue;
+                }
+
+                existing.IsDeleted = false;
+                existing.HolidayName = item.HolidayName;
+                existing.Year = item.Year;
+                existing.IsPaidHoliday = item.IsPaidHoliday;
+                existing.OvertimeMultiplier = item.OvertimeMultiplier;
+                existing.LegalReference = item.LegalReference;
+                existing.NeedsHrVerification = item.NeedsHrVerification;
+                createdCount++;
+                addedHolidays.Add(existing);
+            }
+            else
+            {
+                await _context.Holidays.AddAsync(item, cancellationToken);
+                createdCount++;
+                addedHolidays.Add(item);
+            }
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        int compCount = 0;
+        if (request.AutoGenerateCompensatoryIfWeekend)
+        {
+            foreach (var h in addedHolidays)
+            {
+                var comp = await AttendancePolicyAndShiftEngine.EnsureCompensatoryHolidayAsync(_context, h, cancellationToken);
+                if (comp is not null)
+                    compCount++;
+            }
+        }
+
+        var pending = new List<string>();
+        if (!request.TetStartDate.HasValue && !await _context.Holidays.AnyAsync(h => h.Year == request.Year && (h.HolidayDate.Month == 1 || h.HolidayDate.Month == 2) && h.HolidayName.Contains("Tết Nguyên đán"), cancellationToken))
+            pending.Add("Tết Nguyên đán (5 ngày Âm lịch - HR cần nhập ngày bắt đầu nghỉ)");
+        if (!request.HungKingsDate.HasValue && !await _context.Holidays.AnyAsync(h => h.Year == request.Year && h.HolidayName.Contains("Giỗ Tổ"), cancellationToken))
+            pending.Add("Giỗ Tổ Hùng Vương 10/3 Âm lịch (HR cần nhập ngày quy đổi Dương lịch)");
+
+        if (_currentUser?.UserId is int uid)
+        {
+            await _context.AuditLogs.AddAsync(new Domain.Entities.SystemEntities.AuditLog
+            {
+                UserId = uid,
+                Username = _currentUser.Username ?? "hr.admin",
+                ActionType = "GenerateHolidaysForYear",
+                ModuleName = "TimeAttendance",
+                EntityName = "Holiday",
+                EntityId = request.Year.ToString(),
+                NewValuesJson = $"{{\"year\":{request.Year},\"created\":{createdCount},\"skipped\":{skippedCount},\"compensatory\":{compCount}}}",
+                IpAddress = _currentUser.IpAddress,
+                UserAgent = _currentUser.UserAgent,
+                CreatedAt = DateTime.UtcNow
+            }, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        string msg = $"Đã sinh lịch lễ năm {request.Year}: thêm/cập nhật {createdCount} ngày lễ (bỏ qua {skippedCount} ngày đã tồn tại"
+            + (compCount > 0 ? $", tự sinh {compCount} ngày nghỉ bù cuối tuần" : string.Empty)
+            + ").";
+
+        return new GenerateHolidaysResultDto(request.Year, createdCount, skippedCount, compCount, pending, msg);
     }
 }
 

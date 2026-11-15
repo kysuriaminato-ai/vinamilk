@@ -4,6 +4,11 @@
     ViewData["BreadcrumbParent"] = "Chấm công & Nghỉ phép (Phiên 6)";
     var prevWeek = Model.WeekStartDate.AddDays(-7).ToString("yyyy-MM-dd");
     var nextWeek = Model.WeekStartDate.AddDays(7).ToString("yyyy-MM-dd");
+    string activeTab = ViewBag.ActiveTab as string ?? "roster";
+    int nextHolidayYear = Model.Holidays.Count == 0 ? Model.SelectedYear : Model.SelectedYear + 1;
+    bool hasNationalDayBefore = Model.Holidays.Any(h => h.HolidayDate == new DateOnly(Model.SelectedYear, 9, 1));
+    bool hasNationalDayAfter = Model.Holidays.Any(h => h.HolidayDate == new DateOnly(Model.SelectedYear, 9, 3));
+    bool defaultNationalBefore = hasNationalDayBefore || !hasNationalDayAfter;
 }
 
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
@@ -18,6 +23,9 @@
     <div class="d-flex flex-wrap gap-2">
         <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalBulkSchedule">
             <i class="ti ti-calendar-plus me-1"></i>Phân ca Hàng loạt
+        </button>
+        <button type="button" class="btn btn-outline-warning text-dark" data-bs-toggle="modal" data-bs-target="#modalGenerateHolidaysYear">
+            <i class="ti ti-calendar-cog me-1"></i>Sinh lịch lễ năm N
         </button>
         <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalSaveHoliday">
             <i class="ti ti-confetti me-1"></i>Thêm Ngày Lễ
@@ -85,27 +93,27 @@
 <!-- Navigation Tabs -->
 <ul class="nav nav-tabs mb-3" role="tablist">
     <li class="nav-item">
-        <button class="nav-link active fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-roster" type="button">
+        <button class="nav-link @(activeTab == "roster" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-roster" type="button">
             <i class="ti ti-drag-drop me-1"></i>Lịch Xếp ca Kéo-Thả (Drag & Drop Calendar)
         </button>
     </li>
     <li class="nav-item">
-        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-shifts" type="button">
+        <button class="nav-link @(activeTab == "shifts" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-shifts" type="button">
             <i class="ti ti-clock-hour-8 me-1"></i>Danh mục Ca làm việc (@Model.WorkShifts.Count)
         </button>
     </li>
     <li class="nav-item">
-        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-holidays" type="button">
+        <button class="nav-link @(activeTab == "holidays" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-holidays" type="button">
             <i class="ti ti-calendar-star me-1"></i>Lịch Ngày Lễ, Tết Việt Nam (@Model.Holidays.Count)
         </button>
     </li>
     <li class="nav-item">
-        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-rotation-swap" type="button">
+        <button class="nav-link @(activeTab == "rotation-swap" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-rotation-swap" type="button">
             <i class="ti ti-arrows-exchange me-1"></i>Xoay ca & Đổi ca
         </button>
     </li>
     <li class="nav-item">
-        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-policies" type="button">
+        <button class="nav-link @(activeTab == "policies" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-policies" type="button">
             <i class="ti ti-shield-cog me-1"></i>Nhóm chính sách & Quy định
         </button>
     </li>
@@ -113,7 +121,7 @@
 
 <div class="tab-content">
     <!-- TAB 1: CALENDAR XẾP CA KÉO THẢ -->
-    <div class="tab-pane fade show active" id="tab-roster">
+    <div class="tab-pane fade @(activeTab == "roster" ? "show active" : "")" id="tab-roster">
         <!-- Thanh công cụ lọc tuần + Bảng mẫu Ca kéo-thả -->
         <div class="vnm-card p-3 mb-3">
             <div class="row g-3 align-items-center justify-content-between">
@@ -234,7 +242,7 @@
     </div>
 
     <!-- TAB 2: DANH MỤC CA LÀM VIỆC -->
-    <div class="tab-pane fade" id="tab-shifts">
+    <div class="tab-pane fade @(activeTab == "shifts" ? "show active" : "")" id="tab-shifts">
         <div class="vnm-card overflow-hidden">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
@@ -294,18 +302,48 @@
     </div>
 
     <!-- TAB 3: NGÀY LỄ TẾT VIỆT NAM -->
-    <div class="tab-pane fade" id="tab-holidays">
+    <div class="tab-pane fade @(activeTab == "holidays" ? "show active" : "")" id="tab-holidays">
+        <div class="vnm-card p-3 mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <form method="get" class="d-flex flex-wrap align-items-center gap-2">
+                <input type="hidden" name="tab" value="holidays" />
+                <input type="hidden" name="weekStart" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
+                <input type="hidden" name="unitId" value="@Model.SelectedUnitId" />
+                <label class="fw-semibold small mb-0">Xem lịch lễ năm:</label>
+                <select name="year" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
+                    @for (int y = 2025; y <= 2030; y++)
+                    {
+                        <option value="@y" selected="@(Model.SelectedYear == y)">@y</option>
+                    }
+                </select>
+                <span class="badge @(Model.Holidays.Count(h => !h.IsCompensatoryDay) >= 12 ? "bg-success-subtle text-success" : "bg-warning-subtle text-warning-emphasis")">
+                    @Model.Holidays.Count(h => !h.IsCompensatoryDay) / 12 ngày lễ luật định năm @Model.SelectedYear
+                </span>
+            </form>
+            <button type="button" class="btn btn-sm btn-warning fw-semibold" data-bs-toggle="modal" data-bs-target="#modalGenerateHolidaysYear">
+                <i class="ti ti-calendar-cog me-1"></i>Sinh lịch lễ năm N (@nextHolidayYear)
+            </button>
+        </div>
+
+        @if (Model.Holidays.Count == 0)
+        {
+            <div class="alert alert-danger border-0 shadow-sm mb-3">
+                <i class="ti ti-alert-triangle me-2"></i>
+                <strong>Năm @Model.SelectedYear chưa có danh mục ngày nghỉ lễ!</strong>
+                Vui lòng nhấn <strong>"Sinh lịch lễ năm N (@Model.SelectedYear)"</strong> hoặc dùng biểu mẫu bên dưới để sinh ngày Dương cố định và nhập Tết Âm lịch / Giỗ Tổ trước khi chốt công.
+            </div>
+        }
+
         <div class="vnm-card p-3 mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2 border-start border-4 border-warning">
             <div>
-                <div class="fw-bold text-primary"><i class="ti ti-flag me-1"></i>Lễ Quốc khánh 2/9 gồm 2 ngày (Điều 112.1.đ BLLĐ 2019)</div>
-                <div class="small text-muted">Chọn 1 ngày liền kề trước (01/09) hoặc sau (03/09) ngày 02/09 theo Quyết định của Thủ tướng Chính phủ và xác nhận cho kỳ tính công/lương.</div>
+                <div class="fw-bold text-primary"><i class="ti ti-flag me-1"></i>Lễ Quốc khánh 2/9 gồm 2 ngày (Điều 112.1.đ BLLĐ 2019 • Thông báo 9441/TB-BNV)</div>
+                <div class="small text-muted">Mặc định năm 2026 chọn ngày liền trước (01/09). HR có thể chuyển giữa 01/09 (trước) và 03/09 (sau) theo thông báo của Bộ Nội vụ / Thủ tướng.</div>
             </div>
             <form asp-action="SelectNationalDayAdjacentHoliday" method="post" class="d-flex align-items-center gap-2">
                 @Html.AntiForgeryToken()
-                <input type="hidden" name="year" value="@(Model.Holidays.FirstOrDefault()?.Year ?? 2026)" />
+                <input type="hidden" name="year" value="@Model.SelectedYear" />
                 <select name="choice" class="form-select form-select-sm" style="width: auto;">
-                    <option value="Before">Ngày liền trước: 01/09</option>
-                    <option value="After" selected>Ngày liền sau: 03/09</option>
+                    <option value="Before" selected="@defaultNationalBefore">Ngày liền trước: 01/09 (Mặc định TB 9441/TB-BNV)</option>
+                    <option value="After" selected="@(!defaultNationalBefore)">Ngày liền sau: 03/09</option>
                 </select>
                 <button type="submit" class="btn btn-sm vnm-btn-primary text-nowrap">
                     <i class="ti ti-check me-1"></i>Xác nhận ngày liền kề 2/9
@@ -319,7 +357,7 @@
                         <tr>
                             <th>Ngày tháng</th>
                             <th>Thứ trong tuần</th>
-                            <th>Tên Ngày Lễ / Tết (Điều 112 BLLĐ 2019)</th>
+                            <th>Tên Ngày Lễ / Tết (Điều 112 BLLĐ sửa đổi)</th>
                             <th>Hưởng nguyên lương</th>
                             <th>Hệ số lương làm thêm (OT)</th>
                             <th class="text-end">Thao tác</th>
@@ -341,6 +379,10 @@
                                     {
                                         <span class="badge bg-warning-subtle text-warning ms-1" title="@h.LegalReference">Cần HR đối chiếu</span>
                                     }
+                                    @if (!string.IsNullOrWhiteSpace(h.LegalReference))
+                                    {
+                                        <div class="fs-7 fw-normal text-muted">@h.LegalReference</div>
+                                    }
                                 </td>
                                 <td>
                                     <span class="badge bg-success-subtle text-success">100% lương cơ bản</span>
@@ -352,6 +394,7 @@
                                     <form asp-action="DeleteHoliday" method="post" class="d-inline">
                                         @Html.AntiForgeryToken()
                                         <input type="hidden" name="id" value="@h.Id" />
+                                        <input type="hidden" name="year" value="@Model.SelectedYear" />
                                         <button type="submit" class="btn btn-sm btn-outline-danger" title="Xóa ngày lễ">
                                             <i class="ti ti-trash"></i>
                                         </button>
@@ -366,7 +409,7 @@
     </div>
 
     <!-- TAB 4: XOAY CA TỰ ĐỘNG (3 CA 4 KÍP) & ĐỔI CA GIỮA 2 NHÂN VIÊN -->
-    <div class="tab-pane fade" id="tab-rotation-swap">
+    <div class="tab-pane fade @(activeTab == "rotation-swap" ? "show active" : "")" id="tab-rotation-swap">
         <div class="row g-3">
             <div class="col-lg-5">
                 <div class="vnm-card p-3 h-100">
@@ -495,7 +538,7 @@
     </div>
 
     <!-- TAB 5: NHÓM CHÍNH SÁCH (POLICY GROUP) & THAM SỐ PHÁP LÝ -->
-    <div class="tab-pane fade" id="tab-policies">
+    <div class="tab-pane fade @(activeTab == "policies" ? "show active" : "")" id="tab-policies">
         @if (Model.StatutoryParameter != null)
         {
             var st = Model.StatutoryParameter;
@@ -791,6 +834,72 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
                 <button type="submit" class="btn btn-success">Lưu Ngày Lễ</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Sinh lịch lễ năm N từ quy tắc -->
+<div class="modal fade" id="modalGenerateHolidaysYear" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <form asp-action="GenerateHolidaysForYear" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">
+                    <i class="ti ti-calendar-cog text-warning me-2"></i>Sinh Lịch Ngày Nghỉ Lễ Năm N Từ Quy Tắc
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info fs-7 mb-3">
+                    Hệ thống tự động sinh các ngày <strong>Dương lịch cố định</strong> (01/01, 30/04, 01/05, Quốc khánh 02/09 + liền kề, Ngày Văn hóa VN 24/11).
+                    Các ngày <strong>Âm lịch</strong> (Tết Nguyên đán 5 ngày, Giỗ Tổ Hùng Vương 10/3 ÂL) do HR nhập theo Thông báo chính thức hàng năm.
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Năm cần sinh lịch (*)</label>
+                        <input type="number" name="year" class="form-control" value="@nextHolidayYear" min="2020" max="2100" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Ngày liền kề Quốc khánh 2/9</label>
+                        <select name="nationalDayAdjacentChoice" class="form-select">
+                            <option value="Before" selected>01/09 (Liền trước - mặc định TB 9441)</option>
+                            <option value="After">03/09 (Liền sau)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="includeVietnamCultureDay" value="true" checked id="chkCultureDayGen" />
+                            <label class="form-check-label fw-semibold" for="chkCultureDayGen">Ngày Văn hóa VN (24/11)</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Ngày bắt đầu nghỉ Tết Nguyên đán (5 ngày Âm lịch)</label>
+                        <input type="date" name="tetStartDate" class="form-control" />
+                        <div class="form-text">Để trống nếu chưa có lịch Âm; HR có thể bổ sung sau.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Ngày Giỗ Tổ Hùng Vương (10/3 Âm lịch quy đổi)</label>
+                        <input type="date" name="hungKingsDate" class="form-control" />
+                        <div class="form-text">Ví dụ năm 2027 là 16/04/2027 (HR đối chiếu lịch Vạn Niên).</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="autoGenerateCompensatoryIfWeekend" value="true" id="chkGenCompWeekend" />
+                            <label class="form-check-label" for="chkGenCompWeekend">Tự động sinh ngày nghỉ bù nếu ngày lễ rơi vào Thứ 7 / Chủ nhật</label>
+                        </div>
+                        <div class="form-check mt-1">
+                            <input class="form-check-input" type="checkbox" name="overwriteExistingAutoGenerated" value="true" id="chkGenOverwrite" />
+                            <label class="form-check-label" for="chkGenOverwrite">Cập nhật lại tên/căn cứ pháp lý cho các ngày đã tồn tại trong năm</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button>
+                <button type="submit" class="btn btn-warning fw-semibold">
+                    <i class="ti ti-sparkles me-1"></i>Sinh lịch lễ năm N
+                </button>
             </div>
         </form>
     </div>

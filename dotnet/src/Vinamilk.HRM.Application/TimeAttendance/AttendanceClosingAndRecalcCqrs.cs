@@ -678,6 +678,15 @@ public class AdvanceAttendanceClosingCommandHandler : IRequestHandler<AdvanceAtt
         }, cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        bool hasHolidaysInYear = await _context.Holidays
+            .AsNoTracking()
+            .AnyAsync(h => h.Year == request.Year, cancellationToken);
+        if (!hasHolidaysInYear)
+        {
+            message += $" [CẢNH BÁO: Năm {request.Year} chưa có danh mục ngày nghỉ lễ trong hệ thống — hãy sinh lịch lễ năm {request.Year} và tính lại công nếu có ngày lễ trong kỳ.]";
+        }
+
         return message;
     }
 }

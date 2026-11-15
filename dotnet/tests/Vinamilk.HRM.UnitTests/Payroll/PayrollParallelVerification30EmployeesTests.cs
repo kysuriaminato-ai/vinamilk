@@ -179,17 +179,17 @@ public class PayrollParallelVerification30EmployeesTests
             new WorkShift { Id = 3, ShiftCode = "CA_CHIEU", ShiftName = "Nhà máy Ca 2 Chiều (14:00-22:00)", ShiftType = "Fixed", StartTime = new TimeOnly(14, 0), EndTime = new TimeOnly(22, 0), StandardHours = 8m, WorkdayValue = 1m, GraceLateMinutes = 5, MaxEarlyCheckInMinutes = 120, MaxLateCheckOutMinutes = 240 },
             new WorkShift { Id = 4, ShiftCode = "CA_DEM", ShiftName = "Nhà máy Ca 3 Đêm (22:00-06:00)", ShiftType = "Overnight", StartTime = new TimeOnly(22, 0), EndTime = new TimeOnly(6, 0), IsOvernight = true, StandardHours = 8m, WorkdayValue = 1m, NightShiftAllowanceRate = 0.30m, GraceLateMinutes = 5, MaxEarlyCheckInMinutes = 120, MaxLateCheckOutMinutes = 240 });
 
-        // Seed đủ 2 ngày Lễ Quốc khánh 2026 (02/09 + ngày liền kề 03/09 mặc định chờ HR xác nhận)
+        // Seed đủ 2 ngày Lễ Quốc khánh 2026 (01/09 mặc định theo TB 9441/TB-BNV + 02/09)
         db.Holidays.AddRange(ApplicationDbContextInitializer.BuildDefaultHolidays2026()
             .Where(h => h.HolidayDate.Month == 9));
         await db.SaveChangesAsync();
 
-        // Kiểm chứng tính năng cho HR chuyển chọn ngày liền kề 01/09 (Trước) <-> 03/09 (Sau) rồi chốt về 03/09
+        // Kiểm chứng tính năng cho HR chuyển chọn ngày liền kề 03/09 (Sau) <-> 01/09 (Trước) và giữ mặc định 01/09
         var selectHolidayHandler = new SelectNationalDayAdjacentHolidayCommandHandler(db);
-        (await selectHolidayHandler.Handle(new SelectNationalDayAdjacentHolidayCommand(2026, "Before"), CancellationToken.None))
-            .Should().Be(new DateOnly(2026, 9, 1));
         (await selectHolidayHandler.Handle(new SelectNationalDayAdjacentHolidayCommand(2026, "After"), CancellationToken.None))
             .Should().Be(new DateOnly(2026, 9, 3));
+        (await selectHolidayHandler.Handle(new SelectNationalDayAdjacentHolidayCommand(2026, "Before"), CancellationToken.None))
+            .Should().Be(new DateOnly(2026, 9, 1));
 
         await db.SaveChangesAsync();
         await WorkflowSeederHelper.EnsureDefaultWorkflowsAsync(db, CancellationToken.None);
@@ -393,7 +393,7 @@ public class PayrollParallelVerification30EmployeesTests
         for (var d = sepStart; d <= sepEnd; d = d.AddDays(1))
         {
             bool isWeekend = d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
-            bool isHoliday = d == new DateOnly(2026, 9, 2) || d == new DateOnly(2026, 9, 3);
+            bool isHoliday = d == new DateOnly(2026, 9, 1) || d == new DateOnly(2026, 9, 2);
 
             foreach (var s in specs)
             {
@@ -422,7 +422,7 @@ public class PayrollParallelVerification30EmployeesTests
                     continue;
                 }
 
-                // Ngày lễ 02/09 & 03/09 nghỉ hưởng nguyên lương; chỉ E14 & E18 trực OT ngày 02/09
+                // Ngày lễ 01/09 & 02/09 nghỉ hưởng nguyên lương; chỉ E14 & E18 trực OT ngày 02/09
                 bool hasApprovedHolidayOt = d == new DateOnly(2026, 9, 2) && (s.Id == 14 || s.Id == 18);
                 if (isHoliday && !hasApprovedHolidayOt)
                     continue;
@@ -774,7 +774,7 @@ public class PayrollParallelVerification30EmployeesTests
 
         // SHEET 2: 02_ChamCong_BatThuong
         var ws2 = wb.Worksheets.Add("02_ChamCong_BatThuong");
-        ws2.Cell(1, 1).Value = "CHI TIẾT NGÀY CÔNG BẤT THƯỜNG / ĐẶC BIỆT (QUÊN CHẤM TC, ĐI MUỘN, CA ĐÊM, LỄ 02/09, PHÉP)";
+        ws2.Cell(1, 1).Value = "CHI TIẾT NGÀY CÔNG BẤT THƯỜNG / ĐẶC BIỆT (QUÊN CHẤM TC, ĐI MUỘN, CA ĐÊM, LỄ 01-02/09, PHÉP)";
         ws2.Cell(1, 1).Style.Font.Bold = true;
         string[] h2 = ["Ngày", "Mã NV", "Họ tên", "Ca làm việc", "Ký hiệu", "Giờ vào", "Giờ ra", "Công ngày", "Trễ (phút)", "Quên chấm", "OT150", "OT300 (Lễ)", "Giờ đêm", "Diễn giải engine"];
         for (int c = 0; c < h2.Length; c++)
@@ -947,9 +947,9 @@ public class PayrollParallelVerification30EmployeesTests
         var pStat = statutory.Parameter;
         (string Group, string Assumption, string Value)[] assumptions =
         [
-            ("Chế độ công chuẩn", "Tuần làm việc Thứ 2 – Thứ 6 (Mon..Fri), tháng 09/2026 gồm 22 ngày công chuẩn (20 ngày làm việc thường + 2 ngày Lễ Quốc khánh 02/09 & 03/09 hưởng nguyên lương).", "StandardWorkdays = 22 (gồm 2 ngày L)"),
-            ("Ngày Lễ & Làm thêm Lễ", "Quốc khánh 2026 gồm 2 ngày: 02/09 + 1 ngày liền kề (mặc định 03/09, HR có thể chọn 01/09 hoặc 03/09 theo QĐ Thủ tướng). E14 & E18 trực Lễ 02/09 có OvertimeRequest Approved.", "Hệ số OT300 = 300%; Đêm Lễ có phụ trội đêm"),
-            ("Ca 3 kíp & Phụ cấp đêm", "Nhà máy chia CA_SANG (06-14h), CA_CHIEU (14-22h), CA_DEM (22-06h qua đêm, IsOvernight = true). Đêm nghỉ Lễ 03/09 không quẹt thẻ -> 20 ca đêm thường (160h).", $"NightShiftAllowanceRate = {0.30m:P0}"),
+            ("Chế độ công chuẩn", "Tuần làm việc Thứ 2 – Thứ 6 (Mon..Fri), tháng 09/2026 gồm 22 ngày công chuẩn (20 ngày làm việc thường + 2 ngày Lễ Quốc khánh 01/09 & 02/09 hưởng nguyên lương).", "StandardWorkdays = 22 (gồm 2 ngày L)"),
+            ("Ngày Lễ & Làm thêm Lễ", "Quốc khánh 2026 gồm 2 ngày: 02/09 + 1 ngày liền kề (mặc định 01/09 theo Thông báo 9441/TB-BNV, HR có thể chọn 01/09 hoặc 03/09). E14 & E18 trực Lễ 02/09 có OvertimeRequest Approved.", "Hệ số OT300 = 300%; Đêm Lễ có phụ trội đêm"),
+            ("Ca 3 kíp & Phụ cấp đêm", "Nhà máy chia CA_SANG (06-14h), CA_CHIEU (14-22h), CA_DEM (22-06h qua đêm, IsOvernight = true). Đêm nghỉ Lễ 01/09 & 02/09 -> 20 ca đêm thường (160h).", $"NightShiftAllowanceRate = {0.30m:P0}"),
             ("Xử lý lỗi chấm công", "Đi muộn vượt Grace 5 phút bị ghi nhận LateMinutes; Quên chấm vào/ra (chỉ 1 punch, không giải trình) đánh TC = 0 công ngày đó.", "E05, E10, E19 đi muộn; E06, E15, E29 quên chấm TC"),
             ("Mức lương cơ sở & Vùng BHTN", "HO_ADMIN & SALES_VN thuộc Vùng I; Nhà máy NM_BS thuộc Vùng II.", $"LCS = {pStat.StatutoryBaseSalary:N0} đ; Vùng 1 = {pStat.MinWageRegion1:N0} đ; Vùng 2 = {pStat.MinWageRegion2:N0} đ"),
             ("Tỷ lệ BHXH-BHYT-BHTN & CĐ", "Áp dụng đồng nhất trên Quỹ BH có trần 20 x LCS (BHXH/BHYT) & 20 x LTT Vùng (BHTN). DN BHXH = 17% (HT-TT 14% + ÔĐ-TS 3%) + 0.5% TNLĐ-BNN = 17.5%; KPCĐ 2% tách riêng.", $"NLĐ: {pStat.EmployeeSiRate + pStat.EmployeeHiRate + pStat.EmployeeUiRate:P1}; DN: {pStat.CompanySiRate + pStat.CompanyOccupationalAccidentRate + pStat.CompanyHiRate + pStat.CompanyUiRate:P1} (BHXH {pStat.CompanySiRate + pStat.CompanyOccupationalAccidentRate:P1}); KPCĐ DN: {pStat.CompanyUnionFeeRate:P1}"),

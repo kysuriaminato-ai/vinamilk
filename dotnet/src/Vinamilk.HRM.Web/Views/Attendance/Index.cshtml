@@ -37,7 +37,8 @@
                 <i class="ti ti-refresh me-1"></i>Tổng hợp lại Công
             </button>
         </form>
-        <form asp-action="ToggleLockMonth" method="post" class="d-inline">
+        <form asp-action="ToggleLockMonth" method="post" class="d-inline"
+              onsubmit="@(!Model.IsMonthLocked && Model.HolidayCountInYear == 0 ? $"return confirm('CẢNH BÁO: Năm {Model.Year} chưa có danh mục ngày nghỉ lễ! Bạn có chắc chắn vẫn muốn khóa bảng công tháng {Model.Month:D2}/{Model.Year}?');" : "")">
             @Html.AntiForgeryToken()
             <input type="hidden" name="month" value="@Model.Month" />
             <input type="hidden" name="year" value="@Model.Year" />
@@ -70,6 +71,38 @@
     <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-3">
         <i class="ti ti-alert-triangle me-2"></i>@TempData["ErrorMessage"]
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (TempData["WarningMessage"] != null)
+{
+    <div class="alert alert-warning alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-alert-circle me-2"></i>@TempData["WarningMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (Model.HolidayCountInYear == 0)
+{
+    <div class="alert alert-danger border-0 shadow-sm d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+            <i class="ti ti-calendar-exclamation fs-5 me-2"></i>
+            <strong>CẢNH BÁO TRƯỚC KHI CHỐT CÔNG:</strong> Năm <strong>@Model.Year</strong> chưa có danh mục ngày nghỉ lễ (0 ngày lễ trong hệ thống). Nếu chốt công ngay lúc này, các ngày lễ năm @Model.Year sẽ không tự động tính ký hiệu <strong>L</strong> hoặc hệ số OT 300%!
+        </div>
+        <a href="/Shifts?year=@Model.Year&tab=holidays" class="btn btn-sm btn-danger text-nowrap">
+            <i class="ti ti-calendar-plus me-1"></i>Sinh lịch lễ năm @Model.Year
+        </a>
+    </div>
+}
+else if (Model.UnverifiedHolidaysInYear > 0 && !Model.IsMonthLocked)
+{
+    <div class="alert alert-info border-0 shadow-sm d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+            <i class="ti ti-info-circle me-2"></i>
+            Năm <strong>@Model.Year</strong> hiện có <strong>@Model.HolidayCountInYear</strong> ngày lễ, trong đó <strong>@Model.UnverifiedHolidaysInYear</strong> ngày đang chờ HR đối chiếu trước khi chốt công cuối kỳ.
+        </div>
+        <a href="/Shifts?year=@Model.Year&tab=holidays" class="btn btn-sm btn-outline-primary text-nowrap">
+            Kiểm tra lịch lễ @Model.Year
+        </a>
     </div>
 }
 
@@ -231,7 +264,8 @@
                                 2. Quản lý xác nhận
                             </button>
                         </form>
-                        <form asp-action="AdvanceClosingStep" method="post" class="d-inline">
+                        <form asp-action="AdvanceClosingStep" method="post" class="d-inline"
+                              onsubmit="@(Model.HolidayCountInYear == 0 ? $"return confirm('CẢNH BÁO: Năm {Model.Year} chưa có danh mục ngày nghỉ lễ! Vẫn tiếp tục khóa bảng công?');" : "")">
                             @Html.AntiForgeryToken()
                             <input type="hidden" name="month" value="@Model.Month" />
                             <input type="hidden" name="year" value="@Model.Year" />

@@ -238,7 +238,9 @@ public record MonthlyAttendanceBoardDto(
     DateTime? ReviewDeadlineAt = null,
     IReadOnlyList<AttendanceSymbolDefinitionDto>? Symbols = null,
     IReadOnlyList<PostLockAdjustmentDto>? PostLockAdjustments = null,
-    IReadOnlyList<AttendanceRecalculationBatchDto>? RecalculationBatches = null);
+    IReadOnlyList<AttendanceRecalculationBatchDto>? RecalculationBatches = null,
+    int HolidayCountInYear = 0,
+    int UnverifiedHolidaysInYear = 0);
 
 // ============================================================================
 // 2. AUTO-SEED DỮ LIỆU CHẤM CÔNG THÁNG & TỔNG HỢP BẢNG CÔNG
@@ -973,6 +975,12 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
                 b.RequestedByUsername, b.StartedAt, b.CompletedAt, b.Message))
             .ToListAsync(cancellationToken);
 
+        var holidayFlags = await _context.Holidays
+            .AsNoTracking()
+            .Where(h => h.Year == year)
+            .Select(h => h.NeedsHrVerification)
+            .ToListAsync(cancellationToken);
+
         return new MonthlyAttendanceBoardDto(
             month,
             year,
@@ -1006,7 +1014,9 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
             reviewDeadline,
             symbolDefs,
             postLockAdjs,
-            recalcBatches);
+            recalcBatches,
+            holidayFlags.Count,
+            holidayFlags.Count(needVerify => needVerify));
     }
 }
 
@@ -1521,9 +1531,16 @@ public class ToggleLockMonthlyAttendanceCommandHandler : IRequestHandler<ToggleL
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        return request.LockState
+        bool hasHolidaysInYear = await _context.Holidays
+            .AsNoTracking()
+            .AnyAsync(h => h.Year == request.Year, cancellationToken);
+        string missingHolidayWarning = request.LockState && !hasHolidaysInYear
+            ? $" [CẢNH BÁO: Năm {request.Year} chưa có lịch ngày nghỉ lễ nào — ngày lễ có thể chưa được tính công L/OT300%]"
+            : string.Empty;
+
+        return (request.LockState
             ? $"Đã KHÓA bảng chấm công tháng {request.Month:D2}/{request.Year} ({summaries.Count} nhân viên) để chuyển sang tính lương."
-            : $"Đã MỞ KHÓA bảng chấm công tháng {request.Month:D2}/{request.Year} để điều chỉnh.";
+            : $"Đã MỞ KHÓA bảng chấm công tháng {request.Month:D2}/{request.Year} để điều chỉnh.") + missingHolidayWarning;
     }
 }
 

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Vinamilk.HRM.Application.Common.Interfaces;
 using Vinamilk.HRM.Application.Payroll;
+using Vinamilk.HRM.Application.TimeAttendance;
 using Vinamilk.HRM.Domain.Entities.Core;
 using Vinamilk.HRM.Domain.Entities.Identity;
 using Vinamilk.HRM.Domain.Entities.Payroll;
@@ -423,6 +424,12 @@ public sealed class ApplicationDbContextInitializer
         if (!await _context.Holidays.AnyAsync(h => h.Year == 2026, cancellationToken))
         {
             await _context.Holidays.AddRangeAsync(BuildDefaultHolidays2026(), cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        else if (!await _context.Holidays.AnyAsync(h => h.HolidayDate == new DateOnly(2026, 11, 24), cancellationToken))
+        {
+            var cultureDay = BuildDefaultHolidays2026().First(h => h.HolidayDate == new DateOnly(2026, 11, 24));
+            await _context.Holidays.AddAsync(cultureDay, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
         }
 
@@ -1802,18 +1809,5 @@ public sealed class ApplicationDbContextInitializer
     ];
 
     public static List<Holiday> BuildDefaultHolidays2026() =>
-    [
-        new() { HolidayDate = new DateOnly(2026, 1, 1), HolidayName = "Tết Dương lịch 2026", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.a BLLĐ 2019", NeedsHrVerification = false },
-        new() { HolidayDate = new DateOnly(2026, 2, 16), HolidayName = "Nghỉ Tết Nguyên đán (29 Tết)", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
-        new() { HolidayDate = new DateOnly(2026, 2, 17), HolidayName = "Mùng 1 Tết Nguyên đán Bính Ngọ", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
-        new() { HolidayDate = new DateOnly(2026, 2, 18), HolidayName = "Mùng 2 Tết Nguyên đán Bính Ngọ", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
-        new() { HolidayDate = new DateOnly(2026, 2, 19), HolidayName = "Mùng 3 Tết Nguyên đán Bính Ngọ", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
-        new() { HolidayDate = new DateOnly(2026, 2, 20), HolidayName = "Mùng 4 Tết Nguyên đán Bính Ngọ", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
-        new() { HolidayDate = new DateOnly(2026, 4, 26), HolidayName = "Giỗ Tổ Hùng Vương (10/3 Âm lịch)", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.e BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
-        new() { HolidayDate = new DateOnly(2026, 4, 30), HolidayName = "Ngày Giải phóng miền Nam 30/4", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.c BLLĐ 2019", NeedsHrVerification = false },
-        new() { HolidayDate = new DateOnly(2026, 5, 1), HolidayName = "Ngày Quốc tế Lao động 1/5", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.d BLLĐ 2019", NeedsHrVerification = false },
-        new() { HolidayDate = new DateOnly(2026, 9, 2), HolidayName = "Quốc khánh nước CHXHCN Việt Nam (02/09)", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.đ BLLĐ 2019", NeedsHrVerification = false },
-        new() { HolidayDate = new DateOnly(2026, 9, 3), HolidayName = "Nghỉ liền kề Quốc khánh 2/9 (Dự kiến sau - HR xác nhận 01/09 hoặc 03/09)", Year = 2026, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.đ BLLĐ 2019 (chờ QĐ Thủ tướng: HR chọn 01/09 trước hoặc 03/09 sau)", NeedsHrVerification = true }
-    ];
+        VietnamHolidayRuleBuilder.BuildDefaultHolidays2026();
 }
-

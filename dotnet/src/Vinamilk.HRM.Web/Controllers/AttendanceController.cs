@@ -160,6 +160,10 @@ public class AttendanceController : Controller
     {
         var msg = await _sender.Send(new ToggleLockMonthlyAttendanceCommand(month, year, lockState), cancellationToken);
         TempData["SuccessMessage"] = msg;
+        if (msg.Contains("CẢNH BÁO", StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["WarningMessage"] = $"Năm {year} chưa có lịch ngày nghỉ lễ! Vui lòng vào Ca làm việc & Ngày lễ để sinh lịch lễ năm {year} trước khi tính lương.";
+        }
         return RedirectToAction(nameof(Index), new { month, year });
     }
 
@@ -443,6 +447,10 @@ public class AttendanceController : Controller
             var msg = await _sender.Send(new AdvanceAttendanceClosingCommand(
                 month, year, actionStep, unitId, forceLock), cancellationToken);
             TempData["SuccessMessage"] = msg;
+            if (msg.Contains("CẢNH BÁO", StringComparison.OrdinalIgnoreCase))
+            {
+                TempData["WarningMessage"] = $"Năm {year} chưa có lịch ngày nghỉ lễ! Vui lòng mở Ca làm việc & Ngày lễ để sinh lịch lễ năm {year} trước khi khóa sổ lương.";
+            }
         }
         catch (Exception ex)
         {
