@@ -1,6 +1,7 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Vinamilk.HRM.Application.Common.Interfaces;
 using Vinamilk.HRM.Application.TimeAttendance;
 using Vinamilk.HRM.Infrastructure.Services;
 
@@ -11,13 +12,19 @@ public class AttendanceController : Controller
 {
     private readonly ISender _sender;
     private readonly TimeAttendanceDocumentService _docService;
+    private readonly ICurrentUserService _currentUser;
+    private readonly IAttendanceDeviceSyncJob _deviceSyncJob;
 
     public AttendanceController(
         ISender sender,
-        TimeAttendanceDocumentService docService)
+        TimeAttendanceDocumentService docService,
+        ICurrentUserService currentUser,
+        IAttendanceDeviceSyncJob deviceSyncJob)
     {
         _sender = sender;
         _docService = docService;
+        _currentUser = currentUser;
+        _deviceSyncJob = deviceSyncJob;
     }
 
     [HttpGet]
@@ -43,17 +50,23 @@ public class AttendanceController : Controller
         double latitude,
         double longitude,
         string? qrToken,
+        string? clientDeviceId = null,
+        string? photoUrl = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
+            var ipAddress = _currentUser.IpAddress ?? HttpContext.Connection.RemoteIpAddress?.ToString();
             var msg = await _sender.Send(new WebCheckInCommand(
                 employeeId,
                 punchType,
                 sourceType,
                 latitude,
                 longitude,
-                qrToken), cancellationToken);
+                qrToken,
+                ClientDeviceId: clientDeviceId,
+                IpAddress: ipAddress,
+                PhotoUrl: photoUrl), cancellationToken);
 
             TempData["SuccessMessage"] = msg;
         }
@@ -162,6 +175,71 @@ public class AttendanceController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> PreviewImportExcel(
+        IFormFile? excelFile,
+        int month,
+        int year,
+        CancellationToken cancellationToken = default)
+    {
+        if (excelFile == null || excelFile.Length == 0)
+        {
+            TempData["ErrorMessage"] = "Vui lòng chọn file Excel (.xlsx) dữ liệu chấm công cần kiểm tra.";
+            return RedirectToAction(nameof(Index), new { month, year, tab = "devices" });
+        }
+
+        try
+        {
+            using var stream = excelFile.OpenReadStream();
+            var preview = await _docService.PreviewAttendanceImportFromExcelAsync(stream, cancellationToken);
+            TempData["ImportPreviewJson"] = System.Text.Json.JsonSerializer.Serialize(preview);
+            TempData["SuccessMessage"] = $"Kiểm tra Preview (chưa ghi DB): Tổng {preview.TotalRows} dòng | Hợp lệ: {preview.ValidCount} | Lỗi: {preview.ErrorCount}.";
+        }
+        catch (Exception ex)
+        {
+            TempData["ErrorMessage"] = $"Lỗi kiểm tra file Excel: {ex.Message}";
+        }
+
+        return RedirectToAction(nameof(Index), new { month, year, tab = "devices" });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ConfirmImportExcel(
+        string? previewRowsJson,
+        int month,
+        int year,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(previewRowsJson))
+        {
+            TempData["ErrorMessage"] = "Không có dữ liệu Preview hợp lệ để xác nhận import.";
+            return RedirectToAction(nameof(Index), new { month, year, tab = "devices" });
+        }
+
+        try
+        {
+            var rows = System.Text.Json.JsonSerializer.Deserialize<List<AttendanceImportPreviewRow>>(previewRowsJson)
+                ?? new List<AttendanceImportPreviewRow>();
+            var ipAddress = _currentUser.IpAddress ?? HttpContext.Connection.RemoteIpAddress?.ToString();
+            var result = await _docService.ConfirmAttendanceImportAsync(
+                rows,
+                _currentUser.RequireUserId(),
+                _currentUser.RequireUsername(),
+                ipAddress,
+                cancellationToken);
+            TempData["SuccessMessage"] = $"Xác nhận Import hoàn tất: Tổng {result.TotalRows} dòng | Thành công: {result.SuccessCount} | Lỗi/Trùng: {result.ErrorCount}.";
+            TempData["ImportResultJson"] = System.Text.Json.JsonSerializer.Serialize(result.Details);
+        }
+        catch (Exception ex)
+        {
+            TempData["ErrorMessage"] = $"Lỗi xác nhận import Excel: {ex.Message}";
+        }
+
+        return RedirectToAction(nameof(Index), new { month, year, tab = "devices" });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> ImportExcel(
         IFormFile? excelFile,
         int month,
@@ -177,7 +255,11 @@ public class AttendanceController : Controller
         try
         {
             using var stream = excelFile.OpenReadStream();
-            var result = await _docService.ImportAttendanceFromExcelAsync(stream, cancellationToken);
+            var result = await _docService.ImportAttendanceFromExcelAsync(
+                stream,
+                _currentUser.RequireUserId(),
+                _currentUser.RequireUsername(),
+                cancellationToken);
             TempData["SuccessMessage"] = $"Import hoàn tất: Tổng {result.TotalRows} dòng | Thành công: {result.SuccessCount} | Lỗi: {result.ErrorCount}.";
             TempData["ImportResultJson"] = System.Text.Json.JsonSerializer.Serialize(result.Details);
         }
@@ -187,6 +269,118 @@ public class AttendanceController : Controller
         }
 
         return RedirectToAction(nameof(Index), new { month, year });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> IngestBiometricFile(
+        string deviceCode,
+        IFormFile? logFile,
+        int month,
+        int year,
+        CancellationToken cancellationToken = default)
+    {
+        if (logFile == null || logFile.Length == 0 || string.IsNullOrWhiteSpace(deviceCode))
+        {
+            TempData["ErrorMessage"] = "Vui lòng chọn mã máy chấm công và file log (.csv/.txt/.dat).";
+            return RedirectToAction(nameof(Index), new { month, year, tab = "devices" });
+        }
+
+        try
+        {
+            using var ms = new MemoryStream();
+            await logFile.CopyToAsync(ms, cancellationToken);
+            var summary = await _sender.Send(new IngestBiometricFileCommand(deviceCode, ms.ToArray()), cancellationToken);
+            TempData["SuccessMessage"] = summary.Message;
+        }
+        catch (Exception ex)
+        {
+            TempData["ErrorMessage"] = $"Lỗi đọc file máy chấm công: {ex.Message}";
+        }
+
+        return RedirectToAction(nameof(Index), new { month, year, tab = "devices" });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MapDeviceEmployee(
+        int employeeId,
+        string deviceUserCode,
+        string? deviceCode,
+        string? notes,
+        int month,
+        int year,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var replayed = await _sender.Send(new MapEmployeeDeviceAndReplayCommand(
+                employeeId,
+                deviceUserCode,
+                deviceCode,
+                notes), cancellationToken);
+            TempData["SuccessMessage"] = $"Đã ánh xạ mã máy '{deviceUserCode}' và đẩy lại {replayed} log chờ vào bảng công.";
+        }
+        catch (Exception ex)
+        {
+            TempData["ErrorMessage"] = $"Lỗi ánh xạ mã chấm công: {ex.Message}";
+        }
+
+        return RedirectToAction(nameof(Index), new { month, year, tab = "devices" });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RunDeviceSyncNow(
+        int month,
+        int year,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var summaries = await _deviceSyncJob.SyncAllActiveDevicesAsync(cancellationToken);
+            TempData["SuccessMessage"] = $"Đã đồng bộ {summaries.Count} máy chấm công: {string.Join(" | ", summaries.Select(s => s.DeviceCode + "=" + s.ImportedCount))}";
+        }
+        catch (Exception ex)
+        {
+            TempData["ErrorMessage"] = $"Lỗi đồng bộ định kỳ: {ex.Message}";
+        }
+
+        return RedirectToAction(nameof(Index), new { month, year, tab = "devices" });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpsertManualAttendance(
+        int employeeId,
+        DateOnly workDate,
+        TimeOnly checkInTime,
+        TimeOnly? checkOutTime,
+        string attendanceSymbol,
+        string reason,
+        string? photoUrl,
+        int month,
+        int year,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _sender.Send(new UpsertManualAttendanceLogCommand(
+                employeeId,
+                workDate,
+                checkInTime,
+                checkOutTime,
+                attendanceSymbol,
+                reason,
+                photoUrl), cancellationToken);
+            TempData["SuccessMessage"] = $"Đã ghi nhận/cập nhật công nhập tay HR ngày {workDate:dd/MM/yyyy} (có lưu AuditLog).";
+        }
+        catch (Exception ex)
+        {
+            TempData["ErrorMessage"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index), new { month, year, tab = "matrix" });
     }
 
     [HttpGet]

@@ -19,17 +19,19 @@ public record GeofenceLocationSpec(
     string Address,
     double Latitude,
     double Longitude,
-    double AllowedRadiusMeters);
+    double AllowedRadiusMeters,
+    string OutsideGeofenceAction = "PendingApproval",
+    int QrRotationSeconds = 30);
 
 public static class VinamilkGeofenceCalculator
 {
     public static readonly IReadOnlyList<GeofenceLocationSpec> StandardLocations = new List<GeofenceLocationSpec>
     {
-        new("HQ_SG", "Trụ sở chính Vinamilk Tower (Q.7, TP.HCM)", "Số 10 Tân Trào, Phường Tân Phú, Quận 7, TP.HCM", 10.7296, 106.7218, 300),
-        new("NM_BD", "Nhà máy Sữa Việt Nam - Mega Factory (Bình Dương)", "KCN Mỹ Phước 2, Bến Cát, Bình Dương", 11.1154, 106.6122, 500),
-        new("NM_TS", "Nhà máy Sữa Tiên Sơn (Bắc Ninh)", "KCN Tiên Sơn, Tiên Du, Bắc Ninh", 21.1189, 105.9864, 500),
-        new("CN_HN", "Chi nhánh Vinamilk Hà Nội (Cầu Giấy)", "Tháp Thành Công, Dịch Vọng Hậu, Cầu Giấy, Hà Nội", 21.0285, 105.7892, 300),
-        new("TT_TN", "Trang trại Bò sữa Tây Ninh (Resort Bò sữa)", "Xã Long Khánh, Huyện Bến Cầu, Tây Ninh", 11.1245, 106.1520, 800)
+        new("HQ_SG", "Trụ sở chính Vinamilk Tower (Q.7, TP.HCM)", "Số 10 Tân Trào, Phường Tân Phú, Quận 7, TP.HCM", 10.7296, 106.7218, 300, "PendingApproval", 30),
+        new("NM_BD", "Nhà máy Sữa Việt Nam - Mega Factory (Bình Dương)", "KCN Mỹ Phước 2, Bến Cát, Bình Dương", 11.1154, 106.6122, 500, "Reject", 30),
+        new("NM_TS", "Nhà máy Sữa Tiên Sơn (Bắc Ninh)", "KCN Tiên Sơn, Tiên Du, Bắc Ninh", 21.1189, 105.9864, 500, "Reject", 30),
+        new("CN_HN", "Chi nhánh Vinamilk Hà Nội (Cầu Giấy)", "Tháp Thành Công, Dịch Vọng Hậu, Cầu Giấy, Hà Nội", 21.0285, 105.7892, 300, "PendingApproval", 30),
+        new("TT_TN", "Trang trại Bò sữa Tây Ninh (Resort Bò sữa)", "Xã Long Khánh, Huyện Bến Cầu, Tây Ninh", 11.1245, 106.1520, 800, "PendingApproval", 30)
     };
 
     public static double CalculateHaversineMeters(double lat1, double lon1, double lat2, double lon2)
@@ -46,9 +48,13 @@ public static class VinamilkGeofenceCalculator
         return Math.Round(EarthRadiusMeters * c, 1);
     }
 
-    public static (GeofenceLocationSpec Nearest, double DistanceMeters, bool IsWithinGeofence) EvaluateGps(double lat, double lon)
+    public static (GeofenceLocationSpec Nearest, double DistanceMeters, bool IsWithinGeofence) EvaluateGps(
+        double lat,
+        double lon,
+        IReadOnlyList<GeofenceLocationSpec>? locations = null)
     {
-        var best = StandardLocations
+        var source = locations is { Count: > 0 } ? locations : StandardLocations;
+        var best = source
             .Select(loc => (Loc: loc, Dist: CalculateHaversineMeters(lat, lon, loc.Latitude, loc.Longitude)))
             .OrderBy(x => x.Dist)
             .First();
@@ -56,11 +62,12 @@ public static class VinamilkGeofenceCalculator
         return (best.Loc, best.Dist, best.Dist <= best.Loc.AllowedRadiusMeters);
     }
 
-    public static string GenerateDynamicQrToken(DateTime utcNow)
+    public static string GenerateDynamicQrToken(DateTime utcNow, int rotationSeconds = 30)
     {
-        // Mã QR động thay đổi mỗi 5 phút
-        var windowSlot = utcNow.Ticks / TimeSpan.FromMinutes(5).Ticks;
-        var raw = $"VNM_QR_CHECKIN::{windowSlot}::VinamilkEnterprise2026";
+        // Mã QR động thay đổi mỗi 30–60 giây (mặc định 30 giây)
+        int effectiveSeconds = Math.Clamp(rotationSeconds, 30, 60);
+        var windowSlot = utcNow.Ticks / TimeSpan.FromSeconds(effectiveSeconds).Ticks;
+        var raw = $"VNM_QR_CHECKIN::{effectiveSeconds}::{windowSlot}::VinamilkEnterprise2026";
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
         return "VNM-QR-" + Convert.ToHexString(hash)[..10];
     }
@@ -133,7 +140,41 @@ public record AttendanceLogItemDto(
     string? DeviceId,
     decimal? Latitude,
     decimal? Longitude,
-    string? LocationAddress);
+    string? LocationAddress,
+    string? IpAddress = null,
+    string? PhotoUrl = null,
+    string? EnteredByUsername = null,
+    string? ManualReason = null,
+    string? GeofenceStatus = null);
+
+public record AttendanceDeviceDto(
+    int Id,
+    string DeviceCode,
+    string DeviceName,
+    string ConnectorType,
+    string? LocationName,
+    int SyncIntervalMinutes,
+    bool IsActive,
+    DateTime? LastSyncAt,
+    string? LastSyncSummary);
+
+public record EmployeeDeviceMappingDto(
+    int Id,
+    int EmployeeId,
+    string EmployeeCode,
+    string FullName,
+    string? DeviceCode,
+    string DeviceUserCode,
+    string? Notes);
+
+public record UnmappedAttendanceLogDto(
+    long Id,
+    string DeviceCode,
+    string DeviceUserCode,
+    DateTime PunchTime,
+    string PunchType,
+    string? RawPayload,
+    string Status);
 
 public record AttendanceExplanationItemDto(
     long DailyAttendanceId,
@@ -171,7 +212,10 @@ public record MonthlyAttendanceBoardDto(
     int TotalPresentToday,
     int TotalLateCasesInMonth,
     decimal TotalOtHoursInMonth,
-    int TotalBusinessTripDays);
+    int TotalBusinessTripDays,
+    IReadOnlyList<AttendanceDeviceDto>? Devices = null,
+    IReadOnlyList<EmployeeDeviceMappingDto>? DeviceMappings = null,
+    IReadOnlyList<UnmappedAttendanceLogDto>? UnmappedLogs = null);
 
 // ============================================================================
 // 2. AUTO-SEED DỮ LIỆU CHẤM CÔNG THÁNG & TỔNG HỢP BẢNG CÔNG
@@ -460,14 +504,17 @@ public static class AttendanceBoardSeeder
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    public static string GetSymbolCssClass(string symbol, int lateMinutes)
+    public static string GetSymbolCssClass(string symbol, int lateMinutes, bool isManualEdited = false)
     {
+        if (isManualEdited)
+            return "bg-warning-subtle text-dark fw-bold border border-2 border-warning vnm-manual-edited-cell";
         if (lateMinutes > 0) return "bg-danger-subtle text-danger fw-bold border-danger-subtle";
         return symbol switch
         {
             "X" => "bg-success-subtle text-success fw-semibold",
             "X/2" => "bg-warning-subtle text-warning-emphasis fw-semibold",
             "CT" => "bg-info-subtle text-info-emphasis fw-bold",
+            "CGD" => "bg-warning text-dark fw-bold",
             "P" or "P/2" => "bg-primary-subtle text-primary fw-bold",
             "L" => "bg-danger text-white fw-bold",
             "Om" or "TS" => "bg-warning text-dark fw-semibold",
@@ -587,7 +634,7 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
                         totalOt,
                         d.IsManualEdited,
                         d.EditReason,
-                        AttendanceBoardSeeder.GetSymbolCssClass(d.AttendanceSymbol, d.LateMinutes)));
+                        AttendanceBoardSeeder.GetSymbolCssClass(d.AttendanceSymbol, d.LateMinutes, d.IsManualEdited)));
                 }
                 else
                 {
@@ -704,7 +751,7 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
                 wf?.Status ?? (d.IsManualEdited ? "Approved" : "NotSubmitted"));
         }).ToList();
 
-        // Lấy nhật ký chấm công GPS / QR / Máy vân tay gần nhất
+        // Lấy nhật ký chấm công đa nguồn gần nhất
         var recentLogs = await _context.AttendanceLogs
             .AsNoTracking()
             .Include(l => l.Employee)
@@ -721,7 +768,47 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
                 l.DeviceId,
                 l.Latitude,
                 l.Longitude,
-                l.LocationAddress))
+                l.LocationAddress,
+                l.IpAddress,
+                l.PhotoUrl,
+                l.EnteredByUsername,
+                l.ManualReason,
+                l.GeofenceStatus))
+            .ToListAsync(cancellationToken);
+
+        var dbLocations = await _context.GeofenceLocations
+            .AsNoTracking()
+            .Where(g => g.IsActive)
+            .OrderBy(g => g.LocationCode)
+            .Select(g => new GeofenceLocationSpec(
+                g.LocationCode, g.LocationName, g.Address ?? string.Empty,
+                (double)g.Latitude, (double)g.Longitude, g.AllowedRadiusMeters,
+                g.OutsideGeofenceAction, g.QrRotationSeconds))
+            .ToListAsync(cancellationToken);
+
+        var effectiveLocations = dbLocations.Count > 0 ? dbLocations : VinamilkGeofenceCalculator.StandardLocations;
+        int qrSeconds = effectiveLocations.FirstOrDefault()?.QrRotationSeconds ?? 30;
+
+        var devices = await _context.AttendanceDevices
+            .AsNoTracking()
+            .OrderBy(d => d.DeviceCode)
+            .Select(d => new AttendanceDeviceDto(d.Id, d.DeviceCode, d.DeviceName, d.ConnectorType, d.LocationName, d.SyncIntervalMinutes, d.IsActive, d.LastSyncAt, d.LastSyncSummary))
+            .ToListAsync(cancellationToken);
+
+        var deviceMappings = await _context.EmployeeDeviceMappings
+            .AsNoTracking()
+            .Include(m => m.Employee)
+            .Where(m => m.IsActive)
+            .OrderBy(m => m.DeviceUserCode)
+            .Select(m => new EmployeeDeviceMappingDto(m.Id, m.EmployeeId, m.Employee.EmployeeCode, m.Employee.FullName, m.DeviceCode, m.DeviceUserCode, m.Notes))
+            .ToListAsync(cancellationToken);
+
+        var unmappedLogs = await _context.UnmappedAttendanceLogs
+            .AsNoTracking()
+            .Where(u => u.Status == "PendingMapping")
+            .OrderByDescending(u => u.PunchTime)
+            .Take(30)
+            .Select(u => new UnmappedAttendanceLogDto(u.Id, u.DeviceCode, u.DeviceUserCode, u.PunchTime, u.PunchType, u.RawPayload, u.Status))
             .ToListAsync(cancellationToken);
 
         var firstLocked = summaries.FirstOrDefault(s => s.IsLocked);
@@ -736,8 +823,8 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
             firstLocked?.LockedAt,
             request.UnitId,
             request.SearchKeyword,
-            VinamilkGeofenceCalculator.GenerateDynamicQrToken(DateTime.UtcNow),
-            VinamilkGeofenceCalculator.StandardLocations,
+            VinamilkGeofenceCalculator.GenerateDynamicQrToken(DateTime.UtcNow, qrSeconds),
+            effectiveLocations,
             units,
             activeEmps,
             matrixRows,
@@ -747,7 +834,10 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
             summaries.Count(s => s.ActualWorkdays > 0),
             summaries.Sum(s => s.TotalLateCount),
             summaries.Sum(s => s.TotalOtHours150 + s.TotalOtHours200 + s.TotalOtHours300),
-            totalBusinessTripDays);
+            totalBusinessTripDays,
+            devices,
+            deviceMappings,
+            unmappedLogs);
     }
 }
 
@@ -758,11 +848,15 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
 public record WebCheckInCommand(
     int EmployeeId,
     string PunchType, // CheckIn, CheckOut
-    string SourceType, // MobileGps, WebQr
+    string SourceType, // Web, MobileGps, WebQr
     double Latitude,
     double Longitude,
     string? QrToken = null,
-    DateTime? OverridePunchTime = null) : IRequest<string>;
+    DateTime? OverridePunchTime = null,
+    string? ClientDeviceId = null,
+    string? IpAddress = null,
+    string? PhotoUrl = null,
+    DateTime? OverrideUtcNow = null) : IRequest<string>;
 
 public class WebCheckInCommandHandler : IRequestHandler<WebCheckInCommand, string>
 {
@@ -781,6 +875,7 @@ public class WebCheckInCommandHandler : IRequestHandler<WebCheckInCommand, strin
             ?? throw new KeyNotFoundException("Không tìm thấy nhân viên chấm công.");
 
         var nowLocal = request.OverridePunchTime ?? DateTime.Now;
+        var utcNow = request.OverrideUtcNow ?? DateTime.UtcNow;
 
         // Xác định ca làm việc và NGÀY BẮT ĐẦU CA (ca qua đêm gán về ngày bắt đầu ca)
         var resolvedShift = await AttendancePolicyAndShiftEngine.ResolveShiftForPunchAsync(_context, emp.Id, nowLocal, cancellationToken);
@@ -795,18 +890,84 @@ public class WebCheckInCommandHandler : IRequestHandler<WebCheckInCommand, strin
         if (isLocked)
             throw new InvalidOperationException($"Bảng chấm công tháng {workDate.Month:D2}/{workDate.Year} đã khóa, không thể chấm công bổ sung.");
 
-        // Đánh giá tọa độ GPS Haversine
-        var (nearestLoc, distMeters, isWithinGeofence) = VinamilkGeofenceCalculator.EvaluateGps(request.Latitude, request.Longitude);
-
-        // Kiểm tra mã QR động nếu chọn phương thức WebQr
-        if (request.SourceType == "WebQr" && !string.IsNullOrWhiteSpace(request.QrToken))
+        // Chặn chấm hộ theo 1 thiết bị / 1 tài khoản (nếu client gửi định danh thiết bị)
+        if (!string.IsNullOrWhiteSpace(request.ClientDeviceId))
         {
-            var expectedQr = VinamilkGeofenceCalculator.GenerateDynamicQrToken(DateTime.UtcNow);
-            if (!request.QrToken.Trim().Equals(expectedQr, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException($"Mã QR động '{request.QrToken}' không hợp lệ hoặc đã hết hạn 5 phút (Mã hiện hành: {expectedQr}).");
+            var fp = request.ClientDeviceId.Trim();
+            var otherOwner = await _context.EmployeeDeviceBindings
+                .AsNoTracking()
+                .FirstOrDefaultAsync(b => b.IsActive && b.DeviceFingerprint == fp && b.EmployeeId != emp.Id, cancellationToken);
+            if (otherOwner != null)
+                throw new InvalidOperationException("Thiết bị này đã được gắn cho tài khoản nhân viên khác. Hệ thống chặn chấm công hộ!");
+
+            var empExistingDevice = await _context.EmployeeDeviceBindings
+                .AsNoTracking()
+                .FirstOrDefaultAsync(b => b.IsActive && b.EmployeeId == emp.Id && b.DeviceFingerprint != fp, cancellationToken);
+            if (empExistingDevice != null)
+                throw new InvalidOperationException("Tài khoản đã gắn cố định với thiết bị khác. Liên hệ HR để đổi thiết bị (chặn chấm hộ).");
+
+            var ownBinding = await _context.EmployeeDeviceBindings
+                .FirstOrDefaultAsync(b => b.IsActive && b.EmployeeId == emp.Id && b.DeviceFingerprint == fp, cancellationToken);
+            if (ownBinding == null)
+            {
+                await _context.EmployeeDeviceBindings.AddAsync(new EmployeeDeviceBinding
+                {
+                    EmployeeId = emp.Id,
+                    DeviceFingerprint = fp,
+                    DeviceLabel = request.SourceType,
+                    LastIpAddress = request.IpAddress,
+                    LastSeenAt = utcNow,
+                    IsActive = true
+                }, cancellationToken);
+            }
+            else
+            {
+                ownBinding.LastIpAddress = request.IpAddress ?? ownBinding.LastIpAddress;
+                ownBinding.LastSeenAt = utcNow;
+            }
         }
 
-        var addressNote = $"{nearestLoc.Name} (Khoảng cách GPS: {distMeters:0.#}m - {(isWithinGeofence ? "Hợp lệ trong bán kính" : "Ngoài bán kính chuẩn")})";
+        // Đánh giá tọa độ GPS Haversine theo bảng GeofenceLocations trong DB (hoặc mặc định chuẩn)
+        var dbLocations = await _context.GeofenceLocations
+            .AsNoTracking()
+            .Where(g => g.IsActive)
+            .Select(g => new GeofenceLocationSpec(
+                g.LocationCode, g.LocationName, g.Address ?? string.Empty,
+                (double)g.Latitude, (double)g.Longitude, g.AllowedRadiusMeters,
+                g.OutsideGeofenceAction, g.QrRotationSeconds))
+            .ToListAsync(cancellationToken);
+
+        var (nearestLoc, distMeters, isWithinGeofence) = VinamilkGeofenceCalculator.EvaluateGps(
+            request.Latitude, request.Longitude, dbLocations.Count > 0 ? dbLocations : null);
+
+        // Kiểm tra mã QR động (30–60 giây) nếu chọn phương thức WebQr
+        if (string.Equals(request.SourceType, "WebQr", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(request.QrToken))
+                throw new InvalidOperationException("Vui lòng quét mã QR động tại điểm chấm công.");
+
+            var expectedQr = VinamilkGeofenceCalculator.GenerateDynamicQrToken(utcNow, nearestLoc.QrRotationSeconds);
+            if (!request.QrToken.Trim().Equals(expectedQr, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Mã QR động '{request.QrToken}' không hợp lệ hoặc đã hết hạn ({nearestLoc.QrRotationSeconds} giây).");
+        }
+
+        // Xử lý ngoài Geofence theo cấu hình của địa điểm: Reject hoặc PendingApproval
+        string geofenceStatus;
+        if (isWithinGeofence)
+        {
+            geofenceStatus = "Inside";
+        }
+        else if (string.Equals(nearestLoc.OutsideGeofenceAction, "Reject", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Chấm công bị từ chối: tọa độ cách {nearestLoc.Name} là {distMeters:0.#}m, vượt bán kính cho phép {nearestLoc.AllowedRadiusMeters:0.#}m.");
+        }
+        else
+        {
+            geofenceStatus = "OutsidePendingApproval";
+        }
+
+        var addressNote = $"{nearestLoc.Name} (Khoảng cách GPS: {distMeters:0.#}m - {(isWithinGeofence ? "Trong bán kính" : "Ngoài vùng - Chờ duyệt")})";
 
         await _context.AttendanceLogs.AddAsync(new AttendanceLog
         {
@@ -814,10 +975,18 @@ public class WebCheckInCommandHandler : IRequestHandler<WebCheckInCommand, strin
             PunchTime = nowLocal,
             PunchType = request.PunchType,
             SourceType = request.SourceType,
-            DeviceId = request.SourceType == "WebQr" ? "VINAMILK-QR-KIOSK" : "VINAMILK-WEB-GPS",
+            DeviceId = !string.IsNullOrWhiteSpace(request.ClientDeviceId)
+                ? request.ClientDeviceId.Trim()
+                : (request.SourceType == "WebQr" ? "VINAMILK-QR-KIOSK" : "VINAMILK-WEB-GPS"),
             Latitude = (decimal)request.Latitude,
             Longitude = (decimal)request.Longitude,
-            LocationAddress = addressNote
+            LocationAddress = addressNote,
+            IpAddress = request.IpAddress,
+            PhotoUrl = request.PhotoUrl,
+            GeofenceLocationCode = nearestLoc.Code,
+            GeofenceStatus = geofenceStatus,
+            DistanceMeters = distMeters,
+            ClientDeviceFingerprint = request.ClientDeviceId
         }, cancellationToken);
 
         var daily = await _context.DailyAttendances
@@ -851,7 +1020,13 @@ public class WebCheckInCommandHandler : IRequestHandler<WebCheckInCommand, strin
             }
         }
 
-        if (shift != null)
+        if (geofenceStatus == "OutsidePendingApproval")
+        {
+            daily.AttendanceSymbol = "CGD";
+            daily.WorkdayCount = 0m;
+            daily.EditReason = $"[NGOÀI GEOFENCE CHỜ DUYỆT] {addressNote}";
+        }
+        else if (shift != null)
         {
             var statutory = await AttendancePolicyAndShiftEngine.ResolveStatutoryParameterAsync(_context, workDate, cancellationToken);
             var resolvedPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(_context, emp.Id, workDate, cancellationToken);
@@ -877,7 +1052,7 @@ public class WebCheckInCommandHandler : IRequestHandler<WebCheckInCommand, strin
         await _context.SaveChangesAsync(cancellationToken);
         await AttendanceBoardSeeder.RecalculateSummariesInternalAsync(_context, workDate.Month, workDate.Year, cancellationToken);
 
-        return $"Chấm công {request.PunchType} thành công cho {emp.FullName} lúc {nowLocal:HH:mm:ss} (Ngày công: {workDate:dd/MM/yyyy}) tại {addressNote}.";
+        return $"Chấm công {request.PunchType} ({geofenceStatus}) thành công cho {emp.FullName} lúc {nowLocal:HH:mm:ss} (Ngày công: {workDate:dd/MM/yyyy}) tại {addressNote}.";
     }
 }
 

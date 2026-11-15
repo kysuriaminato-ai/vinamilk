@@ -766,7 +766,35 @@ public sealed class ApplicationDbContextInitializer
             await _context.ShiftRotationPatterns.AddRangeAsync(BuildDefaultShiftRotationPatterns(), cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
         }
+
+        // Idempotent seed cho CL2: Điểm Geofence & Thiết bị máy chấm công
+        if (!await _context.GeofenceLocations.AnyAsync(cancellationToken))
+        {
+            await _context.GeofenceLocations.AddRangeAsync(BuildDefaultGeofenceLocations(), cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        if (!await _context.AttendanceDevices.AnyAsync(cancellationToken))
+        {
+            await _context.AttendanceDevices.AddRangeAsync(BuildDefaultAttendanceDevices(), cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
     }
+
+    public static List<GeofenceLocation> BuildDefaultGeofenceLocations() =>
+    [
+        new() { LocationCode = "HQ_SG", LocationName = "Trụ sở chính Vinamilk Tower (Q.7, TP.HCM)", Address = "Số 10 Tân Trào, Phường Tân Phú, Quận 7, TP.HCM", Latitude = 10.7296m, Longitude = 106.7218m, AllowedRadiusMeters = 300d, OutsideGeofenceAction = "PendingApproval", QrRotationSeconds = 30, IsActive = true },
+        new() { LocationCode = "NM_BD", LocationName = "Nhà máy Sữa Việt Nam - Mega Factory (Bình Dương)", Address = "KCN Mỹ Phước 2, Bến Cát, Bình Dương", Latitude = 11.1154m, Longitude = 106.6122m, AllowedRadiusMeters = 500d, OutsideGeofenceAction = "Reject", QrRotationSeconds = 30, IsActive = true },
+        new() { LocationCode = "NM_TS", LocationName = "Nhà máy Sữa Tiên Sơn (Bắc Ninh)", Address = "KCN Tiên Sơn, Tiên Du, Bắc Ninh", Latitude = 21.1189m, Longitude = 105.9864m, AllowedRadiusMeters = 500d, OutsideGeofenceAction = "Reject", QrRotationSeconds = 30, IsActive = true },
+        new() { LocationCode = "CN_HN", LocationName = "Chi nhánh Vinamilk Hà Nội (Cầu Giấy)", Address = "Tháp Thành Công, Dịch Vọng Hậu, Cầu Giấy, Hà Nội", Latitude = 21.0285m, Longitude = 105.7892m, AllowedRadiusMeters = 300d, OutsideGeofenceAction = "PendingApproval", QrRotationSeconds = 30, IsActive = true },
+        new() { LocationCode = "TT_TN", LocationName = "Trang trại Bò sữa Tây Ninh (Resort Bò sữa)", Address = "Xã Long Khánh, Huyện Bến Cầu, Tây Ninh", Latitude = 11.1245m, Longitude = 106.1520m, AllowedRadiusMeters = 800d, OutsideGeofenceAction = "PendingApproval", QrRotationSeconds = 30, IsActive = true }
+    ];
+
+    public static List<AttendanceDevice> BuildDefaultAttendanceDevices() =>
+    [
+        new() { DeviceCode = "ZKTECO-F22-GATE1", DeviceName = "Máy vân tay ZKTeco Cổng 1 Mega Factory (File Export CSV/TXT/DAT)", ConnectorType = "FileExport", LocationName = "Nhà máy Sữa Bình Dương", SyncIntervalMinutes = 15, IsActive = true },
+        new() { DeviceCode = "HIKVISION-FACE-HQ", DeviceName = "Máy nhận diện khuôn mặt Hikvision Trụ sở chính", ConnectorType = "FileExport", LocationName = "Trụ sở chính Vinamilk Tower", SyncIntervalMinutes = 15, IsActive = true }
+    ];
 
     public static List<AttendanceStatutoryParameter> BuildDefaultAttendanceStatutoryParameters() =>
     [

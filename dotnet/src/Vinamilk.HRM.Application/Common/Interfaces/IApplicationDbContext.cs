@@ -55,6 +55,11 @@ public interface IApplicationDbContext
     DbSet<AttendancePolicy> AttendancePolicies { get; }
     DbSet<ShiftRotationPattern> ShiftRotationPatterns { get; }
     DbSet<ShiftSwapRequest> ShiftSwapRequests { get; }
+    DbSet<GeofenceLocation> GeofenceLocations { get; }
+    DbSet<AttendanceDevice> AttendanceDevices { get; }
+    DbSet<EmployeeDeviceMapping> EmployeeDeviceMappings { get; }
+    DbSet<UnmappedAttendanceLog> UnmappedAttendanceLogs { get; }
+    DbSet<EmployeeDeviceBinding> EmployeeDeviceBindings { get; }
 
     // Payroll Schema
     DbSet<PayrollStatutoryParameter> PayrollStatutoryParameters { get; }

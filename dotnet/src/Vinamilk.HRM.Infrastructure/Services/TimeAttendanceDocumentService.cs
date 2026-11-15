@@ -2,6 +2,7 @@ using ClosedXML.Excel;
 using Microsoft.EntityFrameworkCore;
 using Vinamilk.HRM.Application.Common.Interfaces;
 using Vinamilk.HRM.Application.TimeAttendance;
+using Vinamilk.HRM.Domain.Entities.SystemEntities;
 using Vinamilk.HRM.Domain.Entities.Time;
 
 namespace Vinamilk.HRM.Infrastructure.Services;
@@ -19,6 +20,31 @@ public record AttendanceImportSummaryResult(
     int SuccessCount,
     int ErrorCount,
     IReadOnlyList<AttendanceImportRowResult> Details);
+
+public record AttendanceImportPreviewRow(
+    int RowNumber,
+    int? EmployeeId,
+    string EmployeeCode,
+    string FullName,
+    DateOnly? WorkDate,
+    string WorkDateText,
+    int? WorkShiftId,
+    string ShiftCode,
+    TimeOnly? CheckInTime,
+    TimeOnly? CheckOutTime,
+    string AttendanceSymbol,
+    decimal OvertimeHours150,
+    decimal OvertimeHours200,
+    decimal OvertimeHours300,
+    string DeviceNote,
+    bool IsValid,
+    string ValidationMessage);
+
+public record AttendanceImportPreviewResult(
+    int TotalRows,
+    int ValidCount,
+    int ErrorCount,
+    IReadOnlyList<AttendanceImportPreviewRow> Rows);
 
 public class TimeAttendanceDocumentService
 {
@@ -98,9 +124,9 @@ public class TimeAttendanceDocumentService
     }
 
     // ========================================================================
-    // 2. IMPORT DỮ LIỆU CHẤM CÔNG TỪ MÁY CHẤM CÔNG / FILE EXCEL (.XLSX)
+    // 2A. XEM TRƯỚC IMPORT EXCEL BẢNG CÔNG & BÁO LỖI TỪNG DÒNG (CHƯA GHI DB)
     // ========================================================================
-    public async Task<AttendanceImportSummaryResult> ImportAttendanceFromExcelAsync(
+    public async Task<AttendanceImportPreviewResult> PreviewAttendanceImportFromExcelAsync(
         Stream excelStream,
         CancellationToken cancellationToken = default)
     {
@@ -124,8 +150,8 @@ public class TimeAttendanceDocumentService
             .ToListAsync(cancellationToken);
 
         var lockedSet = lockedMonths.Select(x => (x.Year, x.Month)).ToHashSet();
-        var touchedMonths = new HashSet<(int Year, int Month)>();
-        var results = new List<AttendanceImportRowResult>();
+        var seenInFile = new HashSet<(int EmpId, DateOnly Date)>();
+        var previewRows = new List<AttendanceImportPreviewRow>();
 
         foreach (var row in rows)
         {
@@ -147,81 +173,204 @@ public class TimeAttendanceDocumentService
 
             if (!empDict.TryGetValue(empCode, out var emp))
             {
-                results.Add(new AttendanceImportRowResult(rowNum, empCode, empName, dateStr, false, $"Mã nhân viên '{empCode}' không tồn tại trong hệ thống."));
+                previewRows.Add(new(rowNum, null, empCode, empName, null, dateStr, null, shiftCode, null, null, symbol, ot150, ot200, ot300, deviceNote,
+                    false, $"Mã nhân viên '{empCode}' không tồn tại trong hệ thống."));
                 continue;
             }
 
             if (!DateOnly.TryParse(dateStr, out var attDate))
             {
-                results.Add(new AttendanceImportRowResult(rowNum, empCode, emp.FullName, dateStr, false, $"Ngày chấm công '{dateStr}' không đúng định dạng YYYY-MM-DD."));
+                previewRows.Add(new(rowNum, emp.Id, empCode, emp.FullName, null, dateStr, null, shiftCode, null, null, symbol, ot150, ot200, ot300, deviceNote,
+                    false, $"Ngày chấm công '{dateStr}' không đúng định dạng YYYY-MM-DD."));
                 continue;
             }
 
             if (lockedSet.Contains((attDate.Year, attDate.Month)))
             {
-                results.Add(new AttendanceImportRowResult(rowNum, empCode, emp.FullName, dateStr, false, $"Bảng công tháng {attDate.Month:D2}/{attDate.Year} đã KHÓA, không thể import đè."));
+                previewRows.Add(new(rowNum, emp.Id, empCode, emp.FullName, attDate, attDate.ToString("dd/MM/yyyy"), null, shiftCode, null, null, symbol, ot150, ot200, ot300, deviceNote,
+                    false, $"Bảng công tháng {attDate.Month:D2}/{attDate.Year} đã KHÓA, không thể import đè."));
                 continue;
             }
 
-            shiftDict.TryGetValue(string.IsNullOrEmpty(shiftCode) ? "HC" : shiftCode, out var shift);
-            var shiftStart = shift?.StartTime ?? new TimeOnly(8, 0);
-            var shiftEnd = shift?.EndTime ?? new TimeOnly(17, 0);
-            var graceMins = shift?.GraceLateMinutes ?? 5;
-
-            DateTime? checkInDt = null;
-            DateTime? checkOutDt = null;
-            int lateMins = 0;
-            int earlyMins = 0;
-
-            if (TimeOnly.TryParse(checkInStr, out var inTime))
+            if (!seenInFile.Add((emp.Id, attDate)))
             {
-                checkInDt = attDate.ToDateTime(inTime);
-                if (inTime > shiftStart.AddMinutes(graceMins))
-                    lateMins = (int)(inTime - shiftStart).TotalMinutes;
+                previewRows.Add(new(rowNum, emp.Id, empCode, emp.FullName, attDate, attDate.ToString("dd/MM/yyyy"), null, shiftCode, null, null, symbol, ot150, ot200, ot300, deviceNote,
+                    false, $"Trùng dòng cho NV {empCode} ngày {attDate:dd/MM/yyyy} trong cùng file."));
+                continue;
+            }
 
-                await _context.AttendanceLogs.AddAsync(new AttendanceLog
+            var targetShiftCode = string.IsNullOrEmpty(shiftCode) ? "HC" : shiftCode;
+            if (!shiftDict.TryGetValue(targetShiftCode, out var shift))
+            {
+                previewRows.Add(new(rowNum, emp.Id, empCode, emp.FullName, attDate, attDate.ToString("dd/MM/yyyy"), null, targetShiftCode, null, null, symbol, ot150, ot200, ot300, deviceNote,
+                    false, $"Mã ca '{targetShiftCode}' không tồn tại."));
+                continue;
+            }
+
+            TimeOnly? checkIn = null;
+            TimeOnly? checkOut = null;
+            if (!string.IsNullOrEmpty(checkInStr))
+            {
+                if (!TimeOnly.TryParse(checkInStr, out var parsedIn))
                 {
-                    EmployeeId = emp.Id,
-                    PunchTime = checkInDt.Value,
-                    PunchType = "CheckIn",
-                    SourceType = "BiometricDevice",
-                    DeviceId = string.IsNullOrEmpty(deviceNote) ? "EXCEL-IMPORT" : deviceNote,
-                    LocationAddress = "Import từ máy chấm công / Excel"
-                }, cancellationToken);
+                    previewRows.Add(new(rowNum, emp.Id, empCode, emp.FullName, attDate, attDate.ToString("dd/MM/yyyy"), shift.Id, targetShiftCode, null, null, symbol, ot150, ot200, ot300, deviceNote,
+                        false, $"Giờ vào '{checkInStr}' không đúng định dạng HH:mm."));
+                    continue;
+                }
+                checkIn = parsedIn;
             }
 
-            if (TimeOnly.TryParse(checkOutStr, out var outTime))
+            if (!string.IsNullOrEmpty(checkOutStr))
             {
-                checkOutDt = attDate.ToDateTime(outTime);
-                if (!shift?.IsOvernight == true && outTime < shiftEnd)
-                    earlyMins = (int)(shiftEnd - outTime).TotalMinutes;
+                if (!TimeOnly.TryParse(checkOutStr, out var parsedOut))
+                {
+                    previewRows.Add(new(rowNum, emp.Id, empCode, emp.FullName, attDate, attDate.ToString("dd/MM/yyyy"), shift.Id, targetShiftCode, checkIn, null, symbol, ot150, ot200, ot300, deviceNote,
+                        false, $"Giờ ra '{checkOutStr}' không đúng định dạng HH:mm."));
+                    continue;
+                }
+                checkOut = parsedOut;
             }
 
-            if (string.IsNullOrEmpty(symbol))
-                symbol = "X";
+            var effSymbol = string.IsNullOrEmpty(symbol) ? "X" : symbol;
+            previewRows.Add(new(
+                rowNum, emp.Id, empCode, emp.FullName, attDate, attDate.ToString("dd/MM/yyyy"),
+                shift.Id, targetShiftCode, checkIn, checkOut, effSymbol,
+                ot150, ot200, ot300, string.IsNullOrEmpty(deviceNote) ? "EXCEL-IMPORT" : deviceNote,
+                true, $"Hợp lệ (Ca {targetShiftCode}: {checkInStr}-{checkOutStr}, ký hiệu '{effSymbol}')"));
+        }
+
+        return new AttendanceImportPreviewResult(
+            previewRows.Count,
+            previewRows.Count(r => r.IsValid),
+            previewRows.Count(r => !r.IsValid),
+            previewRows);
+    }
+
+    // ========================================================================
+    // 2B. XÁC NHẬN GHI DỮ LIỆU HỢP LỆ TỪ BẢN XEM TRƯỚC EXCEL
+    // ========================================================================
+    public async Task<AttendanceImportSummaryResult> ConfirmAttendanceImportAsync(
+        IReadOnlyList<AttendanceImportPreviewRow> previewRows,
+        int actorUserId,
+        string actorUsername,
+        string? ipAddress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var results = new List<AttendanceImportRowResult>();
+        var touchedMonths = new HashSet<(int Year, int Month)>();
+        var shiftsById = await _context.WorkShifts.AsNoTracking().ToDictionaryAsync(s => s.Id, cancellationToken);
+
+        foreach (var row in previewRows)
+        {
+            if (!row.IsValid || !row.EmployeeId.HasValue || !row.WorkDate.HasValue)
+            {
+                results.Add(new(row.RowNumber, row.EmployeeCode, row.FullName, row.WorkDateText, false, row.ValidationMessage));
+                continue;
+            }
+
+            var empId = row.EmployeeId.Value;
+            var attDate = row.WorkDate.Value;
+            var isLocked = await _context.MonthlyAttendanceSummaries.AsNoTracking()
+                .AnyAsync(m => m.Month == attDate.Month && m.Year == attDate.Year && m.IsLocked, cancellationToken);
+            if (isLocked)
+            {
+                results.Add(new(row.RowNumber, row.EmployeeCode, row.FullName, row.WorkDateText, false, $"Bảng công tháng {attDate.Month:D2}/{attDate.Year} đã khóa."));
+                continue;
+            }
+
+            WorkShift? shift = row.WorkShiftId.HasValue ? shiftsById.GetValueOrDefault(row.WorkShiftId.Value) : null;
+            DateTime? checkInDt = row.CheckInTime.HasValue ? attDate.ToDateTime(row.CheckInTime.Value) : null;
+            DateTime? checkOutDt = null;
+            if (row.CheckOutTime.HasValue)
+            {
+                bool nextDay = shift?.IsOvernight == true || (row.CheckInTime.HasValue && row.CheckOutTime.Value <= row.CheckInTime.Value);
+                checkOutDt = (nextDay ? attDate.AddDays(1) : attDate).ToDateTime(row.CheckOutTime.Value);
+            }
+
+            if (checkInDt.HasValue)
+            {
+                var inKey = AttendanceDeviceIngestionEngine.BuildExternalLogKey("EXCEL", row.EmployeeCode, checkInDt.Value, "CheckIn");
+                if (!await _context.AttendanceLogs.AsNoTracking().AnyAsync(l => l.ExternalLogKey == inKey, cancellationToken))
+                {
+                    await _context.AttendanceLogs.AddAsync(new AttendanceLog
+                    {
+                        EmployeeId = empId,
+                        PunchTime = checkInDt.Value,
+                        PunchType = "CheckIn",
+                        SourceType = "ExcelImport",
+                        DeviceId = row.DeviceNote,
+                        LocationAddress = "Import Excel đã xác nhận",
+                        IpAddress = ipAddress,
+                        EnteredByUserId = actorUserId,
+                        EnteredByUsername = actorUsername,
+                        GeofenceStatus = "NotApplicable",
+                        ExternalLogKey = inKey
+                    }, cancellationToken);
+                }
+            }
+
+            if (checkOutDt.HasValue)
+            {
+                var outKey = AttendanceDeviceIngestionEngine.BuildExternalLogKey("EXCEL", row.EmployeeCode, checkOutDt.Value, "CheckOut");
+                if (!await _context.AttendanceLogs.AsNoTracking().AnyAsync(l => l.ExternalLogKey == outKey, cancellationToken))
+                {
+                    await _context.AttendanceLogs.AddAsync(new AttendanceLog
+                    {
+                        EmployeeId = empId,
+                        PunchTime = checkOutDt.Value,
+                        PunchType = "CheckOut",
+                        SourceType = "ExcelImport",
+                        DeviceId = row.DeviceNote,
+                        LocationAddress = "Import Excel đã xác nhận",
+                        IpAddress = ipAddress,
+                        EnteredByUserId = actorUserId,
+                        EnteredByUsername = actorUsername,
+                        GeofenceStatus = "NotApplicable",
+                        ExternalLogKey = outKey
+                    }, cancellationToken);
+                }
+            }
+
+            var statutory = await AttendancePolicyAndShiftEngine.ResolveStatutoryParameterAsync(_context, attDate, cancellationToken);
+            var resolvedPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(_context, empId, attDate, cancellationToken);
+
+            decimal workingHours = shift?.StandardHours ?? 8.0m;
+            decimal workdayCount = row.AttendanceSymbol is "KL" or "V" or "OFF" ? 0m : 1.0m;
+            decimal nightHours = 0m;
+            int lateMins = 0, earlyMins = 0;
+
+            if (shift != null && (checkInDt.HasValue || checkOutDt.HasValue))
+            {
+                var calc = AttendancePolicyAndShiftEngine.CalculatePunchAttendance(attDate, shift, checkInDt, checkOutDt, resolvedPolicy.Policy, statutory);
+                workingHours = calc.WorkingHours > 0m ? calc.WorkingHours : shift.StandardHours;
+                nightHours = calc.NightShiftHours;
+                lateMins = calc.LateMinutes;
+                earlyMins = calc.EarlyLeaveMinutes;
+                workdayCount = row.AttendanceSymbol is "KL" or "V" or "OFF" ? 0m : (calc.WorkdayCount > 0m ? calc.WorkdayCount : shift.WorkdayValue);
+            }
 
             var existingDaily = await _context.DailyAttendances
-                .FirstOrDefaultAsync(d => d.EmployeeId == emp.Id && d.AttendanceDate == attDate, cancellationToken);
+                .FirstOrDefaultAsync(d => d.EmployeeId == empId && d.AttendanceDate == attDate, cancellationToken);
 
             if (existingDaily == null)
             {
                 await _context.DailyAttendances.AddAsync(new DailyAttendance
                 {
-                    EmployeeId = emp.Id,
+                    EmployeeId = empId,
                     AttendanceDate = attDate,
                     WorkShiftId = shift?.Id,
                     CheckInTime = checkInDt,
                     CheckOutTime = checkOutDt,
-                    AttendanceSymbol = symbol,
-                    WorkingHours = shift?.StandardHours ?? 8.0m,
-                    WorkdayCount = symbol is "KL" or "V" or "OFF" ? 0m : 1.0m,
+                    AttendanceSymbol = row.AttendanceSymbol,
+                    WorkingHours = workingHours,
+                    WorkdayCount = workdayCount,
                     LateMinutes = lateMins,
                     EarlyLeaveMinutes = earlyMins,
-                    OvertimeHours150 = ot150,
-                    OvertimeHours200 = ot200,
-                    OvertimeHours300 = ot300,
-                    NightShiftHours = shift?.IsOvernight == true ? 8.0m : 0m,
-                    EditReason = string.IsNullOrEmpty(deviceNote) ? "Import Excel" : deviceNote
+                    OvertimeHours150 = row.OvertimeHours150,
+                    OvertimeHours200 = row.OvertimeHours200,
+                    OvertimeHours300 = row.OvertimeHours300,
+                    NightShiftHours = nightHours,
+                    EditReason = $"[ExcelImport: {actorUsername}] {row.DeviceNote}"
                 }, cancellationToken);
             }
             else
@@ -229,24 +378,35 @@ public class TimeAttendanceDocumentService
                 existingDaily.WorkShiftId = shift?.Id ?? existingDaily.WorkShiftId;
                 existingDaily.CheckInTime = checkInDt ?? existingDaily.CheckInTime;
                 existingDaily.CheckOutTime = checkOutDt ?? existingDaily.CheckOutTime;
-                existingDaily.AttendanceSymbol = symbol;
+                existingDaily.AttendanceSymbol = row.AttendanceSymbol;
+                existingDaily.WorkingHours = workingHours;
+                existingDaily.WorkdayCount = workdayCount;
                 existingDaily.LateMinutes = lateMins;
                 existingDaily.EarlyLeaveMinutes = earlyMins;
-                existingDaily.OvertimeHours150 = ot150;
-                existingDaily.OvertimeHours200 = ot200;
-                existingDaily.OvertimeHours300 = ot300;
-                existingDaily.EditReason = string.IsNullOrEmpty(deviceNote) ? "Cập nhật từ Import Excel" : deviceNote;
+                existingDaily.OvertimeHours150 = row.OvertimeHours150;
+                existingDaily.OvertimeHours200 = row.OvertimeHours200;
+                existingDaily.OvertimeHours300 = row.OvertimeHours300;
+                existingDaily.NightShiftHours = nightHours;
+                existingDaily.EditReason = $"[ExcelImport: {actorUsername}] {row.DeviceNote}";
             }
 
             touchedMonths.Add((attDate.Year, attDate.Month));
-            results.Add(new AttendanceImportRowResult(
-                rowNum,
-                empCode,
-                emp.FullName,
-                attDate.ToString("dd/MM/yyyy"),
-                true,
-                $"Đã lưu công '{symbol}' ({checkInStr}-{checkOutStr}, Trễ: {lateMins}p, OT: {ot150 + ot200 + ot300:0.#}h)"));
+            results.Add(new(row.RowNumber, row.EmployeeCode, row.FullName, row.WorkDateText, true,
+                $"Đã lưu công '{row.AttendanceSymbol}' (Trễ: {lateMins}p, Đêm: {nightHours:0.#}h, OT: {row.OvertimeHours150 + row.OvertimeHours200 + row.OvertimeHours300:0.#}h)"));
         }
+
+        await _context.AuditLogs.AddAsync(new AuditLog
+        {
+            UserId = actorUserId,
+            Username = actorUsername,
+            ActionType = "ExcelImportConfirm",
+            ModuleName = "TimeAttendance",
+            EntityName = "AttendanceLog",
+            EntityId = "BatchExcel",
+            NewValuesJson = $"{{\"total\":{results.Count},\"success\":{results.Count(r => r.IsSuccess)},\"errors\":{results.Count(r => !r.IsSuccess)}}}",
+            IpAddress = ipAddress,
+            CreatedAt = DateTime.UtcNow
+        }, cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);
 
@@ -260,6 +420,19 @@ public class TimeAttendanceDocumentService
             results.Count(r => r.IsSuccess),
             results.Count(r => !r.IsSuccess),
             results);
+    }
+
+    // ========================================================================
+    // 2C. WRAPPER IMPORT TRỰC TIẾP (TƯƠNG THÍCH NGƯỢC)
+    // ========================================================================
+    public async Task<AttendanceImportSummaryResult> ImportAttendanceFromExcelAsync(
+        Stream excelStream,
+        int actorUserId,
+        string actorUsername,
+        CancellationToken cancellationToken = default)
+    {
+        var preview = await PreviewAttendanceImportFromExcelAsync(excelStream, cancellationToken);
+        return await ConfirmAttendanceImportAsync(preview.Rows, actorUserId, actorUsername, null, cancellationToken);
     }
 
     // ========================================================================

@@ -63,6 +63,11 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<AttendancePolicy> AttendancePolicies => Set<AttendancePolicy>();
     public DbSet<ShiftRotationPattern> ShiftRotationPatterns => Set<ShiftRotationPattern>();
     public DbSet<ShiftSwapRequest> ShiftSwapRequests => Set<ShiftSwapRequest>();
+    public DbSet<GeofenceLocation> GeofenceLocations => Set<GeofenceLocation>();
+    public DbSet<AttendanceDevice> AttendanceDevices => Set<AttendanceDevice>();
+    public DbSet<EmployeeDeviceMapping> EmployeeDeviceMappings => Set<EmployeeDeviceMapping>();
+    public DbSet<UnmappedAttendanceLog> UnmappedAttendanceLogs => Set<UnmappedAttendanceLog>();
+    public DbSet<EmployeeDeviceBinding> EmployeeDeviceBindings => Set<EmployeeDeviceBinding>();
 
     // Payroll Schema
     public DbSet<PayrollStatutoryParameter> PayrollStatutoryParameters => Set<PayrollStatutoryParameter>();

@@ -63,12 +63,27 @@ public class AttendanceLog : BaseLongAuditableEntity
 {
     public int EmployeeId { get; set; }
     public DateTime PunchTime { get; set; }
+    /// <summary>CheckIn | CheckOut | BreakOut | BreakIn</summary>
     public string PunchType { get; set; } = "CheckIn";
+    /// <summary>Thống nhất mọi nguồn: BiometricDevice | Web | MobileGps | WebQr | ExcelImport | ManualHr</summary>
     public string SourceType { get; set; } = "BiometricDevice";
     public string? DeviceId { get; set; }
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }
     public string? LocationAddress { get; set; }
+    public string? IpAddress { get; set; }
+    public string? PhotoUrl { get; set; }
+    public int? EnteredByUserId { get; set; }
+    public string? EnteredByUsername { get; set; }
+    public string? ManualReason { get; set; }
+    public string? GeofenceLocationCode { get; set; }
+    /// <summary>Inside | OutsidePendingApproval | OutsideRejected | NotApplicable</summary>
+    public string? GeofenceStatus { get; set; }
+    public double? DistanceMeters { get; set; }
+    public string? ClientDeviceFingerprint { get; set; }
+    public bool IsManualOverride { get; set; } = false;
+    /// <summary>Khóa chống trùng log (EmployeeId/DeviceCode + PunchTime + PunchType)</summary>
+    public string? ExternalLogKey { get; set; }
 
     public Employee Employee { get; set; } = null!;
 }
@@ -315,5 +330,87 @@ public class ShiftSwapRequest : BaseAuditableEntity
     public Employee RequesterEmployee { get; set; } = null!;
     public Employee TargetEmployee { get; set; } = null!;
 }
+
+/// <summary>
+/// Địa điểm chấm công Geofence (Nhà máy / Văn phòng / Trang trại) và chính sách ngoài vùng / QR động.
+/// </summary>
+public class GeofenceLocation : BaseAuditableEntity
+{
+    public string LocationCode { get; set; } = string.Empty;
+    public string LocationName { get; set; } = string.Empty;
+    public string? Address { get; set; }
+    public decimal Latitude { get; set; }
+    public decimal Longitude { get; set; }
+    public double AllowedRadiusMeters { get; set; } = 300d;
+    /// <summary>Xử lý khi chấm ngoài vùng bán kính: Reject | PendingApproval</summary>
+    public string OutsideGeofenceAction { get; set; } = "PendingApproval";
+    /// <summary>Chu kỳ đổi mã QR động (30–60 giây).</summary>
+    public int QrRotationSeconds { get; set; } = 30;
+    public bool IsActive { get; set; } = true;
+}
+
+/// <summary>
+/// Thiết bị máy chấm công (đọc file xuất CSV/TXT/DAT hoặc kết nối SDK/API sau này).
+/// </summary>
+public class AttendanceDevice : BaseAuditableEntity
+{
+    public string DeviceCode { get; set; } = string.Empty;
+    public string DeviceName { get; set; } = string.Empty;
+    /// <summary>FileExport | ZKTecoSdk | HikvisionApi</summary>
+    public string ConnectorType { get; set; } = "FileExport";
+    public string? LocationName { get; set; }
+    public string? EndpointOrFolderPath { get; set; }
+    public int SyncIntervalMinutes { get; set; } = 15;
+    public bool IsActive { get; set; } = true;
+    public DateTime? LastSyncAt { get; set; }
+    public string? LastSyncSummary { get; set; }
+}
+
+/// <summary>
+/// Bảng ánh xạ Mã chấm công trên máy ↔ Nhân viên.
+/// </summary>
+public class EmployeeDeviceMapping : BaseAuditableEntity
+{
+    public int EmployeeId { get; set; }
+    public string? DeviceCode { get; set; }
+    public string DeviceUserCode { get; set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
+    public string? Notes { get; set; }
+
+    public Employee Employee { get; set; } = null!;
+}
+
+/// <summary>
+/// Hàng chờ các log từ máy chấm công chưa khớp mã nhân viên (không bị mất khi đồng bộ).
+/// </summary>
+public class UnmappedAttendanceLog : BaseLongAuditableEntity
+{
+    public string DeviceCode { get; set; } = string.Empty;
+    public string DeviceUserCode { get; set; } = string.Empty;
+    public DateTime PunchTime { get; set; }
+    public string PunchType { get; set; } = "CheckIn";
+    public string? RawPayload { get; set; }
+    /// <summary>PendingMapping | Resolved | Ignored</summary>
+    public string Status { get; set; } = "PendingMapping";
+    public int? ResolvedEmployeeId { get; set; }
+    public DateTime? ResolvedAt { get; set; }
+    public string? ResolvedBy { get; set; }
+}
+
+/// <summary>
+/// Gắn thiết bị chấm công Web/Mobile theo nguyên tắc 1 thiết bị / 1 tài khoản nhằm chặn chấm hộ.
+/// </summary>
+public class EmployeeDeviceBinding : BaseAuditableEntity
+{
+    public int EmployeeId { get; set; }
+    public string DeviceFingerprint { get; set; } = string.Empty;
+    public string? DeviceLabel { get; set; }
+    public string? LastIpAddress { get; set; }
+    public DateTime LastSeenAt { get; set; } = DateTime.UtcNow;
+    public bool IsActive { get; set; } = true;
+
+    public Employee Employee { get; set; } = null!;
+}
+
 
 

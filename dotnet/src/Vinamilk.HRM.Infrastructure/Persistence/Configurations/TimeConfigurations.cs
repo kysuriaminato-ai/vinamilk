@@ -78,10 +78,23 @@ public class AttendanceLogConfiguration : IEntityTypeConfiguration<AttendanceLog
         builder.Property(x => x.DeviceId).HasColumnType("varchar(50)");
         builder.Property(x => x.Latitude).HasColumnType("decimal(10,7)");
         builder.Property(x => x.Longitude).HasColumnType("decimal(10,7)");
-        builder.Property(x => x.LocationAddress).HasMaxLength(200);
+        builder.Property(x => x.LocationAddress).HasMaxLength(300);
+        builder.Property(x => x.IpAddress).HasColumnType("varchar(64)");
+        builder.Property(x => x.PhotoUrl).HasMaxLength(300);
+        builder.Property(x => x.EnteredByUsername).HasMaxLength(100);
+        builder.Property(x => x.ManualReason).HasMaxLength(500);
+        builder.Property(x => x.GeofenceLocationCode).HasColumnType("varchar(40)");
+        builder.Property(x => x.GeofenceStatus).HasColumnType("varchar(40)");
+        builder.Property(x => x.ClientDeviceFingerprint).HasColumnType("varchar(120)");
+        builder.Property(x => x.ExternalLogKey).HasColumnType("varchar(140)");
 
         builder.HasIndex(x => new { x.EmployeeId, x.PunchTime })
             .HasDatabaseName("IX_AttendanceLogs_Emp_PunchTime");
+
+        builder.HasIndex(x => x.ExternalLogKey)
+            .IsUnique()
+            .HasDatabaseName("UQ_AttendanceLogs_ExternalLogKey")
+            .HasFilter("[ExternalLogKey] IS NOT NULL AND [IsDeleted] = 0");
 
         builder.HasOne(x => x.Employee)
             .WithMany()
@@ -103,7 +116,7 @@ public class DailyAttendanceConfiguration : IEntityTypeConfiguration<DailyAttend
         builder.Property(x => x.OvertimeHours200).HasColumnType("decimal(5,2)");
         builder.Property(x => x.OvertimeHours300).HasColumnType("decimal(5,2)");
         builder.Property(x => x.NightShiftHours).HasColumnType("decimal(5,2)");
-        builder.Property(x => x.EditReason).HasMaxLength(300);
+        builder.Property(x => x.EditReason).HasMaxLength(500);
 
         builder.HasIndex(x => new { x.EmployeeId, x.AttendanceDate })
             .IsUnique()
@@ -394,5 +407,104 @@ public class ShiftSwapRequestConfiguration : IEntityTypeConfiguration<ShiftSwapR
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class GeofenceLocationConfiguration : IEntityTypeConfiguration<GeofenceLocation>
+{
+    public void Configure(EntityTypeBuilder<GeofenceLocation> builder)
+    {
+        builder.ConfigureBaseAuditable<GeofenceLocation, int>("GeofenceLocations", "time");
+
+        builder.Property(x => x.LocationCode).HasColumnType("varchar(40)").IsRequired();
+        builder.Property(x => x.LocationName).HasMaxLength(150).IsRequired();
+        builder.Property(x => x.Address).HasMaxLength(250);
+        builder.Property(x => x.Latitude).HasColumnType("decimal(10,7)");
+        builder.Property(x => x.Longitude).HasColumnType("decimal(10,7)");
+        builder.Property(x => x.OutsideGeofenceAction).HasColumnType("varchar(30)").HasDefaultValue("PendingApproval");
+
+        builder.HasIndex(x => x.LocationCode)
+            .IsUnique()
+            .HasDatabaseName("UQ_GeofenceLocations_Code")
+            .HasFilter("[IsDeleted] = 0");
+    }
+}
+
+public class AttendanceDeviceConfiguration : IEntityTypeConfiguration<AttendanceDevice>
+{
+    public void Configure(EntityTypeBuilder<AttendanceDevice> builder)
+    {
+        builder.ConfigureBaseAuditable<AttendanceDevice, int>("AttendanceDevices", "time");
+
+        builder.Property(x => x.DeviceCode).HasColumnType("varchar(50)").IsRequired();
+        builder.Property(x => x.DeviceName).HasMaxLength(150).IsRequired();
+        builder.Property(x => x.ConnectorType).HasColumnType("varchar(30)").HasDefaultValue("FileExport");
+        builder.Property(x => x.LocationName).HasMaxLength(150);
+        builder.Property(x => x.EndpointOrFolderPath).HasMaxLength(300);
+        builder.Property(x => x.LastSyncSummary).HasMaxLength(400);
+
+        builder.HasIndex(x => x.DeviceCode)
+            .IsUnique()
+            .HasDatabaseName("UQ_AttendanceDevices_Code")
+            .HasFilter("[IsDeleted] = 0");
+    }
+}
+
+public class EmployeeDeviceMappingConfiguration : IEntityTypeConfiguration<EmployeeDeviceMapping>
+{
+    public void Configure(EntityTypeBuilder<EmployeeDeviceMapping> builder)
+    {
+        builder.ConfigureBaseAuditable<EmployeeDeviceMapping, int>("EmployeeDeviceMappings", "time");
+
+        builder.Property(x => x.DeviceCode).HasColumnType("varchar(50)");
+        builder.Property(x => x.DeviceUserCode).HasColumnType("varchar(50)").IsRequired();
+        builder.Property(x => x.Notes).HasMaxLength(200);
+
+        builder.HasIndex(x => new { x.DeviceCode, x.DeviceUserCode })
+            .HasDatabaseName("IX_EmployeeDeviceMappings_DeviceUser");
+
+        builder.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class UnmappedAttendanceLogConfiguration : IEntityTypeConfiguration<UnmappedAttendanceLog>
+{
+    public void Configure(EntityTypeBuilder<UnmappedAttendanceLog> builder)
+    {
+        builder.ConfigureBaseAuditable<UnmappedAttendanceLog, long>("UnmappedAttendanceLogs", "time");
+
+        builder.Property(x => x.DeviceCode).HasColumnType("varchar(50)").IsRequired();
+        builder.Property(x => x.DeviceUserCode).HasColumnType("varchar(50)").IsRequired();
+        builder.Property(x => x.PunchType).HasColumnType("varchar(20)").IsRequired();
+        builder.Property(x => x.RawPayload).HasMaxLength(400);
+        builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("PendingMapping");
+        builder.Property(x => x.ResolvedBy).HasMaxLength(100);
+
+        builder.HasIndex(x => new { x.DeviceCode, x.DeviceUserCode, x.PunchTime, x.PunchType })
+            .HasDatabaseName("IX_UnmappedAttendanceLogs_Dedup");
+    }
+}
+
+public class EmployeeDeviceBindingConfiguration : IEntityTypeConfiguration<EmployeeDeviceBinding>
+{
+    public void Configure(EntityTypeBuilder<EmployeeDeviceBinding> builder)
+    {
+        builder.ConfigureBaseAuditable<EmployeeDeviceBinding, int>("EmployeeDeviceBindings", "time");
+
+        builder.Property(x => x.DeviceFingerprint).HasColumnType("varchar(120)").IsRequired();
+        builder.Property(x => x.DeviceLabel).HasMaxLength(150);
+        builder.Property(x => x.LastIpAddress).HasColumnType("varchar(64)");
+
+        builder.HasIndex(x => new { x.DeviceFingerprint, x.IsActive })
+            .HasDatabaseName("IX_EmployeeDeviceBindings_Device");
+
+        builder.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 
 

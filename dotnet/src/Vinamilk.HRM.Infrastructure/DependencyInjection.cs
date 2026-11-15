@@ -77,6 +77,8 @@ public static class DependencyInjection
         services.AddSingleton<IEmailNotificationService, EmailNotificationService>();
         services.AddScoped<DatabaseBackupService>();
         services.AddScoped<ContractExpirationAlertJob>();
+        services.AddScoped<Vinamilk.HRM.Application.TimeAttendance.IAttendanceDeviceConnector, Vinamilk.HRM.Application.TimeAttendance.FileAttendanceDeviceConnector>();
+        services.AddScoped<Vinamilk.HRM.Application.TimeAttendance.IAttendanceDeviceSyncJob, AttendanceDeviceSyncJob>();
 
         var useHangfireSql = configuration.GetValue<bool>("Hangfire:UseSqlServerStorage");
         if (useHangfireSql)

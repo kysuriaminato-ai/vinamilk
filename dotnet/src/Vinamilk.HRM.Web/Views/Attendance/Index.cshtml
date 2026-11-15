@@ -3,6 +3,14 @@
     ViewData["Title"] = $"Bảng Chấm Công Tháng {Model.Month:D2}/{Model.Year} • GPS/QR • OT & Giải trình";
     ViewData["BreadcrumbParent"] = "Chấm công & Nghỉ phép (Phiên 6)";
     string activeTab = ViewBag.ActiveTab as string ?? "matrix";
+    Vinamilk.HRM.Infrastructure.Services.AttendanceImportPreviewResult? importPreview = null;
+    if (TempData["ImportPreviewJson"] is string previewJson && !string.IsNullOrWhiteSpace(previewJson))
+    {
+        importPreview = System.Text.Json.JsonSerializer.Deserialize<Vinamilk.HRM.Infrastructure.Services.AttendanceImportPreviewResult>(previewJson);
+    }
+    var deviceList = Model.Devices ?? Array.Empty<Vinamilk.HRM.Application.TimeAttendance.AttendanceDeviceDto>();
+    var mappingList = Model.DeviceMappings ?? Array.Empty<Vinamilk.HRM.Application.TimeAttendance.EmployeeDeviceMappingDto>();
+    var unmappedList = Model.UnmappedLogs ?? Array.Empty<Vinamilk.HRM.Application.TimeAttendance.UnmappedAttendanceLogDto>();
 }
 
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
@@ -131,6 +139,11 @@
             <i class="ti ti-file-description me-1"></i>Giải trình Chấm công & Công tác (@Model.Explanations.Count)
         </button>
     </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "devices" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-devices" type="button">
+            <i class="ti ti-cpu me-1"></i>Máy chấm công, Mapping & Nhập tay HR (@unmappedList.Count chờ)
+        </button>
+    </li>
 </ul>
 
 <div class="tab-content">
@@ -185,6 +198,8 @@
                 <span class="badge bg-danger text-white">L : Nghỉ Lễ Tết (1.0)</span>
                 <span class="badge bg-warning text-dark">Om / TS : Ốm / Thai sản (BHXH)</span>
                 <span class="badge bg-danger-subtle text-danger">Đỏ : Đi muộn / Về sớm</span>
+                <span class="badge bg-secondary-subtle text-secondary">CGD : Ngoài vùng GPS chờ duyệt</span>
+                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning">Vàng đậm + ✎ : HR nhập tay/sửa</span>
                 <span class="badge bg-light text-muted border">OFF : Nghỉ tuần</span>
             </div>
         </div>
@@ -226,8 +241,8 @@
                                                   (cell.LateMinutes > 0 ? $" | Đi muộn {cell.LateMinutes} phút" : "") +
                                                   (cell.OvertimeHours > 0 ? $" | OT {cell.OvertimeHours:0.#}h" : "") +
                                                   (cell.EditReason != null ? $" | {cell.EditReason}" : "");
-                                    <td class="@cell.CssClass" title="@tooltip" style="cursor: pointer;">
-                                        <div>@cell.Symbol</div>
+                                    <td class="@cell.CssClass" title="@tooltip" style="cursor: pointer; @(cell.IsManualEdited ? "outline: 2px solid #f59e0b; outline-offset: -2px;" : "")">
+                                        <div>@cell.Symbol@(cell.IsManualEdited ? "✎" : "")</div>
                                         @if (cell.LateMinutes > 0)
                                         {
                                             <div style="font-size: 0.62rem;">-@cell.LateMinutes'</div>
@@ -264,11 +279,11 @@
                         <i class="ti ti-map-pin-check text-primary me-2"></i>Chấm công Web Định vị GPS (Haversine) & QR Động
                     </h5>
                     <p class="text-secondary fs-7 mb-3">
-                        Hệ thống kiểm tra khoảng cách tọa độ GPS so với bán kính cho phép của Nhà máy / Văn phòng Vinamilk hoặc xác thực mã QR Kiosk thay đổi mỗi 5 phút.
+                        Hệ thống kiểm tra khoảng cách tọa độ GPS so với bán kính cho phép của Nhà máy / Văn phòng Vinamilk, xác thực mã QR Kiosk thay đổi mỗi 30 giây và chống chấm hộ theo ID thiết bị.
                     </p>
 
                     <div class="p-3 rounded border text-center mb-3" style="background: var(--vnm-bg-subtle);">
-                        <div class="fs-7 text-muted text-uppercase fw-semibold">Mã QR Kiosk Động Hiện Hành (Hiệu lực 5 phút)</div>
+                        <div class="fs-7 text-muted text-uppercase fw-semibold">Mã QR Kiosk Động Hiện Hành (Xoay mỗi 30 giây)</div>
                         <div class="fs-3 fw-bold font-monospace text-primary my-1" id="vnmCurrentQrCode">@Model.CurrentDynamicQrToken</div>
                         <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.getElementById('qrInputBox').value='@Model.CurrentDynamicQrToken'">
                             <i class="ti ti-qrcode me-1"></i>Điền mã QR này vào form chấm công
@@ -336,6 +351,11 @@
                             <input type="text" name="qrToken" id="qrInputBox" class="form-control font-monospace" value="@Model.CurrentDynamicQrToken" />
                         </div>
 
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Device Fingerprint / Mã thiết bị cá nhân (Chống chấm công hộ)</label>
+                            <input type="text" name="clientDeviceId" id="clientDeviceIdBox" class="form-control font-monospace form-control-sm" placeholder="VD: IPHONE-15-VNM-001 (tùy chọn)" />
+                        </div>
+
                         <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">
                             <i class="ti ti-fingerprint me-1"></i>Xác nhận Chấm công Ngay
                         </button>
@@ -383,6 +403,14 @@
                                             @if (log.Latitude.HasValue && log.Longitude.HasValue)
                                             {
                                                 <span class="text-muted font-monospace">(@log.Latitude.Value.ToString("0.0000"), @log.Longitude.Value.ToString("0.0000"))</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(log.GeofenceStatus) && log.GeofenceStatus != "NotApplicable")
+                                            {
+                                                <span class="badge bg-light text-dark border ms-1">@log.GeofenceStatus</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(log.EnteredByUsername))
+                                            {
+                                                <div class="text-warning-emphasis">HR: @log.EnteredByUsername (@log.ManualReason)</div>
                                             }
                                         </td>
                                     </tr>
@@ -625,22 +653,214 @@
             </div>
         </div>
     </div>
+
+    <!-- TAB 5: MÁY CHẤM CÔNG, MAPPING, PREVIEW IMPORT & NHẬP TAY HR -->
+    <div class="tab-pane fade @(activeTab == "devices" ? "show active" : "")" id="tab-devices">
+        @if (importPreview != null)
+        {
+            <div class="vnm-card p-3 mb-3 border border-primary">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <h5 class="fw-bold mb-0 text-primary">
+                        <i class="ti ti-eye-check me-2"></i>Bước 2: Kết quả Preview Import Excel (Chưa ghi DB)
+                    </h5>
+                    <form asp-action="ConfirmImportExcel" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="month" value="@Model.Month" />
+                        <input type="hidden" name="year" value="@Model.Year" />
+                        <input type="hidden" name="previewRowsJson" value="@System.Text.Json.JsonSerializer.Serialize(importPreview.Rows)" />
+                        <button type="submit" class="btn btn-success btn-sm fw-bold" @(importPreview.ValidCount == 0 ? "disabled" : "")>
+                            <i class="ti ti-check me-1"></i>Xác nhận Ghi DB (@importPreview.ValidCount dòng hợp lệ)
+                        </button>
+                    </form>
+                </div>
+                <div class="table-responsive" style="max-height: 260px;">
+                    <table class="table table-sm table-bordered mb-0 fs-7">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Dòng</th>
+                                <th>Mã NV</th>
+                                <th>Ngày công</th>
+                                <th>Vào</th>
+                                <th>Ra</th>
+                                <th>Trạng thái</th>
+                                <th>Ghi chú lỗi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in importPreview.Rows)
+                            {
+                                <tr class="@(r.IsValid ? "" : "table-danger")">
+                                    <td>@r.RowNumber</td>
+                                    <td class="font-monospace">@r.EmployeeCode</td>
+                                    <td>@(r.WorkDate.HasValue ? r.WorkDate.Value.ToString("dd/MM/yyyy") : r.WorkDateText)</td>
+                                    <td>@r.CheckInTime?.ToString("HH:mm")</td>
+                                    <td>@r.CheckOutTime?.ToString("HH:mm")</td>
+                                    <td>@(r.IsValid ? "Hợp lệ" : "Lỗi")</td>
+                                    <td class="text-danger">@r.ValidationMessage</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <div class="row g-3 mb-3">
+            <div class="col-lg-5">
+                <div class="vnm-card p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="fw-bold mb-0"><i class="ti ti-fingerprint text-primary me-2"></i>Đọc file Máy chấm công (.csv/.txt/.dat)</h5>
+                        <form asp-action="RunDeviceSyncNow" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="month" value="@Model.Month" />
+                            <input type="hidden" name="year" value="@Model.Year" />
+                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <i class="ti ti-refresh me-1"></i>Chạy Sync Job
+                            </button>
+                        </form>
+                    </div>
+                    <form asp-action="IngestBiometricFile" method="post" enctype="multipart/form-data">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="month" value="@Model.Month" />
+                        <input type="hidden" name="year" value="@Model.Year" />
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold">Chọn Máy chấm công (*)</label>
+                            <select name="deviceCode" class="form-select form-select-sm" required>
+                                @foreach (var d in deviceList)
+                                {
+                                    <option value="@d.DeviceCode">@d.DeviceCode - @d.DeviceName (@d.ConnectorType)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold">File log xuất từ máy (.csv / .txt / .dat) (*)</label>
+                            <input type="file" name="logFile" accept=".csv,.txt,.dat" class="form-control form-control-sm" required />
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm w-100 fw-semibold">
+                            <i class="ti ti-upload me-1"></i>Đọc & Đồng bộ Log Máy chấm công
+                        </button>
+                    </form>
+
+                    <hr class="my-3" />
+                    <h6 class="fw-bold mb-2"><i class="ti ti-pencil text-warning me-1"></i>Nhập tay / Điều chỉnh công bởi HR (Bắt buộc lý do)</h6>
+                    <form asp-action="UpsertManualAttendance" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="month" value="@Model.Month" />
+                        <input type="hidden" name="year" value="@Model.Year" />
+                        <div class="mb-2">
+                            <select name="employeeId" class="form-select form-select-sm" required>
+                                @foreach (var emp in Model.ActiveEmployees)
+                                {
+                                    <option value="@emp.Id">@emp.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-4">
+                                <input type="date" name="workDate" class="form-control form-control-sm" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                            </div>
+                            <div class="col-3">
+                                <input type="time" name="checkInTime" class="form-control form-control-sm" value="08:00" required />
+                            </div>
+                            <div class="col-3">
+                                <input type="time" name="checkOutTime" class="form-control form-control-sm" value="17:00" />
+                            </div>
+                            <div class="col-2">
+                                <select name="attendanceSymbol" class="form-select form-select-sm">
+                                    <option value="X">X</option>
+                                    <option value="X/2">X/2</option>
+                                    <option value="CT">CT</option>
+                                    <option value="P">P</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <input type="text" name="reason" class="form-control form-control-sm" placeholder="Lý do nhập tay / sửa công HR (*)" required />
+                        </div>
+                        <button type="submit" class="btn btn-warning btn-sm w-100 fw-bold">
+                            <i class="ti ti-device-floppy me-1"></i>Lưu công nhập tay HR (Ghi AuditLog)
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="col-lg-7">
+                <div class="vnm-card p-3 h-100">
+                    <h5 class="fw-bold mb-2">
+                        <i class="ti ti-link text-primary me-2"></i>Hàng chờ Chưa ánh xạ Mã Máy (@unmappedList.Count) & Ánh xạ Nhân viên
+                    </h5>
+                    <form asp-action="MapDeviceEmployee" method="post" class="row g-2 mb-3">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="month" value="@Model.Month" />
+                        <input type="hidden" name="year" value="@Model.Year" />
+                        <div class="col-md-4">
+                            <select name="employeeId" class="form-select form-select-sm" required>
+                                @foreach (var emp in Model.ActiveEmployees)
+                                {
+                                    <option value="@emp.Id">@emp.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" name="deviceUserCode" class="form-control form-control-sm" placeholder="Mã user trên máy (*)" required />
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" name="deviceCode" class="form-control form-control-sm" placeholder="Mã máy (tùy chọn)" />
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-outline-success btn-sm w-100 fw-semibold">Map & Replay</button>
+                        </div>
+                    </form>
+
+                    <div class="table-responsive" style="max-height: 220px;">
+                        <table class="table table-sm table-hover mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Máy</th>
+                                    <th>Mã trên máy</th>
+                                    <th>Thời gian chấm</th>
+                                    <th>Loại</th>
+                                    <th>Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (unmappedList.Count == 0)
+                                {
+                                    <tr><td colspan="5" class="text-center text-muted py-3">Không có log chấm công nào đang chờ ánh xạ.</td></tr>
+                                }
+                                @foreach (var u in unmappedList)
+                                {
+                                    <tr>
+                                        <td class="font-monospace">@u.DeviceCode</td>
+                                        <td class="fw-bold text-danger font-monospace">@u.DeviceUserCode</td>
+                                        <td class="font-monospace">@u.PunchTime.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                        <td>@u.PunchType</td>
+                                        <td><span class="badge bg-warning-subtle text-warning-emphasis">@u.Status</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
-<!-- Modal Import Excel Máy chấm công -->
+<!-- Modal Import Excel Máy chấm công (Bước 1: Preview kiểm tra lỗi trước khi ghi DB) -->
 <div class="modal fade" id="modalImportAttendance" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <form asp-action="ImportExcel" method="post" enctype="multipart/form-data" class="modal-content border-0 shadow">
+        <form asp-action="PreviewImportExcel" method="post" enctype="multipart/form-data" class="modal-content border-0 shadow">
             @Html.AntiForgeryToken()
             <input type="hidden" name="month" value="@Model.Month" />
             <input type="hidden" name="year" value="@Model.Year" />
             <div class="modal-header">
-                <h5 class="modal-title fw-bold"><i class="ti ti-file-import text-primary me-2"></i>Import Dữ liệu từ Máy chấm công / Excel (.xlsx)</h5>
+                <h5 class="modal-title fw-bold"><i class="ti ti-file-import text-primary me-2"></i>Import 2 Bước từ Excel (Preview → Xác nhận)</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="alert alert-info border-0 fs-7">
-                    Hệ thống tự động đối chiếu giờ vào/ra với Ca làm việc để tính số phút đi muộn, về sớm, công ca đêm và giờ OT. Nếu bảng công tháng đã khóa, hệ thống sẽ từ chối ghi đè.
+                    Bước 1 sẽ đọc và báo lỗi từng dòng (trùng log, sai ngày, mã NV không tồn tại) <strong>mà chưa ghi vào CSDL</strong>. Sau khi kiểm tra bảng Preview bạn mới bấm Xác nhận ghi DB.
                 </div>
                 <div class="mb-3">
                     <a href="/Attendance/DownloadImportTemplate" class="btn btn-sm btn-outline-primary">
@@ -654,7 +874,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button>
-                <button type="submit" class="btn btn-primary">Thực hiện Import</button>
+                <button type="submit" class="btn btn-primary">Kiểm tra Preview (Chưa ghi DB)</button>
             </div>
         </form>
     </div>

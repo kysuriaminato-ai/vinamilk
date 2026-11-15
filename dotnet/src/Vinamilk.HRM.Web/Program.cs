@@ -334,6 +334,12 @@ if (app.Configuration.GetValue<bool>("Hangfire:UseSqlServerStorage"))
     {
         Authorization = new[] { new HangfireSuperAdminAuthFilter() }
     });
+
+    var syncIntervalMinutes = Math.Clamp(app.Configuration.GetValue<int?>("AttendanceSync:IntervalMinutes") ?? 15, 1, 59);
+    Hangfire.RecurringJob.AddOrUpdate<Vinamilk.HRM.Application.TimeAttendance.IAttendanceDeviceSyncJob>(
+        "attendance-device-sync",
+        job => job.SyncAllActiveDevicesAsync(CancellationToken.None),
+        $"*/{syncIntervalMinutes} * * * *");
 }
 
 app.MapControllerRoute(
