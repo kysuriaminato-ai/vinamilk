@@ -104,7 +104,7 @@ public static class WorkflowSeederHelper
         {
             "LeaveRequest", "OvertimeRequest", "AttendanceExplanation", "PersonnelTransfer", "PayrollPeriod",
             "TimeRequest:LateEarly", "TimeRequest:BusinessTrip", "TimeRequest:RemoteWork", "TimeRequest:AttendanceExplanation",
-            "ShiftSwapRequest", "RequestCancellationRequest"
+            "ShiftSwapRequest", "RequestCancellationRequest", "SalaryAdvance"
         };
         if (expectedTypes.All(t => existingEntityTypes.Contains(t)))
             return;
@@ -331,6 +331,27 @@ public static class WorkflowSeederHelper
                         ApproverUserId = chroUserId,
                         ConditionExpression = "Always",
                         SlaHours = 24
+                    }
+                }
+            },
+            new()
+            {
+                WorkflowCode = "WF_SALARY_ADVANCE",
+                WorkflowName = "Quy trình Phê duyệt Đề nghị Tạm ứng Lương (ESS)",
+                EntityType = "SalaryAdvance",
+                Description = "Kiểm soát hạn mức tạm ứng theo PolicyGroup và phê duyệt trước khi chi ứng lương / tự động khấu trừ vào kỳ lương chính.",
+                IsActive = true,
+                Steps = new List<WorkflowStep>
+                {
+                    new()
+                    {
+                        StepOrder = 1,
+                        StepName = "Bước 1: Quản lý trực tiếp / C&B phê duyệt đề nghị tạm ứng",
+                        ApproverType = "DirectManager",
+                        ApproverRoleId = hrManagerRoleId,
+                        ApproverUserId = lineManagerUserId ?? chroUserId,
+                        ConditionExpression = "Always",
+                        SlaHours = 12
                     }
                 }
             }
@@ -1094,9 +1115,12 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
 
         // 2. Trường hợp TỪ CHỐI (REJECTED) hoặc HỦY (CANCELLED)
         if (request.Action.Equals("Rejected", StringComparison.OrdinalIgnoreCase) ||
-            request.Action.Equals("Cancelled", StringComparison.OrdinalIgnoreCase))
+            request.Action.Equals("Reject", StringComparison.OrdinalIgnoreCase) ||
+            request.Action.Equals("Cancelled", StringComparison.OrdinalIgnoreCase) ||
+            request.Action.Equals("Cancel", StringComparison.OrdinalIgnoreCase))
         {
-            var isReject = request.Action.Equals("Rejected", StringComparison.OrdinalIgnoreCase);
+            var isReject = request.Action.Equals("Rejected", StringComparison.OrdinalIgnoreCase) ||
+                request.Action.Equals("Reject", StringComparison.OrdinalIgnoreCase);
             instance.Status = isReject ? "Rejected" : "Cancelled";
             instance.CompletedAt = DateTime.UtcNow;
 
@@ -1212,6 +1236,11 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
         {
             var ot = await _context.OvertimeRequests.AsNoTracking().FirstOrDefaultAsync(x => x.Id == instance.EntityId, cancellationToken);
             return ot?.RequestedHours ?? 1m;
+        }
+        if (instance.EntityType == "SalaryAdvance")
+        {
+            var adv = await _context.SalaryAdvances.AsNoTracking().FirstOrDefaultAsync(x => x.Id == instance.EntityId, cancellationToken);
+            return adv?.Amount ?? 1m;
         }
         return 1m;
     }
@@ -1528,6 +1557,34 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
                     }, cancellationToken);
                 }
                 break;
+
+            case "SalaryAdvance":
+                var approvedAdvance = await _context.SalaryAdvances
+                    .FirstOrDefaultAsync(a => a.Id == instance.EntityId, cancellationToken);
+                if (approvedAdvance != null && approvedAdvance.Status == "Pending")
+                {
+                    approvedAdvance.Status = "Approved";
+                    approvedAdvance.ApprovedByUserId = approverUserId;
+                    approvedAdvance.ApprovedAt = DateTime.UtcNow;
+                    approvedAdvance.ApproverComment = comment;
+                    await _context.AuditLogs.AddAsync(new AuditLog
+                    {
+                        UserId = approverUserId,
+                        Username = approverUsername,
+                        ModuleName = "Payroll",
+                        ActionType = "SalaryAdvance_Approve",
+                        EntityName = nameof(Domain.Entities.Payroll.SalaryAdvance),
+                        EntityId = approvedAdvance.Id.ToString(),
+                        OldValuesJson = "{\"Status\":\"Pending\"}",
+                        NewValuesJson = $"{{\"Status\":\"Approved\",\"ApprovedByUserId\":{approverUserId}}}",
+                        AffectedColumns = "Status,ApprovedByUserId,ApprovedAt,ApproverComment",
+                        IpAddress = _currentUser.IpAddress ?? "127.0.0.1",
+                        UserAgent = _currentUser.UserAgent ?? "WorkflowEngine",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = approverUsername
+                    }, cancellationToken);
+                }
+                break;
         }
     }
 
@@ -1661,6 +1718,33 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
                         OldValuesJson = "{\"Status\":\"Submitted\"}",
                         NewValuesJson = "{\"Status\":\"Calculated\"}",
                         AffectedColumns = "Status",
+                        IpAddress = _currentUser.IpAddress ?? "127.0.0.1",
+                        UserAgent = _currentUser.UserAgent ?? "WorkflowEngine",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = actorUsername
+                    }, cancellationToken);
+                }
+                break;
+
+            case "SalaryAdvance":
+                var rejectedAdvance = await _context.SalaryAdvances
+                    .FirstOrDefaultAsync(a => a.Id == instance.EntityId, cancellationToken);
+                if (rejectedAdvance != null && rejectedAdvance.Status == "Pending")
+                {
+                    string oldStatus = rejectedAdvance.Status;
+                    rejectedAdvance.Status = instance.Status; // Rejected hoặc Cancelled
+                    rejectedAdvance.ApproverComment = comment;
+                    await _context.AuditLogs.AddAsync(new AuditLog
+                    {
+                        UserId = actorUserId,
+                        Username = actorUsername,
+                        ModuleName = "Payroll",
+                        ActionType = "SalaryAdvance_Reject",
+                        EntityName = nameof(Domain.Entities.Payroll.SalaryAdvance),
+                        EntityId = rejectedAdvance.Id.ToString(),
+                        OldValuesJson = $"{{\"Status\":\"{oldStatus}\"}}",
+                        NewValuesJson = $"{{\"Status\":\"{rejectedAdvance.Status}\"}}",
+                        AffectedColumns = "Status,ApproverComment",
                         IpAddress = _currentUser.IpAddress ?? "127.0.0.1",
                         UserAgent = _currentUser.UserAgent ?? "WorkflowEngine",
                         CreatedAt = DateTime.UtcNow,

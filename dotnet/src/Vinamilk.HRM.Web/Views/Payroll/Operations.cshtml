@@ -9,6 +9,7 @@
         <a href="/Payroll/Parameters" class="btn btn-outline-primary"><i class="ti ti-adjustments-horizontal me-1"></i>2. Tham số Luật</a>
         <a href="/Payroll/SalaryStructures" class="btn btn-outline-primary"><i class="ti ti-calculator me-1"></i>3. Cấu trúc lương</a>
         <a href="/Payroll/Operations" class="btn vnm-btn-primary"><i class="ti ti-wallet me-1"></i>4. Tạm ứng / Vay / Truy lĩnh / Net→Gross</a>
+        <a href="/Payroll/TerminationSettlements" class="btn btn-outline-danger"><i class="ti ti-user-minus me-1"></i>5. Quyết toán Nghỉ việc</a>
     </div>
 </div>
 
@@ -158,6 +159,20 @@
                     </select>
                 </div>
                 <div class="col-12">
+                    <label class="form-label small fw-semibold">Chế độ tính thuế TNCN kỳ điều chỉnh</label>
+                    <select name="recalculateTaxInSourcePeriod" class="form-select form-select-sm">
+                        <option value="">Theo PolicyGroup (Mặc định: Tính lại đúng kỳ gốc)</option>
+                        <option value="true">Tính lại chênh lệch thuế đúng kỳ nguồn đã khóa</option>
+                        <option value="false">Gộp tính thuế vào kỳ mở chi trả kế tiếp</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <div class="form-check small">
+                        <input class="form-check-input" type="checkbox" name="autoAssignNextOpenPeriod" value="true" id="chkAutoNextOpen" />
+                        <label class="form-check-label" for="chkAutoNextOpen">Tự động gán vào kỳ mở kế tiếp sau kỳ nguồn</label>
+                    </div>
+                </div>
+                <div class="col-12">
                     <label class="form-label small fw-semibold">Lý do (bắt buộc)</label>
                     <input type="text" name="reason" class="form-control form-control-sm" placeholder="VD: Bổ sung 2 ngày công truy lĩnh kỳ trước..." required />
                 </div>
@@ -234,14 +249,26 @@
             <h6 class="fw-bold mb-2">Khoản vay &amp; Trả góp (@Model.Loans.Count)</h6>
             <div class="table-responsive" style="max-height: 280px; overflow-y:auto;">
                 <table class="table table-sm mb-0 small">
-                    <thead><tr><th>NV</th><th>Kỳ đã thu</th><th class="text-end">Tổng vay / Còn</th></tr></thead>
+                    <thead><tr><th>NV</th><th>Kỳ đã thu</th><th class="text-end">Tổng vay / Còn</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var l in Model.Loans)
                         {
                             <tr>
-                                <td><strong>@l.EmployeeCode</strong><div>@l.EmployeeName</div></td>
+                                <td><strong>@l.EmployeeCode</strong><div>@l.EmployeeName</div><span class="badge bg-secondary-subtle text-dark">@l.Status</span></td>
                                 <td>@l.PaidInstallments / @l.TermMonths kỳ</td>
                                 <td class="text-end"><div>@l.PrincipalAmount.ToString("N0")</div><span class="text-muted">Còn: @l.RemainingPrincipal.ToString("N0")</span></td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-xs btn-outline-primary py-0 px-1" style="font-size:11px;" onclick="viewLoanDetail(@l.Id)">Kỳ trả</button>
+                                    @if (l.Status == "Active" && l.RemainingPrincipal > 0)
+                                    {
+                                        <form method="post" action="/Payroll/SettleLoanEarly" class="d-inline" onsubmit="return confirm('Xác nhận tất toán sớm toàn bộ dư nợ còn lại của khoản vay này?');">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="employeeLoanId" value="@l.Id" />
+                                            <input type="hidden" name="reason" value="Tất toán sớm theo đề nghị" />
+                                            <button type="submit" class="btn btn-xs btn-outline-success py-0 px-1" style="font-size:11px;">Tất toán</button>
+                                        </form>
+                                    }
+                                </td>
                             </tr>
                         }
                     </tbody>
@@ -259,8 +286,22 @@
                         @foreach (var adj in Model.Adjustments)
                         {
                             <tr>
-                                <td><strong>@adj.EmployeeCode</strong><div class="text-muted">@adj.Reason</div></td>
-                                <td><span class="badge bg-info-subtle text-dark">@adj.AdjustmentType</span><div>@adj.TargetMonth.ToString("D2")/@adj.TargetYear</div></td>
+                                <td>
+                                    <strong>@adj.EmployeeCode</strong>
+                                    <div class="text-muted">@adj.Reason</div>
+                                    @if (!string.IsNullOrWhiteSpace(adj.TaxCalculationNote))
+                                    {
+                                        <div class="text-primary" style="font-size:11px;">@adj.TaxCalculationNote</div>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge bg-info-subtle text-dark">@adj.AdjustmentType</span>
+                                    <div>@adj.TargetMonth.ToString("D2")/@adj.TargetYear</div>
+                                    @if (adj.RecalculateTaxInSourcePeriod)
+                                    {
+                                        <small class="text-warning-emphasis">Δ thuế nguồn: @adj.SourcePeriodTaxDelta.ToString("+N0;-N0;0")</small>
+                                    }
+                                </td>
                                 <td class="text-end fw-semibold">@adj.Amount.ToString("N0")<div><small class="text-muted">@adj.Status</small></div></td>
                             </tr>
                         }
@@ -271,8 +312,29 @@
     </div>
 </div>
 
+<div class="modal fade" id="loanDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title fw-bold" id="loanModalTitle">Chi tiết Lịch trả góp Khoản vay</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="loanModalBody">Đang tải...</div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
 <script>
+    async function viewLoanDetail(loanId) {
+        const res = await fetch(`/Payroll/LoanDetail?id=${loanId}`);
+        const d = await res.json();
+        document.getElementById('loanModalTitle').textContent = `${d.loanCode} - ${d.employeeName} (${d.status})`;
+        const rows = d.installments.map(i => `<tr><td>Kỳ ${i.installmentNumber}</td><td>${String(i.targetMonth).padStart(2,'0')}/${i.targetYear}</td><td class="text-end">${Number(i.amount).toLocaleString('vi-VN')} đ</td><td><span class="badge bg-light text-dark">${i.status}</span></td></tr>`).join('');
+        document.getElementById('loanModalBody').innerHTML = `<div class="mb-2 small">Gốc vay: <strong>${Number(d.principalAmount).toLocaleString('vi-VN')} đ</strong> | Dư nợ còn: <strong class="text-danger">${Number(d.remainingPrincipal).toLocaleString('vi-VN')} đ</strong> | Lý do: ${d.reason}</div><table class="table table-sm small mb-0"><thead><tr><th>Kỳ</th><th>Tháng trừ</th><th class="text-end">Số tiền</th><th>Trạng thái</th></tr></thead><tbody>${rows}</tbody></table>`;
+        new bootstrap.Modal(document.getElementById('loanDetailModal')).show();
+    }
+
     document.getElementById('btnSolveNtg').addEventListener('click', async () => {
         const token = document.querySelector('#netToGrossForm input[name="__RequestVerificationToken"]').value;
         const payload = {

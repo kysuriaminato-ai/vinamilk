@@ -298,6 +298,131 @@ public sealed class PayrollDocumentService : IPayrollDocumentService
         return VietnamPayrollEngine.CalculateProgressivePitBreakdown(record.AssessableIncome, pitBrackets);
     }
 
+    public PayslipPdfResult GenerateTerminationSettlementPdf(EmployeeTerminationSettlement settlement, Employee employee)
+    {
+        ArgumentNullException.ThrowIfNull(settlement);
+        ArgumentNullException.ThrowIfNull(employee);
+
+        var plainBankAcc = _encryptionService.Decrypt(employee.BankAccountEncrypted);
+        var maskedAcc = string.IsNullOrWhiteSpace(plainBankAcc)
+            ? "Chưa cập nhật"
+            : (plainBankAcc.Length > 4 ? $"****{plainBankAcc[^4..]}" : plainBankAcc);
+
+        var doc = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(1.4f, Unit.Centimetre);
+                page.DefaultTextStyle(x => x.FontSize(9.5f));
+
+                page.Header().Column(col =>
+                {
+                    col.Item().Row(row =>
+                    {
+                        row.RelativeItem().Column(left =>
+                        {
+                            left.Item().Text("CÔNG TY CỔ PHẦN SỮA VIỆT NAM (VINAMILK)").Bold().FontSize(11).FontColor("#003DA5");
+                            left.Item().Text("Hệ thống Quản trị Nguồn nhân lực Enterprise HRM").FontSize(8.5f).FontColor("#64748b");
+                        });
+                        row.RelativeItem().AlignRight().Column(right =>
+                        {
+                            right.Item().Text($"BIÊN BẢN QUYẾT TOÁN NGHỈ VIỆC — {settlement.SettlementCode}").Bold().FontSize(11);
+                            right.Item().Text($"Ngày làm việc cuối: {settlement.LastWorkingDate:dd/MM/yyyy} | Trạng thái: {settlement.Status}").FontSize(8.5f);
+                        });
+                    });
+                    col.Item().PaddingVertical(6).LineHorizontal(1).LineColor("#003DA5");
+                });
+
+                page.Content().Column(col =>
+                {
+                    col.Spacing(8);
+
+                    col.Item().Border(0.75f).BorderColor("#cbd5e1").Padding(8).Column(info =>
+                    {
+                        info.Spacing(3);
+                        info.Item().Text($"Nhân viên: {employee.FullName.ToUpperInvariant()}   |   Mã NV: {employee.EmployeeCode}").Bold();
+                        info.Item().Text($"Đơn vị: {employee.OrganizationUnit?.UnitName ?? "-"}   |   Chức danh: {employee.Position?.PositionName ?? "-"}");
+                        info.Item().Text($"Ngày vào làm: {settlement.HireDate:dd/MM/yyyy}   |   Hình thức: {settlement.TerminationType}   |   Tài khoản nhận: {employee.BankName ?? "-"} ({maskedAcc})");
+                        info.Item().Text($"Thâm niên: {settlement.TotalTenureMonths:0.#} tháng | Đóng BHTN: {settlement.UnemploymentInsuranceCoveredMonths:0.#} tháng | Số năm hưởng TCTV: {settlement.EligibleSeveranceYears:0.#} năm");
+                    });
+
+                    col.Item().Text("I. CÁC KHOẢN CHI TRẢ QUYẾT TOÁN (GROSS SETTLEMENT)").Bold().FontColor("#003DA5");
+                    col.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(c =>
+                        {
+                            c.RelativeColumn(5);
+                            c.RelativeColumn(4);
+                            c.RelativeColumn(3);
+                        });
+
+                        AddTableHeader(table, "Khoản mục", "Cơ sở tính", "Số tiền (VNĐ)");
+                        AddTableRow(table, "1. Lương kỳ làm việc cuối cùng", $"{settlement.WorkedDaysInFinalMonth:0.##}/{settlement.StandardWorkdaysUsed:0.##} công chuẩn", $"{settlement.FinalMonthSalaryAmount:N0}");
+                        AddTableRow(table, "2. Chi trả phép năm chưa sử dụng", $"{settlement.UnusedLeaveDays:0.##} ngày phép tồn", $"{settlement.UnusedLeavePayoutAmount:N0}");
+                        AddTableRow(table, "3. Trợ cấp thôi việc theo luật định", $"{settlement.EligibleSeveranceYears:0.##} năm x {settlement.StatutorySeveranceRatePerYear:0.##} x {settlement.AverageSalaryLast6Months:N0}", $"{settlement.StatutorySeveranceAmount:N0}");
+                        AddTableRow(table, "4. Trợ cấp bổ sung chính sách nội bộ", $"{settlement.EligibleSeveranceYears:0.##} năm x {settlement.CompanyExtraSeveranceRatePerYear:0.##} tháng lương", $"{settlement.CompanyExtraSeveranceAmount:N0}");
+                        AddTableRow(table, "5. Thưởng / Truy lĩnh tồn đọng khác", $"Áp dụng kỳ {settlement.TargetPayrollMonth:D2}/{settlement.TargetPayrollYear}", $"{settlement.OtherBonusOrRetroAmount:N0}");
+                        AddTableTotalRow(table, "TỔNG THU NHẬP QUYẾT TOÁN (GROSS)", $"{settlement.TotalGrossSettlement:N0} đ");
+                    });
+
+                    col.Item().Text("II. CÁC KHOẢN KHẤU TRỪ, TẠM ỨNG & TẤT TOÁN KHOẢN VAY").Bold().FontColor("#003DA5");
+                    col.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(c =>
+                        {
+                            c.RelativeColumn(5);
+                            c.RelativeColumn(4);
+                            c.RelativeColumn(3);
+                        });
+
+                        AddTableHeader(table, "Khoản khấu trừ / Thu hồi", "Diễn giải", "Số tiền (VNĐ)");
+                        AddTableRow(table, "1. BHXH / BHYT / BHTN NLĐ đóng", "Theo lương đóng bảo hiểm kỳ cuối", $"{settlement.EmployeeInsuranceDeduction:N0}");
+                        AddTableRow(table, "2. Thuế TNCN quyết toán", "Đã loại trừ TCTV miễn thuế theo TT 111/2013", $"{settlement.PersonalIncomeTaxDeduction:N0}");
+                        AddTableRow(table, "3. Thu hồi tạm ứng lương chưa khấu trừ", "Đơn tạm ứng đã duyệt chờ cấn trừ", $"{settlement.SalaryAdvanceDeduction:N0}");
+                        AddTableRow(table, "4. Tất toán dư nợ vay / trả góp nội bộ", "Toàn bộ các kỳ còn lại của hợp đồng vay", $"{settlement.LoanPayoffDeduction:N0}");
+                        AddTableRow(table, "5. Khấu trừ / bồi hoàn khác", settlement.Notes ?? "-", $"{settlement.OtherDeduction:N0}");
+                        var totalDeductions = settlement.EmployeeInsuranceDeduction
+                            + settlement.PersonalIncomeTaxDeduction
+                            + settlement.SalaryAdvanceDeduction
+                            + settlement.LoanPayoffDeduction
+                            + settlement.OtherDeduction;
+                        AddTableTotalRow(table, "TỔNG CÁC KHOẢN KHẤU TRỪ & THU HỒI", $"{totalDeductions:N0} đ");
+                    });
+
+                    col.Item().Background("#eef4ff").Border(1).BorderColor("#003DA5").Padding(10).Row(r =>
+                    {
+                        r.RelativeItem().Column(c =>
+                        {
+                            c.Item().Text("SỐ TIỀN QUYẾT TOÁN THỰC NHẬN (NET SETTLEMENT)").Bold().FontSize(11).FontColor("#003DA5");
+                            if (settlement.RemainingDebtToRecover > 0m)
+                            {
+                                c.Item().Text($"Cảnh báo: Công nợ còn phải thu hồi thêm từ NLĐ: {settlement.RemainingDebtToRecover:N0} đ")
+                                    .FontSize(8.5f).Bold().FontColor("#b91c1c");
+                            }
+                            else
+                            {
+                                c.Item().Text("Đã đối chiếu công, phép tồn, tạm ứng lương và tất toán khoản vay nội bộ.")
+                                    .FontSize(8.5f);
+                            }
+                        });
+                        r.AutoItem().AlignMiddle().Text($"{settlement.NetSettlementAmount:N0} VNĐ").Bold().FontSize(15).FontColor("#0f766e");
+                    });
+                });
+
+                page.Footer().AlignCenter().Text(x =>
+                {
+                    x.Span($"Biên bản quyết toán nghỉ việc Vinamilk HRM • {employee.EmployeeCode} ({settlement.SettlementCode}) • Trang ");
+                    x.CurrentPageNumber();
+                });
+            });
+        });
+
+        var rawBytes = doc.GeneratePdf();
+        var fileName = $"QuyetToanNghiViec_{employee.EmployeeCode}_{settlement.SettlementCode}.pdf";
+        return new PayslipPdfResult(rawBytes, fileName, "Biên bản quyết toán nghỉ việc nội bộ", false);
+    }
+
     private static void AddTableHeader(TableDescriptor table, params string[] headers)
     {
         table.Header(h =>

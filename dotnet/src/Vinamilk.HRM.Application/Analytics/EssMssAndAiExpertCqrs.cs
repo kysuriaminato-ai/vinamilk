@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Vinamilk.HRM.Application.Common.Interfaces;
+using Vinamilk.HRM.Application.Payroll;
 using Vinamilk.HRM.Domain.Entities.SystemEntities;
 
 namespace Vinamilk.HRM.Application.Analytics;
@@ -66,7 +67,8 @@ public sealed record EssMssPortalDto(
     List<EssRequestItemDto> MyRequests,
     List<MssPendingApprovalDto> PendingApprovals,
     List<EssLeaveTypeOptionDto> LeaveTypes,
-    bool IsManager);
+    bool IsManager,
+    EssSalaryAdvanceQuotaDto? AdvanceQuota = null);
 
 public sealed record GetEssMssPortalQuery(int? EmployeeId = null) : IRequest<EssMssPortalDto>;
 
@@ -199,10 +201,27 @@ public class GetEssMssPortalQueryHandler : IRequestHandler<GetEssMssPortalQuery,
                 o.CreatedAt))
             .ToListAsync(cancellationToken);
 
-        var myRequests = leaveRequests.Concat(otRequests)
+        var advRequests = await _context.SalaryAdvances
+            .AsNoTracking()
+            .Where(a => a.EmployeeId == targetEmp.Id)
+            .OrderByDescending(a => a.CreatedAt)
+            .Take(6)
+            .Select(a => new EssRequestItemDto(
+                "Tạm ứng lương",
+                a.AdvanceNumber,
+                $"Kỳ {a.TargetMonth:D2}/{a.TargetYear} ({a.Amount:N0} đ)",
+                a.Reason,
+                a.Status,
+                a.CreatedAt))
+            .ToListAsync(cancellationToken);
+
+        var myRequests = leaveRequests.Concat(otRequests).Concat(advRequests)
             .OrderByDescending(r => r.CreatedAt)
-            .Take(10)
+            .Take(12)
             .ToList();
+
+        var advanceQuota = await new GetEssSalaryAdvanceQuotaQueryHandler(_context)
+            .Handle(new GetEssSalaryAdvanceQuotaQuery(targetEmp.Id), cancellationToken);
 
         var subordinateCount = await _context.Employees
             .CountAsync(e => e.DirectManagerId == targetEmp.Id, cancellationToken);
@@ -238,7 +257,8 @@ public class GetEssMssPortalQueryHandler : IRequestHandler<GetEssMssPortalQuery,
             myRequests,
             pendingWorkflows,
             leaveTypes,
-            isManager);
+            isManager,
+            advanceQuota);
     }
 }
 

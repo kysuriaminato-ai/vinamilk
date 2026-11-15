@@ -756,6 +756,18 @@ public sealed class ApplicationDbContextInitializer
             await _context.PolicyGroups.AddAsync(defaultGroup, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
         }
+        else if (!await _context.PayrollPolicies.AnyAsync(cancellationToken))
+        {
+            var defaultGroupId = await _context.PolicyGroups
+                .OrderByDescending(g => g.IsCompanyDefault)
+                .Select(g => g.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (defaultGroupId > 0)
+            {
+                await _context.PayrollPolicies.AddAsync(BuildDefaultPayrollPolicy(defaultGroupId), cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
 
         if (!await _context.ShiftRotationPatterns.AnyAsync(cancellationToken))
         {
@@ -1214,8 +1226,24 @@ public sealed class ApplicationDbContextInitializer
             AllowCompensatoryLeaveForOt = true,
             UseSpecialIndustry300OtLimit = false
         });
+        group.PayrollPolicies.Add(BuildDefaultPayrollPolicy(0));
         return group;
     }
+
+    public static PayrollPolicy BuildDefaultPayrollPolicy(int policyGroupId) => new()
+    {
+        PolicyGroupId = policyGroupId,
+        MaxAdvanceLimitPercent = 50.00m,
+        AdvanceMinTenureDays = 30,
+        AdvanceCutoffDayOfMonth = 25,
+        SettleLoansOnTermination = true,
+        RetroTaxMode = "RecalculateSourcePeriod",
+        ExtraSeveranceMonthsPerYear = 0m,
+        PayMidMonthAdvanceWithoutPit = true,
+        LegalReference = "Quy chế lương nội bộ Vinamilk & Điều 101 BLLĐ 2019 (tạm ứng lương)",
+        Notes = "Hạn mức tạm ứng tối đa 50% lương cơ bản, tính lại thuế TNCN kỳ gốc khi truy lĩnh/truy thu",
+        NeedsHrVerification = true
+    };
 
     public static List<ShiftRotationPattern> BuildDefaultShiftRotationPatterns() =>
     [
@@ -1267,6 +1295,10 @@ public sealed class ApplicationDbContextInitializer
             OtNightOvertimeExtraRate = 0.20m,
             OtTaxableBaseRate = 1.00m,
             IsOtExcessTaxExempt = true,
+            SeveranceAllowanceMonthsPerYear = 0.50m,
+            SeveranceMinTenureMonths = 12,
+            SeveranceRoundingHalfYearMonths = 6,
+            IsSeveranceStatutoryTaxExempt = true,
             NeedsHrVerification = true,
             SelfDeduction = 11_000_000m,
             DependentDeduction = 4_400_000m
@@ -1304,6 +1336,10 @@ public sealed class ApplicationDbContextInitializer
             OtNightOvertimeExtraRate = 0.20m,
             OtTaxableBaseRate = 1.00m,
             IsOtExcessTaxExempt = true,
+            SeveranceAllowanceMonthsPerYear = 0.50m,
+            SeveranceMinTenureMonths = 12,
+            SeveranceRoundingHalfYearMonths = 6,
+            IsSeveranceStatutoryTaxExempt = true,
             NeedsHrVerification = true,
             SelfDeduction = 15_500_000m,
             DependentDeduction = 6_200_000m
@@ -1341,6 +1377,10 @@ public sealed class ApplicationDbContextInitializer
             OtNightOvertimeExtraRate = 0.20m,
             OtTaxableBaseRate = 1.00m,
             IsOtExcessTaxExempt = true,
+            SeveranceAllowanceMonthsPerYear = 0.50m,
+            SeveranceMinTenureMonths = 12,
+            SeveranceRoundingHalfYearMonths = 6,
+            IsSeveranceStatutoryTaxExempt = true,
             NeedsHrVerification = true,
             SelfDeduction = 15_500_000m,
             DependentDeduction = 6_200_000m

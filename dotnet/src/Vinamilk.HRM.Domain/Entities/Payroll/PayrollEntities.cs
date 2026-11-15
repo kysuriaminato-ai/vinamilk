@@ -63,6 +63,14 @@ public class PayrollStatutoryParameter : BaseAuditableEntity
     public decimal PayrollVarianceWarningThresholdPercent { get; set; } = 20.00m;
     /// <summary>Tỷ lệ lương thử việc tối thiểu (% - mặc định 85% theo Điều 26 BLLĐ 2019).</summary>
     public decimal MinProbationSalaryRatePercent { get; set; } = 85.00m;
+    /// <summary>Mức hưởng trợ cấp thôi việc luật định mỗi năm làm việc (mặc định 0.5 tháng lương theo Điều 46.1 BLLĐ 2019).</summary>
+    public decimal SeveranceAllowanceMonthsPerYear { get; set; } = 0.5m;
+    /// <summary>Số tháng làm việc thường xuyên tối thiểu để hưởng trợ cấp thôi việc (mặc định 12 tháng theo Điều 46.1 BLLĐ 2019).</summary>
+    public int SeveranceMinTenureMonths { get; set; } = 12;
+    /// <summary>Ngưỡng tháng lẻ làm tròn thành 1 năm trợ cấp thôi việc (mặc định >= 6 tháng tính 1 năm, dưới 6 tháng tính 0.5 năm theo Điều 8 NĐ 145/2020/NĐ-CP).</summary>
+    public int SeveranceRoundingHalfYearMonths { get; set; } = 6;
+    /// <summary>Miễn thuế TNCN cho khoản trợ cấp thôi việc theo đúng quy định BLLĐ (Điều 2.2.b TT 111/2013/TT-BTC).</summary>
+    public bool IsSeveranceStatutoryTaxExempt { get; set; } = true;
     public bool NeedsHrVerification { get; set; } = true;
 
     public decimal GetRegionalMinWage(int wageRegion) => wageRegion switch
@@ -219,8 +227,11 @@ public class PayrollPeriod : BaseAuditableEntity
     public string PeriodCode { get; set; } = string.Empty;
     public int Month { get; set; }
     public int Year { get; set; }
-    /// <summary>Monthly (Lương tháng) | Bonus13 (Kỳ chi Thưởng tháng 13) | HolidayBonus (Kỳ chi Thưởng Lễ/Tết)</summary>
+    /// <summary>Monthly (Lương tháng) | MidMonthAdvance (Tạm ứng giữa tháng) | Bonus13 (Kỳ chi Thưởng tháng 13) | HolidayBonus (Kỳ chi Thưởng Lễ/Tết)</summary>
     public string PeriodType { get; set; } = "Monthly";
+    /// <summary>Thứ tự đợt chi trong cùng tháng (1, 2, 3...) để tính gộp thuế TNCN tháng đúng thứ tự.</summary>
+    public int DisbursementSequence { get; set; } = 1;
+    public DateOnly? DisbursementDate { get; set; }
     public string PeriodTitle { get; set; } = string.Empty;
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
@@ -383,9 +394,17 @@ public class SalaryAdvance : BaseAuditableEntity
     public int TargetMonth { get; set; }
     public decimal Amount { get; set; }
     public string Reason { get; set; } = string.Empty;
-    /// <summary>Approved | Deducted | Cancelled</summary>
+    /// <summary>Pending | Approved | Rejected | Cancelled | Deducted</summary>
     public string Status { get; set; } = "Approved";
+    public int? WorkflowInstanceId { get; set; }
+    public int? ApprovedByUserId { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public string? ApproverComment { get; set; }
+    public decimal MaxAllowedAmountSnapshot { get; set; } = 0m;
+    public int? PolicyGroupIdUsed { get; set; }
+    public int? DisbursementPayrollPeriodId { get; set; }
     public int? DeductedPayrollPeriodId { get; set; }
+    public int? TerminationSettlementId { get; set; }
 
     public Employee Employee { get; set; } = null!;
 }
@@ -417,9 +436,10 @@ public class EmployeeLoanInstallment : BaseAuditableEntity
     public int TargetYear { get; set; }
     public int TargetMonth { get; set; }
     public decimal Amount { get; set; }
-    /// <summary>Scheduled | Deducted | Waived</summary>
+    /// <summary>Scheduled | Deducted | SettledOnTermination | Waived</summary>
     public string Status { get; set; } = "Scheduled";
     public int? DeductedPayrollPeriodId { get; set; }
+    public int? TerminationSettlementId { get; set; }
 
     public EmployeeLoan EmployeeLoan { get; set; } = null!;
     public Employee Employee { get; set; } = null!;
@@ -427,6 +447,7 @@ public class EmployeeLoanInstallment : BaseAuditableEntity
 
 public class PayrollAdjustment : BaseAuditableEntity
 {
+    public string AdjustmentCode { get; set; } = string.Empty;
     public int EmployeeId { get; set; }
     public int TargetYear { get; set; }
     public int TargetMonth { get; set; }
@@ -436,10 +457,90 @@ public class PayrollAdjustment : BaseAuditableEntity
     public bool IsTaxable { get; set; } = true;
     public bool IsSocialInsuranceBase { get; set; } = false;
     public decimal Amount { get; set; }
+    public bool RecalculateTaxInSourcePeriod { get; set; } = false;
+    public decimal SourcePeriodTaxDelta { get; set; } = 0m;
+    public string? TaxCalculationNote { get; set; }
     public string Reason { get; set; } = string.Empty;
     /// <summary>Approved | Applied | Cancelled</summary>
     public string Status { get; set; } = "Approved";
     public int? AppliedPayrollPeriodId { get; set; }
+    public int? TerminationSettlementId { get; set; }
+
+    public Employee Employee { get; set; } = null!;
+}
+
+/// <summary>
+/// Chính sách lương & tạm ứng nội bộ gắn với PolicyGroup (ưu tiên: Nhân viên > Chức danh > Đơn vị > Mặc định công ty).
+/// </summary>
+public class PayrollPolicy : BaseAuditableEntity
+{
+    public int PolicyGroupId { get; set; }
+    /// <summary>Hạn mức tạm ứng lương tối đa qua ESS (% trên lương cơ bản hàng tháng).</summary>
+    public decimal MaxAdvanceLimitPercent { get; set; } = 50.00m;
+    /// <summary>Thâm niên tối thiểu (ngày) để được gửi đơn tạm ứng lương.</summary>
+    public int AdvanceMinTenureDays { get; set; } = 30;
+    /// <summary>Ngày chốt trong tháng nhận đơn tạm ứng lương.</summary>
+    public int AdvanceCutoffDayOfMonth { get; set; } = 25;
+    /// <summary>Tự động tất toán toàn bộ dư nợ vay/trả góp khi quyết toán nghỉ việc.</summary>
+    public bool SettleLoansOnTermination { get; set; } = true;
+    /// <summary>RecalculateSourcePeriod (Tính lại thuế đúng kỳ gốc phát sinh) | ApplyInTargetPeriod (Gộp thuế vào kỳ kế tiếp).</summary>
+    public string RetroTaxMode { get; set; } = "RecalculateSourcePeriod";
+    /// <summary>Mức trợ cấp thôi việc công ty hỗ trợ thêm ngoài mức luật định (tháng lương / năm làm việc).</summary>
+    public decimal ExtraSeveranceMonthsPerYear { get; set; } = 0m;
+    /// <summary>Đợt chi tạm ứng giữa tháng không khấu trừ tạm thuế, quyết toán thuế cuối tháng.</summary>
+    public bool PayMidMonthAdvanceWithoutPit { get; set; } = true;
+    public string? LegalReference { get; set; }
+    public string? Notes { get; set; }
+    public bool NeedsHrVerification { get; set; } = true;
+
+    public PolicyGroup PolicyGroup { get; set; } = null!;
+}
+
+/// <summary>
+/// Biên bản Quyết toán nghỉ việc (Final Termination Settlement): lương ngày làm cuối, phép tồn, trợ cấp thôi việc, trừ tạm ứng/vay.
+/// </summary>
+public class EmployeeTerminationSettlement : BaseAuditableEntity
+{
+    public string SettlementCode { get; set; } = string.Empty;
+    public int EmployeeId { get; set; }
+    public DateOnly HireDate { get; set; }
+    public DateOnly LastWorkingDate { get; set; }
+    /// <summary>Resignation | MutualAgreement | ContractExpiry | Dismissal | IllegalUnilateralTermination</summary>
+    public string TerminationType { get; set; } = "Resignation";
+    public bool IsEligibleForSeverance { get; set; } = true;
+    public decimal StandardWorkdaysUsed { get; set; } = 26m;
+    public decimal WorkedDaysInFinalMonth { get; set; }
+    public decimal BaseSalaryUsed { get; set; }
+    public decimal PositionAllowanceUsed { get; set; }
+    public decimal FinalMonthSalaryAmount { get; set; }
+    public decimal AverageSalaryLast6Months { get; set; }
+    public decimal TotalTenureMonths { get; set; }
+    public decimal UnemploymentInsuranceCoveredMonths { get; set; }
+    public decimal EligibleSeveranceYears { get; set; }
+    public decimal StatutorySeveranceRatePerYear { get; set; }
+    public decimal CompanyExtraSeveranceRatePerYear { get; set; }
+    public decimal StatutorySeveranceAmount { get; set; }
+    public decimal CompanyExtraSeveranceAmount { get; set; }
+    public decimal UnusedLeaveDays { get; set; }
+    public decimal UnusedLeavePayoutAmount { get; set; }
+    public decimal OtherBonusOrRetroAmount { get; set; }
+    public decimal TotalGrossSettlement { get; set; }
+    public decimal EmployeeInsuranceDeduction { get; set; }
+    public decimal PersonalIncomeTaxDeduction { get; set; }
+    public decimal SalaryAdvanceDeduction { get; set; }
+    public decimal LoanPayoffDeduction { get; set; }
+    public decimal OtherDeduction { get; set; }
+    public decimal NetSettlementAmount { get; set; }
+    public decimal RemainingDebtToRecover { get; set; }
+    public string? CalculationBreakdownJson { get; set; }
+    /// <summary>Draft | Approved | Paid | Cancelled</summary>
+    public string Status { get; set; } = "Draft";
+    public int TargetPayrollYear { get; set; }
+    public int TargetPayrollMonth { get; set; }
+    public int? ApprovedByUserId { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public DateTime? PaidAt { get; set; }
+    public string? Notes { get; set; }
 
     public Employee Employee { get; set; } = null!;
 }

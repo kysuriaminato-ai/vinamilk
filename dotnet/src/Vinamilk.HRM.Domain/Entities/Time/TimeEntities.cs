@@ -316,6 +316,7 @@ public class PolicyGroup : BaseAuditableEntity
     public string? Description { get; set; }
 
     public ICollection<AttendancePolicy> AttendancePolicies { get; set; } = new List<AttendancePolicy>();
+    public ICollection<Vinamilk.HRM.Domain.Entities.Payroll.PayrollPolicy> PayrollPolicies { get; set; } = new List<Vinamilk.HRM.Domain.Entities.Payroll.PayrollPolicy>();
     public ICollection<PolicyGroupAssignment> Assignments { get; set; } = new List<PolicyGroupAssignment>();
 }
 

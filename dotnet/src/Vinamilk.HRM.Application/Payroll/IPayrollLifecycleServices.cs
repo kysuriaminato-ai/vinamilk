@@ -90,6 +90,10 @@ public interface IPayrollDocumentService
         IReadOnlyList<PitBracket> pitBrackets,
         bool applyPassword = true);
 
+    PayslipPdfResult GenerateTerminationSettlementPdf(
+        EmployeeTerminationSettlement settlement,
+        Employee employee);
+
     byte[] ExportDepartmentSummaryExcel(PayrollDepartmentSummaryReportDto report);
 }
 

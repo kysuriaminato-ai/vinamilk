@@ -1,0 +1,152 @@
+@model Vinamilk.HRM.Application.Payroll.TerminationSettlementOverviewDto
+@{
+    ViewData["Title"] = "Quyết toán Nghỉ việc (Final Settlement & Trợ cấp thôi việc)";
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Payroll" class="btn btn-outline-primary"><i class="ti ti-cash me-1"></i>1. Bảng lương &amp; Kỳ tính lương</a>
+        <a href="/Payroll/Parameters" class="btn btn-outline-primary"><i class="ti ti-adjustments-horizontal me-1"></i>2. Tham số Luật</a>
+        <a href="/Payroll/SalaryStructures" class="btn btn-outline-primary"><i class="ti ti-calculator me-1"></i>3. Cấu trúc lương</a>
+        <a href="/Payroll/Operations" class="btn btn-outline-primary"><i class="ti ti-wallet me-1"></i>4. Tạm ứng / Vay / Truy lĩnh / Net→Gross</a>
+        <a href="/Payroll/TerminationSettlements" class="btn btn-danger"><i class="ti ti-user-minus me-1"></i>5. Quyết toán Nghỉ việc</a>
+    </div>
+</div>
+
+@if (TempData["PayrollSuccess"] != null)
+{
+    <div class="alert alert-success border-0 shadow-sm mb-3">@TempData["PayrollSuccess"]</div>
+}
+@if (TempData["PayrollError"] != null)
+{
+    <div class="alert alert-danger border-0 shadow-sm mb-3">@TempData["PayrollError"]</div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-lg-4">
+        <div class="vnm-card p-3 h-100">
+            <h5 class="fw-bold mb-3"><i class="ti ti-calculator text-danger me-1"></i>Tính &amp; Lập Phiếu Quyết toán Nghỉ việc</h5>
+            <form method="post" action="/Payroll/CalculateTerminationSettlement" class="row g-2">
+                @Html.AntiForgeryToken()
+                <div class="col-12">
+                    <label class="form-label small fw-semibold">Nhân viên nghỉ việc</label>
+                    <select name="employeeId" class="form-select form-select-sm" required>
+                        @foreach (var e in Model.Employees)
+                        {
+                            <option value="@e.Id">@e.EmployeeCode - @e.FullName</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-6">
+                    <label class="form-label small fw-semibold">Ngày làm việc cuối</label>
+                    <input type="date" name="lastWorkingDate" value="@DateTime.Today.ToString("yyyy-MM-dd")" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-6">
+                    <label class="form-label small fw-semibold">Hình thức nghỉ</label>
+                    <select name="terminationType" class="form-select form-select-sm">
+                        <option value="Resignation">Thôi việc đúng luật (Resignation)</option>
+                        <option value="MutualAgreement">Thỏa thuận chấm dứt HĐLĐ</option>
+                        <option value="ContractExpiry">Hết hạn HĐLĐ</option>
+                        <option value="Dismissal">Sa thải kỷ luật (Không TCTV)</option>
+                        <option value="IllegalUnilateralTermination">Đơn phương trái luật (Không TCTV)</option>
+                    </select>
+                </div>
+                <div class="col-6">
+                    <label class="form-label small fw-semibold">Công chuẩn tháng cuối</label>
+                    <input type="number" name="standardWorkdays" step="0.5" value="26" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-6">
+                    <label class="form-label small fw-semibold">Tháng đóng BHTN (tùy chọn)</label>
+                    <input type="number" name="unemploymentInsuranceCoveredMonthsOverride" step="1" min="0" placeholder="Tự lấy theo thâm niên" class="form-control form-control-sm" />
+                </div>
+                <div class="col-12">
+                    <div class="form-check small">
+                        <input class="form-check-input" type="checkbox" name="deductEmployeeInsuranceOnFinalMonth" value="true" checked id="chkDeductInsFinal" />
+                        <label class="form-check-label" for="chkDeductInsFinal">Khấu trừ BHXH/BHYT/BHTN (10.5%) trên tháng làm việc cuối</label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-semibold">Ghi chú quyết toán</label>
+                    <input type="text" name="notes" class="form-control form-control-sm" placeholder="VD: Bàn giao tài sản đầy đủ ngày cuối..." />
+                </div>
+                <div class="col-12 mt-2">
+                    <button type="submit" class="btn btn-sm btn-danger w-100 fw-semibold">
+                        <i class="ti ti-file-analytics me-1"></i>Tính Quyết toán Nghỉ việc
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="vnm-card p-3 h-100">
+            <h5 class="fw-bold mb-3"><i class="ti ti-list-check text-primary me-1"></i>Danh sách Biên bản Quyết toán Nghỉ việc (@Model.Settlements.Count)</h5>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle small mb-0">
+                    <thead>
+                        <tr>
+                            <th>Mã phiếu &amp; NV</th>
+                            <th>Ngày cuối / Công</th>
+                            <th class="text-end">Lương + Phép tồn</th>
+                            <th class="text-end">Trợ cấp thôi việc</th>
+                            <th class="text-end">Cấn trừ Tạm ứng &amp; Vay</th>
+                            <th class="text-end">Thực nhận (Net)</th>
+                            <th>Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in Model.Settlements)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@s.SettlementCode</strong>
+                                    <div>@s.EmployeeCode - @s.EmployeeName</div>
+                                    <span class="badge @(s.Status == "Paid" ? "bg-success" : s.Status == "Approved" ? "bg-primary" : "bg-warning text-dark")">@s.Status</span>
+                                </td>
+                                <td>
+                                    <div>@s.LastWorkingDate.ToString("dd/MM/yyyy")</div>
+                                    <div class="text-muted">Công: @s.WorkedDaysInFinalMonth.ToString("0.#") | Phép: @s.UnusedLeaveDays.ToString("0.#")</div>
+                                </td>
+                                <td class="text-end">
+                                    <div>@s.FinalMonthSalaryAmount.ToString("N0")</div>
+                                    <div class="text-muted">+Phép: @s.UnusedLeavePayoutAmount.ToString("N0")</div>
+                                </td>
+                                <td class="text-end">
+                                    <div>@((s.StatutorySeveranceAmount + s.CompanyExtraSeveranceAmount).ToString("N0"))</div>
+                                    <div class="text-muted">@s.EligibleSeveranceYears.ToString("0.#") năm</div>
+                                </td>
+                                <td class="text-end text-danger">
+                                    <div>Ứng: -@s.SalaryAdvanceDeduction.ToString("N0")</div>
+                                    <div>Vay: -@s.LoanPayoffDeduction.ToString("N0")</div>
+                                </td>
+                                <td class="text-end fw-bold text-success">
+                                    @s.NetSettlementAmount.ToString("N0") đ
+                                    @if (s.RemainingDebtToRecover > 0m)
+                                    {
+                                        <div class="text-danger small">Còn nợ: @s.RemainingDebtToRecover.ToString("N0")</div>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-column gap-1">
+                                        <a href="/Payroll/DownloadTerminationSettlementPdf?id=@s.Id" class="btn btn-xs btn-outline-dark py-0 px-2" style="font-size:11px;">
+                                            <i class="ti ti-file-type-pdf me-1"></i>In PDF
+                                        </a>
+                                        @if (s.Status == "Draft")
+                                        {
+                                            <form method="post" action="/Payroll/ApproveTerminationSettlement">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@s.Id" />
+                                                <input type="hidden" name="markAsPaid" value="true" />
+                                                <button type="submit" class="btn btn-xs btn-success w-100 py-0 px-2" style="font-size:11px;">Chốt &amp; Chi</button>
+                                            </form>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

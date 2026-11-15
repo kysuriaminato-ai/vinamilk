@@ -152,6 +152,8 @@ public sealed class GetPayrollManagementOverviewQueryHandler
             .Include(p => p.PayrollRecords)
             .OrderByDescending(p => p.Year)
             .ThenByDescending(p => p.Month)
+            .ThenByDescending(p => p.DisbursementSequence)
+            .ThenByDescending(p => p.Id)
             .ToListAsync(cancellationToken);
 
         var periods = periodsRaw.Select(p =>
@@ -395,7 +397,10 @@ public sealed record CreatePayrollPeriodCommand(
     int Year,
     int Month,
     decimal StandardWorkdays = 26m,
-    string PeriodType = "Monthly")
+    string PeriodType = "Monthly",
+    int? DisbursementSequence = null,
+    DateOnly? DisbursementDate = null,
+    bool CreateNewBatch = false)
     : IRequest<int>;
 
 public sealed class CreatePayrollPeriodCommandHandler : IRequestHandler<CreatePayrollPeriodCommand, int>
@@ -411,34 +416,56 @@ public sealed class CreatePayrollPeriodCommandHandler : IRequestHandler<CreatePa
 
         var periodType = string.IsNullOrWhiteSpace(request.PeriodType) ? "Monthly" : request.PeriodType.Trim();
 
-        var existing = await _context.PayrollPeriods
-            .FirstOrDefaultAsync(p => p.Year == request.Year && p.Month == request.Month && p.PeriodType == periodType, cancellationToken);
-        if (existing is not null)
-            return existing.Id;
+        if (!request.CreateNewBatch)
+        {
+            var existing = await _context.PayrollPeriods
+                .FirstOrDefaultAsync(p => p.Year == request.Year && p.Month == request.Month && p.PeriodType == periodType, cancellationToken);
+            if (existing is not null)
+                return existing.Id;
+        }
+
+        var existingInMonth = await _context.PayrollPeriods
+            .AsNoTracking()
+            .Where(p => p.Year == request.Year && p.Month == request.Month)
+            .ToListAsync(cancellationToken);
+
+        int seq = request.DisbursementSequence
+            ?? (existingInMonth.Count > 0 ? existingInMonth.Max(p => p.DisbursementSequence) + 1 : 1);
 
         var startDate = new DateOnly(request.Year, request.Month, 1);
         var endDate = new DateOnly(request.Year, request.Month, DateTime.DaysInMonth(request.Year, request.Month));
 
         var prefix = periodType switch
         {
+            "MidMonthAdvance" => "PAY-ADV",
             "Bonus13" => "PAY-B13",
             "HolidayBonus" => "PAY-HOL",
             _ => "PAY"
         };
         var titlePrefix = periodType switch
         {
+            "MidMonthAdvance" => "Đợt chi Tạm ứng giữa tháng",
             "Bonus13" => "Kỳ chi Thưởng Tháng 13",
             "HolidayBonus" => "Kỳ chi Thưởng Lễ/Tết",
             _ => "Kỳ lương"
         };
 
+        var sameTypeCount = existingInMonth.Count(p => string.Equals(p.PeriodType, periodType, StringComparison.OrdinalIgnoreCase));
+        var periodCode = sameTypeCount == 0
+            ? $"{prefix}-{request.Year}-{request.Month:D2}"
+            : $"{prefix}-{request.Year}-{request.Month:D2}-B{sameTypeCount + 1}";
+
         var period = new PayrollPeriod
         {
-            PeriodCode = $"{prefix}-{request.Year}-{request.Month:D2}",
+            PeriodCode = periodCode,
             PeriodType = periodType,
+            DisbursementSequence = seq,
+            DisbursementDate = request.DisbursementDate,
             Year = request.Year,
             Month = request.Month,
-            PeriodTitle = $"{titlePrefix} Tháng {request.Month:D2}/{request.Year}",
+            PeriodTitle = sameTypeCount == 0
+                ? $"{titlePrefix} Tháng {request.Month:D2}/{request.Year}"
+                : $"{titlePrefix} (Đợt {sameTypeCount + 1}) Tháng {request.Month:D2}/{request.Year}",
             StartDate = startDate,
             EndDate = endDate,
             StandardWorkdays = request.StandardWorkdays > 0m ? request.StandardWorkdays : 26m,

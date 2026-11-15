@@ -86,6 +86,8 @@ public interface IApplicationDbContext
     DbSet<EmployeeLoan> EmployeeLoans { get; }
     DbSet<EmployeeLoanInstallment> EmployeeLoanInstallments { get; }
     DbSet<PayrollAdjustment> PayrollAdjustments { get; }
+    DbSet<PayrollPolicy> PayrollPolicies { get; }
+    DbSet<EmployeeTerminationSettlement> EmployeeTerminationSettlements { get; }
 
     // Talent Schema
     DbSet<RecruitmentRequest> RecruitmentRequests { get; }

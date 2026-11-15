@@ -12,6 +12,13 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
+@if (TempData["EssError"] is string err)
+{
+    <div class="alert alert-danger alert-dismissible fade show py-2 small">
+        <i class="ti ti-alert-triangle me-1"></i>@err
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
 
 <!-- PROFILE HERO -->
 <div class="ess-card p-3 mb-3">
@@ -163,6 +170,44 @@ else if (activeTab == "requests")
             <div class="col-6"><input type="time" name="endTime" class="form-control form-control-sm" value="20:00" required /></div>
             <div class="col-12"><input type="text" name="reason" class="form-control form-control-sm" placeholder="Nội dung công việc OT..." required /></div>
             <div class="col-12"><button type="submit" class="btn btn-warning btn-sm w-100 fw-semibold">Đăng ký OT</button></div>
+        </form>
+    </div>
+
+    <div class="ess-card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="fw-bold mb-0"><i class="ti ti-cash-banknote me-1 text-success"></i>Đề nghị Tạm ứng Lương (ESS)</h6>
+            @if (Model.AdvanceQuota != null)
+            {
+                <span class="badge bg-success-subtle text-success">Tối đa @Model.AdvanceQuota.MaxAdvanceLimitPercent.ToString("0.#")% (@Model.AdvanceQuota.PolicyScopeLevel)</span>
+            }
+        </div>
+        @if (Model.AdvanceQuota != null)
+        {
+            <div class="alert alert-light border py-2 px-2 small mb-2">
+                Hạn mức tháng @Model.AdvanceQuota.TargetMonth.ToString("D2")/@Model.AdvanceQuota.TargetYear: <strong>@Model.AdvanceQuota.MaxAllowedAmount.ToString("N0") đ</strong>
+                • Đã/đang xin: @Model.AdvanceQuota.UsedOrPendingInMonth.ToString("N0") đ
+                • Còn được ứng: <strong class="text-success">@Model.AdvanceQuota.RemainingAllowedAmount.ToString("N0") đ</strong>
+            </div>
+        }
+        <form asp-action="SubmitSalaryAdvance" method="post" class="row g-2">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="employeeId" value="@Model.Profile.EmployeeId" />
+            <input type="hidden" name="requestDate" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+            <div class="col-4">
+                <input type="number" name="targetMonth" min="1" max="12" value="@(Model.AdvanceQuota?.TargetMonth ?? DateTime.Today.Month)" class="form-control form-control-sm" placeholder="Tháng" required />
+            </div>
+            <div class="col-4">
+                <input type="number" name="targetYear" min="2024" max="2035" value="@(Model.AdvanceQuota?.TargetYear ?? DateTime.Today.Year)" class="form-control form-control-sm" placeholder="Năm" required />
+            </div>
+            <div class="col-4">
+                <input type="number" name="amount" min="100000" step="100000" value="@((Model.AdvanceQuota != null && Model.AdvanceQuota.RemainingAllowedAmount >= 2000000m) ? 2000000m : (Model.AdvanceQuota?.RemainingAllowedAmount ?? 1000000m))" class="form-control form-control-sm" placeholder="Số tiền" required />
+            </div>
+            <div class="col-12">
+                <input type="text" name="reason" class="form-control form-control-sm" placeholder="Lý do đề nghị tạm ứng lương..." required />
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-success btn-sm w-100 fw-semibold">Gửi Đề nghị Tạm ứng (Workflow)</button>
+            </div>
         </form>
     </div>
 

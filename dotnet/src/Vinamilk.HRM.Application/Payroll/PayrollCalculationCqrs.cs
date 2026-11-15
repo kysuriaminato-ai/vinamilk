@@ -47,7 +47,13 @@ public sealed record PayrollCalculationInput(
     bool IsBonusPeriodOnly = false,
     decimal PriorMonthAssessableIncome = 0m,
     bool SkipRegularNightAllowance = false,
-    bool SkipEmployeeUnionFee = false);
+    bool SkipEmployeeUnionFee = false,
+    bool HasPriorMonthlyDisbursement = false,
+    decimal PriorMonthTaxableIncome = 0m,
+    decimal PriorMonthPitWithheld = 0m,
+    decimal SourcePeriodTaxDelta = 0m,
+    decimal SourcePeriodAdjustedTaxableExcluded = 0m,
+    decimal TargetPeriodTaxableDeductionFromRetro = 0m);
 
 public sealed record MidMonthAggregatedPayrollResult(
     PayrollCalculationBreakdown Breakdown,
@@ -142,7 +148,13 @@ public sealed record NetToGrossInput(
     decimal RegularNightHours = 0m,
     decimal ExtraTemplateEarnings = 0m,
     decimal ExtraTaxExemptAmount = 0m,
-    decimal CustomDeductions = 0m);
+    decimal CustomDeductions = 0m,
+    bool HasPriorMonthlyDisbursement = false,
+    decimal PriorMonthTaxableIncome = 0m,
+    decimal PriorMonthPitWithheld = 0m,
+    decimal SourcePeriodTaxDelta = 0m,
+    decimal SourcePeriodAdjustedTaxableExcluded = 0m,
+    decimal TargetPeriodTaxableDeductionFromRetro = 0m);
 
 public sealed record NetToGrossSolution(
     decimal SolvedContractBaseSalary,
@@ -389,7 +401,12 @@ public static class VietnamPayrollEngine
             : 0m;
 
         decimal totalExempt = Math.Max(0m, input.ExtraTaxExemptAmount) + Math.Max(0m, otTaxExemptAmount);
-        decimal taxableIncome = Math.Max(0m, gross - totalEmpIns - totalExempt);
+        decimal taxableIncome = Math.Max(0m,
+            gross
+            - totalEmpIns
+            - totalExempt
+            - Math.Max(0m, input.SourcePeriodAdjustedTaxableExcluded)
+            - Math.Max(0m, input.TargetPeriodTaxableDeductionFromRetro));
 
         decimal selfDeduction = 0m;
         decimal depDeduction = 0m;
@@ -402,14 +419,25 @@ public static class VietnamPayrollEngine
             selfDeduction = 0m;
             depDeduction = 0m;
             assessableIncome = taxableIncome;
-            pit = Math.Round(assessableIncome * parameter.PitNonResidentRate, 0, MidpointRounding.AwayFromZero);
+            if (input.HasPriorMonthlyDisbursement)
+            {
+                decimal combinedTax = Math.Round((input.PriorMonthTaxableIncome + assessableIncome) * parameter.PitNonResidentRate, 0, MidpointRounding.AwayFromZero);
+                pit = Math.Max(0m, combinedTax - input.PriorMonthPitWithheld);
+            }
+            else
+            {
+                pit = Math.Round(assessableIncome * parameter.PitNonResidentRate, 0, MidpointRounding.AwayFromZero);
+            }
         }
         else if (string.Equals(residencyMode, "ResidentShortTerm", StringComparison.OrdinalIgnoreCase))
         {
             selfDeduction = 0m;
             depDeduction = 0m;
             assessableIncome = taxableIncome;
-            if (taxableIncome >= parameter.PitShortTermThreshold)
+            decimal combinedTaxable = input.HasPriorMonthlyDisbursement
+                ? input.PriorMonthTaxableIncome + taxableIncome
+                : taxableIncome;
+            if (combinedTaxable >= parameter.PitShortTermThreshold)
             {
                 if (input.HasPitCommitment08)
                 {
@@ -418,7 +446,10 @@ public static class VietnamPayrollEngine
                 }
                 else
                 {
-                    pit = Math.Round(assessableIncome * parameter.PitShortTermRate, 0, MidpointRounding.AwayFromZero);
+                    decimal totalShortPit = Math.Round(combinedTaxable * parameter.PitShortTermRate, 0, MidpointRounding.AwayFromZero);
+                    pit = input.HasPriorMonthlyDisbursement
+                        ? Math.Max(0m, totalShortPit - input.PriorMonthPitWithheld)
+                        : totalShortPit;
                 }
             }
             else
@@ -429,7 +460,21 @@ public static class VietnamPayrollEngine
         else
         {
             // ResidentStandard (HĐLĐ >= 3 tháng): biểu lũy tiến từng phần
-            if (input.IsBonusPeriodOnly && input.PriorMonthAssessableIncome > 0m)
+            if (input.HasPriorMonthlyDisbursement)
+            {
+                // Nhiều đợt chi trong cùng tháng: tính thuế TNCN tổng trên tất cả các đợt chi rồi trừ số đã khấu trừ ở các đợt trước
+                selfDeduction = 0m;
+                depDeduction = 0m;
+                decimal fullMonthSelf = parameter.SelfDeduction;
+                decimal fullMonthDep = Math.Max(0, input.DependentCount) * parameter.DependentDeduction;
+                decimal priorAssess = Math.Max(0m, input.PriorMonthTaxableIncome - fullMonthSelf - fullMonthDep);
+                decimal combinedTaxable = input.PriorMonthTaxableIncome + taxableIncome;
+                decimal combinedAssessable = Math.Max(0m, combinedTaxable - fullMonthSelf - fullMonthDep);
+                assessableIncome = Math.Max(0m, combinedAssessable - priorAssess);
+                decimal totalMonthlyPit = CalculateProgressivePit(combinedAssessable, pitBrackets);
+                pit = Math.Max(0m, totalMonthlyPit - input.PriorMonthPitWithheld);
+            }
+            else if (input.IsBonusPeriodOnly && input.PriorMonthAssessableIncome > 0m)
             {
                 // Kỳ thưởng tách riêng trong cùng tháng đã tính lương chính: không giảm trừ gia cảnh 2 lần
                 selfDeduction = 0m;
@@ -448,6 +493,21 @@ public static class VietnamPayrollEngine
             }
         }
 
+        decimal pitRefundCredit = 0m;
+        if (input.SourcePeriodTaxDelta != 0m)
+        {
+            decimal adjustedPit = pit + input.SourcePeriodTaxDelta;
+            if (adjustedPit >= 0m)
+            {
+                pit = adjustedPit;
+            }
+            else
+            {
+                pitRefundCredit = Math.Abs(adjustedPit);
+                pit = 0m;
+            }
+        }
+
         decimal totalOtherDeductions = input.DisciplineDeduction
             + Math.Max(0m, input.CustomDeductions)
             + Math.Max(0m, input.SalaryAdvanceDeduction)
@@ -455,7 +515,7 @@ public static class VietnamPayrollEngine
             + Math.Max(0m, input.RetroDeductionAmount)
             + empUnionFee;
 
-        decimal net = Math.Max(0m, gross - totalEmpIns - pit - totalOtherDeductions);
+        decimal net = Math.Max(0m, gross + pitRefundCredit - totalEmpIns - pit - totalOtherDeductions);
         decimal totalCompanyCost = gross + compSi + compHi + compUi + compOa + compUnionFee;
 
         return new PayrollCalculationBreakdown(
@@ -550,7 +610,13 @@ public static class VietnamPayrollEngine
                 SalaryAdvanceDeduction: input.SalaryAdvanceDeduction,
                 LoanInstallmentDeduction: input.LoanInstallmentDeduction,
                 TaxResidencyMode: input.TaxResidencyMode,
-                HasPitCommitment08: input.HasPitCommitment08),
+                HasPitCommitment08: input.HasPitCommitment08,
+                HasPriorMonthlyDisbursement: input.HasPriorMonthlyDisbursement,
+                PriorMonthTaxableIncome: input.PriorMonthTaxableIncome,
+                PriorMonthPitWithheld: input.PriorMonthPitWithheld,
+                SourcePeriodTaxDelta: input.SourcePeriodTaxDelta,
+                SourcePeriodAdjustedTaxableExcluded: input.SourcePeriodAdjustedTaxableExcluded,
+                TargetPeriodTaxableDeductionFromRetro: input.TargetPeriodTaxableDeductionFromRetro),
             parameter,
             pitBrackets);
 
@@ -654,7 +720,13 @@ public static class VietnamPayrollEngine
         decimal kpiMultiplier = 1.0m,
         bool isBonusPeriodOnly = false,
         decimal priorMonthAssessableIncome = 0m,
-        decimal? solvedBaseSalaryOverride = null)
+        decimal? solvedBaseSalaryOverride = null,
+        bool hasPriorMonthlyDisbursement = false,
+        decimal priorMonthTaxableIncome = 0m,
+        decimal priorMonthPitWithheld = 0m,
+        decimal sourcePeriodTaxDelta = 0m,
+        decimal sourcePeriodAdjustedTaxableExcluded = 0m,
+        decimal targetPeriodTaxableDeductionFromRetro = 0m)
     {
         if (slices == null || slices.Count == 0)
             throw new ArgumentException("Danh sách đoạn hiệu lực hồ sơ lương không được rỗng.", nameof(slices));
@@ -878,7 +950,13 @@ public static class VietnamPayrollEngine
             PrecomputedOtTaxExemptAmount: sumDayOtTaxExempt + nightOtTaxExempt,
             IsBonusPeriodOnly: isBonusPeriodOnly,
             PriorMonthAssessableIncome: priorMonthAssessableIncome,
-            SkipRegularNightAllowance: hasNightAllowanceLine), statutoryContext);
+            SkipRegularNightAllowance: hasNightAllowanceLine,
+            HasPriorMonthlyDisbursement: hasPriorMonthlyDisbursement,
+            PriorMonthTaxableIncome: priorMonthTaxableIncome,
+            PriorMonthPitWithheld: priorMonthPitWithheld,
+            SourcePeriodTaxDelta: sourcePeriodTaxDelta,
+            SourcePeriodAdjustedTaxableExcluded: sourcePeriodAdjustedTaxableExcluded,
+            TargetPeriodTaxableDeductionFromRetro: targetPeriodTaxableDeductionFromRetro), statutoryContext);
 
         string? splitNote = evaluatedSlices.Count > 1
             ? "Tách lương theo hiệu lực: " + string.Join("; ", evaluatedSlices.Select(s =>
@@ -1024,6 +1102,8 @@ public static class VietnamPayrollEngine
             "Thuế Thu nhập cá nhân (TNCN)",
             taxFormula,
             $"TNChịuThuế={breakdown.TaxableIncome:N0}, BảnThân={breakdown.SelfDeductionAmount:N0}, NPT({input.DependentCount})={breakdown.DependentDeductionAmount:N0}, TNTínhThuế={breakdown.AssessableIncome:N0}"
+            + (input.HasPriorMonthlyDisbursement ? $" | Gộp đợt trước trong tháng: TNChịuThuếTrước={input.PriorMonthTaxableIncome:N0}, ThuếĐãKhấuTrừTrước={input.PriorMonthPitWithheld:N0}" : "")
+            + (input.SourcePeriodTaxDelta != 0m ? $" | Điều chỉnh thuế kỳ gốc={input.SourcePeriodTaxDelta:+N0;-N0;0}" : "")
             + (string.IsNullOrWhiteSpace(activePitText) ? "" : $" | {activePitText}"),
             breakdown.PersonalIncomeTax,
             parameter.LegalReference));
@@ -1132,7 +1212,8 @@ public sealed record EvaluatedEmployeePayroll(
     decimal? PreviousRevisionNet,
     decimal? PreviousPeriodNet,
     decimal? VariancePercent,
-    bool HasHighVarianceWarning);
+    bool HasHighVarianceWarning,
+    IReadOnlyList<int>? ConsumedDisbursedAdvanceIds = null);
 
 public sealed record EvaluatedPeriodBundle(
     PayrollPeriod Period,
@@ -1212,7 +1293,8 @@ public static class PayrollPeriodEvaluator
             ? period.EndDate
             : new DateOnly(period.Year, period.Month, DateTime.DaysInMonth(period.Year, period.Month));
 
-        bool isBonusPeriodOnly = !string.Equals(period.PeriodType, "Monthly", StringComparison.OrdinalIgnoreCase);
+        bool isAdvanceDisbursementPeriod = string.Equals(period.PeriodType, "MidMonthAdvance", StringComparison.OrdinalIgnoreCase);
+        bool isBonusPeriodOnly = isAdvanceDisbursementPeriod || !string.Equals(period.PeriodType, "Monthly", StringComparison.OrdinalIgnoreCase);
 
         var statutoryContext = await VietnamPayrollEngine.ResolveStatutoryContextAsync(
             context, periodEndDate, cancellationToken);
@@ -1377,13 +1459,15 @@ public static class PayrollPeriodEvaluator
             .GroupBy(r => r.EmployeeId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        // Tạm ứng lương (Approved hoặc đã khấu trừ vào chính kỳ này khi tính lại)
+        // Tạm ứng lương (Approved hoặc đã khấu trừ vào chính kỳ này khi tính lại; với kỳ MidMonthAdvance lấy các đơn chưa chi hoặc đã chi qua chính kỳ này)
         var advances = await context.SalaryAdvances
             .AsNoTracking()
             .Where(a => employeeIds.Contains(a.EmployeeId)
                 && a.TargetYear == period.Year
                 && a.TargetMonth == period.Month
-                && (a.Status == "Approved" || (a.Status == "Deducted" && a.DeductedPayrollPeriodId == period.Id)))
+                && (a.Status == "Approved"
+                    || (a.Status == "Deducted" && a.DeductedPayrollPeriodId == period.Id)
+                    || (isAdvanceDisbursementPeriod && a.DisbursementPayrollPeriodId == period.Id)))
             .ToListAsync(cancellationToken);
         var advanceByEmpId = advances
             .GroupBy(a => a.EmployeeId)
@@ -1396,7 +1480,7 @@ public static class PayrollPeriodEvaluator
             .Where(i => employeeIds.Contains(i.EmployeeId)
                 && i.TargetYear == period.Year
                 && i.TargetMonth == period.Month
-                && i.EmployeeLoan.Status == "Active"
+                && (i.EmployeeLoan.Status == "Active" || (i.Status == "Deducted" && i.DeductedPayrollPeriodId == period.Id))
                 && (i.Status == "Scheduled" || (i.Status == "Deducted" && i.DeductedPayrollPeriodId == period.Id)))
             .ToListAsync(cancellationToken);
         var installmentByEmpId = installments
@@ -1415,21 +1499,46 @@ public static class PayrollPeriodEvaluator
             .GroupBy(a => a.EmployeeId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        // Nếu là kỳ thưởng (Bonus13 / HolidayBonus), tìm AssessableIncome từ kỳ Monthly cùng tháng để tính thuế TNCN phần tăng thêm
-        var sameMonthAssessableMap = new Dictionary<int, decimal>();
-        if (isBonusPeriodOnly)
+        // Nhiều đợt chi trong cùng tháng: cộng dồn Thu nhập chịu thuế & Thuế đã khấu trừ của tất cả các đợt chi khác đã tính trong cùng (Year, Month)
+        var priorMonthTaxableMap = new Dictionary<int, decimal>();
+        var priorMonthPitMap = new Dictionary<int, decimal>();
+        var priorMonthAssessableMap = new Dictionary<int, decimal>();
+        var dedicatedBonusPeriodTypesInMonth = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!isAdvanceDisbursementPeriod)
         {
-            var monthlyPeriodId = await context.PayrollPeriods
+            var otherNonAdvancePeriods = await context.PayrollPeriods
                 .AsNoTracking()
-                .Where(p => p.Year == period.Year && p.Month == period.Month && p.PeriodType == "Monthly" && p.Id != period.Id)
-                .Select(p => (int?)p.Id)
-                .FirstOrDefaultAsync(cancellationToken);
-            if (monthlyPeriodId.HasValue)
+                .Where(p => p.Year == period.Year
+                    && p.Month == period.Month
+                    && p.Id != period.Id
+                    && p.PeriodType != "MidMonthAdvance")
+                .Select(p => new { p.Id, p.PeriodType })
+                .ToListAsync(cancellationToken);
+
+            foreach (var op in otherNonAdvancePeriods)
             {
-                sameMonthAssessableMap = await context.PayrollRecords
+                if (string.Equals(op.PeriodType, "Bonus13", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(op.PeriodType, "HolidayBonus", StringComparison.OrdinalIgnoreCase))
+                {
+                    dedicatedBonusPeriodTypesInMonth.Add(op.PeriodType);
+                }
+            }
+
+            var otherNonAdvanceIds = otherNonAdvancePeriods.Select(p => p.Id).ToList();
+            if (otherNonAdvanceIds.Count > 0)
+            {
+                var priorRecs = await context.PayrollRecords
                     .AsNoTracking()
-                    .Where(r => r.PayrollPeriodId == monthlyPeriodId.Value && employeeIds.Contains(r.EmployeeId))
-                    .ToDictionaryAsync(r => r.EmployeeId, r => r.AssessableIncome, cancellationToken);
+                    .Where(r => otherNonAdvanceIds.Contains(r.PayrollPeriodId) && employeeIds.Contains(r.EmployeeId))
+                    .Select(r => new { r.EmployeeId, r.TaxableIncome, r.PersonalIncomeTax, r.AssessableIncome })
+                    .ToListAsync(cancellationToken);
+
+                foreach (var g in priorRecs.GroupBy(r => r.EmployeeId))
+                {
+                    priorMonthTaxableMap[g.Key] = g.Sum(x => x.TaxableIncome);
+                    priorMonthPitMap[g.Key] = g.Sum(x => x.PersonalIncomeTax);
+                    priorMonthAssessableMap[g.Key] = g.Sum(x => x.AssessableIncome);
+                }
             }
         }
 
@@ -1505,6 +1614,83 @@ public static class PayrollPeriodEvaluator
                 ? 0m
                 : (settlementByEmpId.TryGetValue(emp.Id, out var payoutAmt) ? payoutAmt : 0m);
 
+            // Đợt chi Tạm ứng lương giữa tháng (MidMonthAdvance): chỉ trả tiền tạm ứng cho NV có đơn đã duyệt (chưa khấu trừ, quyết toán thuế vào lương chính cuối tháng)
+            if (isAdvanceDisbursementPeriod)
+            {
+                if (!advanceByEmpId.TryGetValue(emp.Id, out var empMidAdvs) || empMidAdvs.Count == 0)
+                    continue;
+
+                decimal advTotal = empMidAdvs.Sum(a => a.Amount);
+                var disbursedAdvIds = empMidAdvs.Select(a => a.Id).ToList();
+                var advInput = new PayrollCalculationInput(
+                    ContractBaseSalary: advTotal,
+                    PositionAllowance: 0m,
+                    OtherAllowance: 0m,
+                    StandardWorkdays: period.StandardWorkdays,
+                    PayableWorkdays: 0m,
+                    OtHours150: 0m,
+                    OtHours200: 0m,
+                    OtHours300: 0m,
+                    KpiBonus: 0m,
+                    DisciplineDeduction: 0m,
+                    DependentCount: deps,
+                    IsUnionMember: false,
+                    WageRegion: wageRegion,
+                    InsuranceContractSalaryOverride: 0m,
+                    IsBonusPeriodOnly: true);
+
+                var advTrace = new List<CalculationTraceStepDto>
+                {
+                    new(1, "Advance", "Tổng tiền tạm ứng chi trả giữa tháng", "Tổng các đơn tạm ứng đã duyệt trong tháng",
+                        string.Join("; ", empMidAdvs.Select(a => $"{a.AdvanceNumber}: {a.Amount:N0}")), advTotal, null),
+                    new(2, "Tax", "Thuế TNCN đợt tạm ứng", "Chuyển sang quyết toán gộp cuối tháng theo kỳ lương chính",
+                        "Thuế tạm ứng = 0 đ", 0m, null),
+                    new(3, "Net", "Thực lĩnh đợt tạm ứng", "Tiền tạm ứng thực nhận",
+                        $"Net = {advTotal:N0} đ", advTotal, null)
+                };
+
+                var advRec = new PayrollRecord
+                {
+                    PayrollPeriodId = period.Id,
+                    EmployeeId = emp.Id,
+                    OrganizationUnitId = emp.OrganizationUnitId,
+                    PositionId = emp.PositionId,
+                    StandardWorkdays = period.StandardWorkdays,
+                    PayableWorkdays = 0m,
+                    ContractBaseSalary = advTotal,
+                    ActualBaseSalary = advTotal,
+                    GrossIncome = advTotal,
+                    TaxableIncome = 0m,
+                    AssessableIncome = 0m,
+                    PersonalIncomeTax = 0m,
+                    NetSalary = advTotal,
+                    TotalCompanyCost = advTotal,
+                    DependentCount = deps,
+                    TaxResidencyMode = "ResidentStandard",
+                    PitBracketsJson = "[]",
+                    CalculationTraceJson = JsonSerializer.Serialize(advTrace),
+                    PaymentStatus = "Calculated",
+                    Notes = $"Chi tạm ứng giữa tháng ({string.Join(", ", empMidAdvs.Select(a => a.AdvanceNumber))})"
+                };
+
+                evaluatedEmployees.Add(new EvaluatedEmployeePayroll(
+                    emp,
+                    att,
+                    advRec,
+                    advTrace,
+                    Array.Empty<PitBracketTaxSliceDto>(),
+                    Array.Empty<int>(),
+                    Array.Empty<int>(),
+                    Array.Empty<int>(),
+                    Array.Empty<int>(),
+                    previousRevisionNetMap.TryGetValue(emp.Id, out var prevAdvRevNet) ? prevAdvRevNet : null,
+                    prevPeriodNetMap.TryGetValue(emp.Id, out var prevAdvPerNet) ? prevAdvPerNet : null,
+                    null,
+                    false,
+                    disbursedAdvIds));
+                continue;
+            }
+
             // Tạm ứng, vay trả góp, truy lĩnh/truy thu, thưởng/kỷ luật
             var consumedAdvIds = new List<int>();
             decimal salaryAdvanceDed = 0m;
@@ -1549,6 +1735,10 @@ public static class PayrollPeriodEvaluator
             decimal commissionBonus = 0m;
             decimal thirteenthBonus = 0m;
             decimal kpiBonusManual = rewardExtra;
+            decimal sourcePeriodTaxDelta = 0m;
+            decimal sourcePeriodAdjustedTaxableExcluded = 0m;
+            decimal targetPeriodTaxableDeductionFromRetro = 0m;
+            decimal nonTaxableAdjExempt = 0m;
 
             if (adjByEmpId.TryGetValue(emp.Id, out var empAdjs))
             {
@@ -1561,6 +1751,8 @@ public static class PayrollPeriodEvaluator
                             || string.Equals(adj.AdjustmentType, "HolidayBonus", StringComparison.OrdinalIgnoreCase))
                         {
                             thirteenthBonus += adj.Amount;
+                            if (!adj.IsTaxable)
+                                nonTaxableAdjExempt += adj.Amount;
                             consumedAdjIds.Add(adj.Id);
                         }
                     }
@@ -1570,19 +1762,46 @@ public static class PayrollPeriodEvaluator
                         {
                             case "RetroEarning":
                                 retroEarning += adj.Amount;
+                                if (!adj.IsTaxable)
+                                    nonTaxableAdjExempt += adj.Amount;
+                                else if (adj.RecalculateTaxInSourcePeriod)
+                                {
+                                    sourcePeriodAdjustedTaxableExcluded += adj.Amount;
+                                    sourcePeriodTaxDelta += adj.SourcePeriodTaxDelta;
+                                }
                                 consumedAdjIds.Add(adj.Id);
                                 break;
                             case "RetroDeduction":
                                 retroDeduction += adj.Amount;
+                                if (adj.IsTaxable)
+                                {
+                                    if (adj.RecalculateTaxInSourcePeriod)
+                                        sourcePeriodTaxDelta += adj.SourcePeriodTaxDelta;
+                                    else if (adj.TaxCalculationNote != null
+                                        && adj.TaxCalculationNote.Contains("gộp tính tại kỳ mở", StringComparison.OrdinalIgnoreCase))
+                                        targetPeriodTaxableDeductionFromRetro += adj.Amount;
+                                }
                                 consumedAdjIds.Add(adj.Id);
                                 break;
                             case "Commission":
                                 commissionBonus += adj.Amount;
+                                if (!adj.IsTaxable)
+                                    nonTaxableAdjExempt += adj.Amount;
+                                else if (adj.RecalculateTaxInSourcePeriod)
+                                {
+                                    sourcePeriodAdjustedTaxableExcluded += adj.Amount;
+                                    sourcePeriodTaxDelta += adj.SourcePeriodTaxDelta;
+                                }
                                 consumedAdjIds.Add(adj.Id);
                                 break;
                             case "Bonus13":
                             case "HolidayBonus":
+                                // Nếu tháng này đã mở đợt chi thưởng tách riêng cho loại thưởng tương ứng -> để dành cho đợt chi đó
+                                if (dedicatedBonusPeriodTypesInMonth.Contains(adj.AdjustmentType))
+                                    break;
                                 thirteenthBonus += adj.Amount;
+                                if (!adj.IsTaxable)
+                                    nonTaxableAdjExempt += adj.Amount;
                                 consumedAdjIds.Add(adj.Id);
                                 break;
                         }
@@ -1621,7 +1840,10 @@ public static class PayrollPeriodEvaluator
                 thirteenthBonus = Math.Round(referenceBaseSalary * monthsWorked / 12m, 0, MidpointRounding.AwayFromZero);
             }
 
-            decimal priorMonthAssessable = isBonusPeriodOnly && sameMonthAssessableMap.TryGetValue(emp.Id, out var priorAss)
+            bool hasPriorDisbursement = priorMonthTaxableMap.ContainsKey(emp.Id);
+            decimal priorMonthTaxable = priorMonthTaxableMap.TryGetValue(emp.Id, out var pTax) ? pTax : 0m;
+            decimal priorMonthPit = priorMonthPitMap.TryGetValue(emp.Id, out var pPit) ? pPit : 0m;
+            decimal priorMonthAssessable = priorMonthAssessableMap.TryGetValue(emp.Id, out var priorAss)
                 ? priorAss
                 : 0m;
 
@@ -1685,7 +1907,13 @@ public static class PayrollPeriodEvaluator
                         retroDeductionAmount: retroDeduction,
                         salaryAdvanceDeduction: salaryAdvanceDed,
                         loanInstallmentDeduction: loanInstDed,
-                        kpiMultiplier: kpiMultiplier);
+                        kpiMultiplier: kpiMultiplier,
+                        hasPriorMonthlyDisbursement: hasPriorDisbursement,
+                        priorMonthTaxableIncome: priorMonthTaxable,
+                        priorMonthPitWithheld: priorMonthPit,
+                        sourcePeriodTaxDelta: sourcePeriodTaxDelta,
+                        sourcePeriodAdjustedTaxableExcluded: sourcePeriodAdjustedTaxableExcluded,
+                        targetPeriodTaxableDeductionFromRetro: targetPeriodTaxableDeductionFromRetro);
 
                     decimal? fixedIns = lastProf.InsuranceSalary > 0m ? lastProf.InsuranceSalary : null;
                     netToGrossSol = VietnamPayrollEngine.SolveGrossFromNet(
@@ -1718,8 +1946,14 @@ public static class PayrollPeriodEvaluator
                             OtHours300Night: ot300Night,
                             RegularNightHours: nightHours,
                             ExtraTemplateEarnings: preAgg.ExtraTemplateEarnings,
-                            ExtraTaxExemptAmount: preAgg.TaxExemptAmount,
-                            CustomDeductions: preAgg.CustomDeductions),
+                            ExtraTaxExemptAmount: preAgg.TaxExemptAmount + nonTaxableAdjExempt,
+                            CustomDeductions: preAgg.CustomDeductions,
+                            HasPriorMonthlyDisbursement: hasPriorDisbursement,
+                            PriorMonthTaxableIncome: priorMonthTaxable,
+                            PriorMonthPitWithheld: priorMonthPit,
+                            SourcePeriodTaxDelta: sourcePeriodTaxDelta,
+                            SourcePeriodAdjustedTaxableExcluded: sourcePeriodAdjustedTaxableExcluded,
+                            TargetPeriodTaxableDeductionFromRetro: targetPeriodTaxableDeductionFromRetro),
                         statutoryContext);
                     solvedOverride = netToGrossSol.SolvedContractBaseSalary;
                 }
@@ -1750,13 +1984,19 @@ public static class PayrollPeriodEvaluator
                     salaryAdvanceDeduction: salaryAdvanceDed,
                     loanInstallmentDeduction: loanInstDed,
                     kpiMultiplier: kpiMultiplier,
-                    solvedBaseSalaryOverride: solvedOverride);
+                    solvedBaseSalaryOverride: solvedOverride,
+                    hasPriorMonthlyDisbursement: hasPriorDisbursement,
+                    priorMonthTaxableIncome: priorMonthTaxable,
+                    priorMonthPitWithheld: priorMonthPit,
+                    sourcePeriodTaxDelta: sourcePeriodTaxDelta,
+                    sourcePeriodAdjustedTaxableExcluded: sourcePeriodAdjustedTaxableExcluded,
+                    targetPeriodTaxableDeductionFromRetro: targetPeriodTaxableDeductionFromRetro);
 
                 breakdown = agg.Breakdown;
                 contractBaseSalary = agg.EffectiveContractBaseSalary;
                 posAllowance = agg.EffectivePositionAllowance;
                 otherAllowance = agg.EffectiveOtherAllowance + agg.ExtraTemplateEarnings;
-                taxExemptAmount = agg.TaxExemptAmount + breakdown.OtTaxExemptAmount;
+                taxExemptAmount = agg.TaxExemptAmount + breakdown.OtTaxExemptAmount + nonTaxableAdjExempt;
                 disciplineDeduction = disciplineFine + agg.CustomDeductions;
                 splitNote = agg.SplitSummaryNote;
                 evaluatedLines = agg.AggregatedLines;
@@ -1780,7 +2020,7 @@ public static class PayrollPeriodEvaluator
                     breakdown.ActualBaseSalary,
                     breakdown.OvertimePay,
                     agg.ExtraTemplateEarnings,
-                    agg.TaxExemptAmount,
+                    agg.TaxExemptAmount + nonTaxableAdjExempt,
                     agg.CustomDeductions,
                     ot150Night,
                     ot200Night,
@@ -1793,7 +2033,13 @@ public static class PayrollPeriodEvaluator
                     salaryAdvanceDed,
                     loanInstDed,
                     lastProf.TaxResidencyMode,
-                    lastProf.HasPitCommitment08);
+                    lastProf.HasPitCommitment08,
+                    HasPriorMonthlyDisbursement: hasPriorDisbursement,
+                    PriorMonthTaxableIncome: priorMonthTaxable,
+                    PriorMonthPitWithheld: priorMonthPit,
+                    SourcePeriodTaxDelta: sourcePeriodTaxDelta,
+                    SourcePeriodAdjustedTaxableExcluded: sourcePeriodAdjustedTaxableExcluded,
+                    TargetPeriodTaxableDeductionFromRetro: targetPeriodTaxableDeductionFromRetro);
             }
             else
             {
@@ -1831,7 +2077,14 @@ public static class PayrollPeriodEvaluator
                             OtHours150Night: ot150Night,
                             OtHours200Night: ot200Night,
                             OtHours300Night: ot300Night,
-                            RegularNightHours: nightHours),
+                            RegularNightHours: nightHours,
+                            ExtraTaxExemptAmount: nonTaxableAdjExempt,
+                            HasPriorMonthlyDisbursement: hasPriorDisbursement,
+                            PriorMonthTaxableIncome: priorMonthTaxable,
+                            PriorMonthPitWithheld: priorMonthPit,
+                            SourcePeriodTaxDelta: sourcePeriodTaxDelta,
+                            SourcePeriodAdjustedTaxableExcluded: sourcePeriodAdjustedTaxableExcluded,
+                            TargetPeriodTaxableDeductionFromRetro: targetPeriodTaxableDeductionFromRetro),
                         statutoryContext);
                     contractBaseSalary = netToGrossSol.SolvedContractBaseSalary;
                     posAllowance = latestProfile.PositionAllowance;
@@ -1877,10 +2130,17 @@ public static class PayrollPeriodEvaluator
                     TaxResidencyMode: residencyMode,
                     HasPitCommitment08: commitment08,
                     IsBonusPeriodOnly: isBonusPeriodOnly,
-                    PriorMonthAssessableIncome: priorMonthAssessable);
+                    PriorMonthAssessableIncome: priorMonthAssessable,
+                    ExtraTaxExemptAmount: nonTaxableAdjExempt,
+                    HasPriorMonthlyDisbursement: hasPriorDisbursement,
+                    PriorMonthTaxableIncome: priorMonthTaxable,
+                    PriorMonthPitWithheld: priorMonthPit,
+                    SourcePeriodTaxDelta: sourcePeriodTaxDelta,
+                    SourcePeriodAdjustedTaxableExcluded: sourcePeriodAdjustedTaxableExcluded,
+                    TargetPeriodTaxableDeductionFromRetro: targetPeriodTaxableDeductionFromRetro);
 
                 breakdown = VietnamPayrollEngine.Calculate(traceInput, statutoryContext);
-                taxExemptAmount = breakdown.OtTaxExemptAmount;
+                taxExemptAmount = breakdown.OtTaxExemptAmount + nonTaxableAdjExempt;
             }
 
             var pitSlices = string.Equals(breakdown.TaxResidencyMode, "ResidentStandard", StringComparison.OrdinalIgnoreCase)
@@ -2090,6 +2350,12 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
         var affectedEmpIds = eval.EvaluatedEmployees.Select(e => e.Employee.Id).ToHashSet();
 
         // Giải phóng liên kết cũ (tính lại là hoàn toàn idempotent) rồi gán lại theo lần tính mới
+        var prevDisbursedAdvs = await _context.SalaryAdvances
+            .Where(a => a.DisbursementPayrollPeriodId == period.Id && affectedEmpIds.Contains(a.EmployeeId))
+            .ToListAsync(cancellationToken);
+        foreach (var adv in prevDisbursedAdvs)
+            adv.DisbursementPayrollPeriodId = null;
+
         var prevLinkedAdvs = await _context.SalaryAdvances
             .Where(a => a.DeductedPayrollPeriodId == period.Id && affectedEmpIds.Contains(a.EmployeeId))
             .ToListAsync(cancellationToken);
@@ -2099,6 +2365,7 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
             adv.DeductedPayrollPeriodId = null;
         }
 
+        var affectedLoanIds = new HashSet<int>();
         var prevLinkedInsts = await _context.EmployeeLoanInstallments
             .Where(i => i.DeductedPayrollPeriodId == period.Id && affectedEmpIds.Contains(i.EmployeeId))
             .ToListAsync(cancellationToken);
@@ -2106,6 +2373,7 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
         {
             inst.Status = "Scheduled";
             inst.DeductedPayrollPeriodId = null;
+            affectedLoanIds.Add(inst.EmployeeLoanId);
         }
 
         var prevLinkedAdjs = await _context.PayrollAdjustments
@@ -2115,6 +2383,19 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
         {
             adj.Status = "Approved";
             adj.AppliedPayrollPeriodId = null;
+        }
+
+        var allConsumedDisbursedAdvIds = eval.EvaluatedEmployees
+            .Where(e => e.ConsumedDisbursedAdvanceIds != null)
+            .SelectMany(e => e.ConsumedDisbursedAdvanceIds!)
+            .ToHashSet();
+        if (allConsumedDisbursedAdvIds.Count > 0)
+        {
+            var toDisburseAdvs = await _context.SalaryAdvances
+                .Where(a => allConsumedDisbursedAdvIds.Contains(a.Id))
+                .ToListAsync(cancellationToken);
+            foreach (var adv in toDisburseAdvs)
+                adv.DisbursementPayrollPeriodId = period.Id;
         }
 
         var allConsumedAdvIds = eval.EvaluatedEmployees.SelectMany(e => e.ConsumedAdvanceIds).ToHashSet();
@@ -2140,6 +2421,23 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
             {
                 inst.Status = "Deducted";
                 inst.DeductedPayrollPeriodId = period.Id;
+                affectedLoanIds.Add(inst.EmployeeLoanId);
+            }
+        }
+
+        if (affectedLoanIds.Count > 0)
+        {
+            var loansToCheck = await _context.EmployeeLoans
+                .Include(l => l.Installments)
+                .Where(l => affectedLoanIds.Contains(l.Id))
+                .ToListAsync(cancellationToken);
+            foreach (var loan in loansToCheck)
+            {
+                if (loan.Status is "Active" or "PaidOff")
+                {
+                    bool hasRemainingScheduled = loan.Installments.Any(i => i.Status == "Scheduled");
+                    loan.Status = hasRemainingScheduled ? "Active" : "PaidOff";
+                }
             }
         }
 

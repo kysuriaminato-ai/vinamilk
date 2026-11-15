@@ -297,7 +297,10 @@ public sealed record PayrollAdjustmentRowDto(
     string? SourceLockedPeriodCode,
     string Reason,
     string Status,
-    int? AppliedInPayrollPeriodId);
+    int? AppliedInPayrollPeriodId,
+    bool RecalculateTaxInSourcePeriod = false,
+    decimal SourcePeriodTaxDelta = 0m,
+    string? TaxCalculationNote = null);
 
 public sealed record PayrollOperationsOverviewDto(
     IReadOnlyList<SimpleEmployeeLookupDto> Employees,
@@ -417,7 +420,7 @@ public sealed class GetPayrollOperationsOverviewQueryHandler
 
         var adjustments = adjustmentsRaw.Select(a => new PayrollAdjustmentRowDto(
             a.Id,
-            $"ADJ-{a.Id}",
+            string.IsNullOrWhiteSpace(a.AdjustmentCode) ? $"ADJ-{a.Id}" : a.AdjustmentCode,
             a.EmployeeId,
             a.Employee.EmployeeCode,
             a.Employee.FullName,
@@ -429,7 +432,10 @@ public sealed class GetPayrollOperationsOverviewQueryHandler
             a.SourceLockedPeriodId.HasValue && periodCodeMap.TryGetValue(a.SourceLockedPeriodId.Value, out var srcCode) ? srcCode : null,
             a.Reason,
             a.Status,
-            a.AppliedPayrollPeriodId)).ToList();
+            a.AppliedPayrollPeriodId,
+            a.RecalculateTaxInSourcePeriod,
+            a.SourcePeriodTaxDelta,
+            a.TaxCalculationNote)).ToList();
 
         return new PayrollOperationsOverviewDto(employees, periodDtos, lockedPeriods, advances, loans, adjustments);
     }
@@ -611,7 +617,10 @@ public sealed record CreatePayrollAdjustmentCommand(
     int TargetMonth,
     decimal Amount,
     string Reason,
-    int? SourceLockedPeriodId = null) : IRequest<int>;
+    int? SourceLockedPeriodId = null,
+    bool IsTaxable = true,
+    bool? RecalculateTaxInSourcePeriod = null,
+    bool AutoAssignNextOpenPeriod = false) : IRequest<int>;
 
 public sealed class CreatePayrollAdjustmentCommandHandler : IRequestHandler<CreatePayrollAdjustmentCommand, int>
 {
@@ -633,15 +642,14 @@ public sealed class CreatePayrollAdjustmentCommandHandler : IRequestHandler<Crea
             throw new InvalidOperationException("Số tiền điều chỉnh/thưởng phải lớn hơn 0.");
         if (string.IsNullOrWhiteSpace(request.Reason))
             throw new InvalidOperationException("Bắt buộc nhập lý do cho phiếu điều chỉnh truy lĩnh/truy thu/thưởng.");
-        if (request.TargetMonth is < 1 or > 12 || request.TargetYear < 2000)
-            throw new ArgumentOutOfRangeException(nameof(request), "Tháng/năm áp dụng không hợp lệ.");
 
         var emp = await _context.Employees.FirstOrDefaultAsync(e => e.Id == request.EmployeeId, cancellationToken)
             ?? throw new KeyNotFoundException($"Không tìm thấy nhân viên #{request.EmployeeId}.");
 
+        PayrollPeriod? srcPeriod = null;
         if (request.SourceLockedPeriodId.HasValue)
         {
-            var srcPeriod = await _context.PayrollPeriods
+            srcPeriod = await _context.PayrollPeriods
                 .AsNoTracking()
                 .FirstOrDefaultAsync(p => p.Id == request.SourceLockedPeriodId.Value, cancellationToken)
                 ?? throw new KeyNotFoundException($"Không tìm thấy kỳ lương nguồn #{request.SourceLockedPeriodId.Value}.");
@@ -649,15 +657,146 @@ public sealed class CreatePayrollAdjustmentCommandHandler : IRequestHandler<Crea
                 throw new InvalidOperationException($"Kỳ nguồn {srcPeriod.PeriodCode} chưa khóa; chỉ dùng truy lĩnh/truy thu đối chiếu kỳ đã khóa.");
         }
 
-        var code = $"ADJ-{request.TargetYear}{request.TargetMonth:D2}-{DateTime.UtcNow:HHmmssfff}";
+        int targetYear = request.TargetYear;
+        int targetMonth = request.TargetMonth;
+        if ((request.AutoAssignNextOpenPeriod || targetYear <= 0 || targetMonth <= 0) && srcPeriod != null)
+        {
+            var nextOpen = await _context.PayrollPeriods
+                .AsNoTracking()
+                .Where(p => !p.IsLocked
+                    && p.PeriodType == "Monthly"
+                    && (p.Year > srcPeriod.Year || (p.Year == srcPeriod.Year && p.Month > srcPeriod.Month)))
+                .OrderBy(p => p.Year)
+                .ThenBy(p => p.Month)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (nextOpen != null)
+            {
+                targetYear = nextOpen.Year;
+                targetMonth = nextOpen.Month;
+            }
+            else
+            {
+                targetYear = srcPeriod.Month == 12 ? srcPeriod.Year + 1 : srcPeriod.Year;
+                targetMonth = srcPeriod.Month == 12 ? 1 : srcPeriod.Month + 1;
+            }
+        }
+
+        if (targetMonth is < 1 or > 12 || targetYear < 2000)
+            throw new ArgumentOutOfRangeException(nameof(request), "Tháng/năm áp dụng không hợp lệ.");
+
+        bool targetAlreadyLocked = await _context.PayrollPeriods
+            .AsNoTracking()
+            .AnyAsync(p => p.Year == targetYear
+                && p.Month == targetMonth
+                && p.PeriodType == "Monthly"
+                && p.IsLocked, cancellationToken);
+        if (targetAlreadyLocked)
+        {
+            throw new InvalidOperationException(
+                $"Kỳ lương {targetMonth:D2}/{targetYear} đã khóa, không thể gán phiếu điều chỉnh mới trực tiếp vào kỳ này. Hãy chọn kỳ mở kế tiếp.");
+        }
+
+        decimal roundedAmount = Math.Round(request.Amount, 0, MidpointRounding.AwayFromZero);
+        string adjType = request.AdjustmentType.Trim();
+        bool recalcInSource = false;
+        decimal sourceTaxDelta = 0m;
+        string? taxNote = null;
+
+        if (srcPeriod != null && request.IsTaxable && (adjType is "RetroEarning" or "RetroDeduction" or "Commission"))
+        {
+            var policyResolved = await PayrollPolicyResolver.ResolvePayrollPolicyAsync(_context, emp.Id, srcPeriod.EndDate, cancellationToken);
+            bool policyRecalc = string.Equals(policyResolved.Policy.RetroTaxMode, "RecalculateSourcePeriod", StringComparison.OrdinalIgnoreCase);
+            bool wantRecalc = request.RecalculateTaxInSourcePeriod ?? policyRecalc;
+
+            if (wantRecalc)
+            {
+                var srcRecord = await _context.PayrollRecords
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(r => r.PayrollPeriodId == srcPeriod.Id && r.EmployeeId == emp.Id, cancellationToken);
+
+                if (srcRecord != null)
+                {
+                    var statutoryContext = await VietnamPayrollEngine.TryResolveStatutoryContextAsync(_context, srcPeriod.EndDate, cancellationToken);
+                    if (statutoryContext != null)
+                    {
+                        var priorAdjs = await _context.PayrollAdjustments
+                            .AsNoTracking()
+                            .Where(a => a.EmployeeId == emp.Id
+                                && a.SourceLockedPeriodId == srcPeriod.Id
+                                && a.RecalculateTaxInSourcePeriod
+                                && a.IsTaxable
+                                && a.Status != "Cancelled")
+                            .Select(a => new { a.AdjustmentType, a.Amount })
+                            .ToListAsync(cancellationToken);
+
+                        decimal priorDelta = priorAdjs.Sum(a =>
+                            a.AdjustmentType == "RetroDeduction" ? -a.Amount :
+                            (a.AdjustmentType is "RetroEarning" or "Commission" ? a.Amount : 0m));
+
+                        decimal signedDelta = adjType == "RetroDeduction" ? -roundedAmount : roundedAmount;
+                        decimal baselineTaxable = Math.Max(0m, srcRecord.TaxableIncome + priorDelta);
+                        decimal updatedTaxable = Math.Max(0m, baselineTaxable + signedDelta);
+
+                        decimal oldTax;
+                        decimal newTax;
+                        if (string.Equals(srcRecord.TaxResidencyMode, "NonResidentFlat20", StringComparison.OrdinalIgnoreCase))
+                        {
+                            oldTax = Math.Round(baselineTaxable * statutoryContext.Parameter.PitNonResidentRate, 0, MidpointRounding.AwayFromZero);
+                            newTax = Math.Round(updatedTaxable * statutoryContext.Parameter.PitNonResidentRate, 0, MidpointRounding.AwayFromZero);
+                        }
+                        else if (string.Equals(srcRecord.TaxResidencyMode, "CasualWithholding10", StringComparison.OrdinalIgnoreCase))
+                        {
+                            oldTax = !srcRecord.UsedCommitment08 && baselineTaxable >= statutoryContext.Parameter.PitShortTermThreshold
+                                ? Math.Round(baselineTaxable * statutoryContext.Parameter.PitShortTermRate, 0, MidpointRounding.AwayFromZero)
+                                : 0m;
+                            newTax = !srcRecord.UsedCommitment08 && updatedTaxable >= statutoryContext.Parameter.PitShortTermThreshold
+                                ? Math.Round(updatedTaxable * statutoryContext.Parameter.PitShortTermRate, 0, MidpointRounding.AwayFromZero)
+                                : 0m;
+                        }
+                        else
+                        {
+                            decimal deductions = srcRecord.SelfDeductionAmount + srcRecord.DependentDeductionAmount;
+                            decimal oldAssess = Math.Max(0m, baselineTaxable - deductions);
+                            decimal newAssess = Math.Max(0m, updatedTaxable - deductions);
+                            oldTax = VietnamPayrollEngine.CalculateProgressivePit(oldAssess, statutoryContext.PitBrackets);
+                            newTax = VietnamPayrollEngine.CalculateProgressivePit(newAssess, statutoryContext.PitBrackets);
+                        }
+
+                        recalcInSource = true;
+                        sourceTaxDelta = newTax - oldTax;
+                        taxNote = $"Tính lại thuế kỳ nguồn {srcPeriod.PeriodCode}: Thu nhập chịu thuế {baselineTaxable:N0} -> {updatedTaxable:N0} đ; Thuế TNCN {oldTax:N0} -> {newTax:N0} đ (Chênh lệch {sourceTaxDelta:+N0;-N0;0} đ).";
+                    }
+                    else
+                    {
+                        taxNote = $"Không tìm thấy tham số thuế kỳ nguồn {srcPeriod.PeriodCode}, thuế sẽ tính vào kỳ chi trả {targetMonth:D2}/{targetYear}.";
+                    }
+                }
+                else
+                {
+                    taxNote = $"Nhân viên chưa có phiếu lương tại kỳ nguồn {srcPeriod.PeriodCode}, thuế sẽ tính vào kỳ chi trả {targetMonth:D2}/{targetYear}.";
+                }
+            }
+            else
+            {
+                taxNote = $"Thuế TNCN phần điều chỉnh gộp tính tại kỳ mở {targetMonth:D2}/{targetYear} theo chính sách {policyResolved.PolicyGroupName}.";
+            }
+        }
+
+        var code = $"ADJ-{targetYear}{targetMonth:D2}-{DateTime.UtcNow:HHmmssfff}";
         var entity = new PayrollAdjustment
         {
+            AdjustmentCode = code,
             EmployeeId = emp.Id,
-            AdjustmentType = request.AdjustmentType.Trim(),
-            TargetYear = request.TargetYear,
-            TargetMonth = request.TargetMonth,
-            Amount = Math.Round(request.Amount, 0, MidpointRounding.AwayFromZero),
+            AdjustmentType = adjType,
+            TargetYear = targetYear,
+            TargetMonth = targetMonth,
+            Amount = roundedAmount,
             SourceLockedPeriodId = request.SourceLockedPeriodId,
+            IsTaxable = request.IsTaxable,
+            RecalculateTaxInSourcePeriod = recalcInSource,
+            SourcePeriodTaxDelta = sourceTaxDelta,
+            TaxCalculationNote = taxNote,
             Reason = request.Reason.Trim(),
             Status = "Approved"
         };
@@ -671,7 +810,19 @@ public sealed class CreatePayrollAdjustmentCommandHandler : IRequestHandler<Crea
             ActionType = "PayrollAdjustment_Create",
             EntityName = nameof(PayrollAdjustment),
             EntityId = code,
-            NewValuesJson = JsonSerializer.Serialize(new { emp.EmployeeCode, entity.AdjustmentType, entity.TargetYear, entity.TargetMonth, entity.Amount, entity.SourceLockedPeriodId, entity.Reason }),
+            NewValuesJson = JsonSerializer.Serialize(new
+            {
+                emp.EmployeeCode,
+                entity.AdjustmentCode,
+                entity.AdjustmentType,
+                entity.TargetYear,
+                entity.TargetMonth,
+                entity.Amount,
+                entity.SourceLockedPeriodId,
+                entity.RecalculateTaxInSourcePeriod,
+                entity.SourcePeriodTaxDelta,
+                entity.Reason
+            }),
             IpAddress = _currentUser?.IpAddress ?? "127.0.0.1",
             UserAgent = _currentUser?.UserAgent ?? "PayrollWeb",
             CreatedAt = DateTime.UtcNow,

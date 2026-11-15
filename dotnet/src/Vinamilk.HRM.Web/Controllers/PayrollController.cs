@@ -44,11 +44,15 @@ public class PayrollController : Controller
         int month,
         decimal standardWorkdays = 26m,
         string periodType = "Monthly",
+        bool createNewBatch = false,
+        DateOnly? disbursementDate = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var id = await _mediator.Send(new CreatePayrollPeriodCommand(year, month, standardWorkdays, periodType), cancellationToken);
+            var id = await _mediator.Send(
+                new CreatePayrollPeriodCommand(year, month, standardWorkdays, periodType, DisbursementDate: disbursementDate, CreateNewBatch: createNewBatch),
+                cancellationToken);
             TempData["PayrollSuccess"] = $"Đã tạo / mở kỳ lương ({periodType}) tháng {month:D2}/{year}.";
             return RedirectToAction(nameof(Index), new { periodId = id });
         }
@@ -725,18 +729,134 @@ public class PayrollController : Controller
         decimal amount,
         string reason,
         int? sourceLockedPeriodId = null,
+        bool isTaxable = true,
+        bool? recalculateTaxInSourcePeriod = null,
+        bool autoAssignNextOpenPeriod = false,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            await _mediator.Send(new CreatePayrollAdjustmentCommand(employeeId, adjustmentType, targetYear, targetMonth, amount, reason, sourceLockedPeriodId), cancellationToken);
-            TempData["PayrollSuccess"] = $"Đã tạo phiếu điều chỉnh ({adjustmentType}) {amount:N0} đ vào kỳ {targetMonth:D2}/{targetYear}.";
+            await _mediator.Send(new CreatePayrollAdjustmentCommand(
+                employeeId,
+                adjustmentType,
+                targetYear,
+                targetMonth,
+                amount,
+                reason,
+                sourceLockedPeriodId,
+                isTaxable,
+                recalculateTaxInSourcePeriod,
+                autoAssignNextOpenPeriod), cancellationToken);
+            TempData["PayrollSuccess"] = $"Đã tạo phiếu điều chỉnh ({adjustmentType}) {amount:N0} đ.";
         }
         catch (Exception ex)
         {
             TempData["PayrollError"] = ex.Message;
         }
         return RedirectToAction(nameof(Operations));
+    }
+
+    // =========================================================================
+    // CL7: CHI TIẾT KHOẢN VAY, TẤT TOÁN SỚM & QUYẾT TOÁN NGHỈ VIỆC (FINAL SETTLEMENT)
+    // =========================================================================
+
+    [HttpGet("LoanDetail")]
+    [Authorize(Policy = "Payroll.Calculate")]
+    public async Task<IActionResult> LoanDetail(int id, CancellationToken cancellationToken = default)
+    {
+        var detail = await _mediator.Send(new GetEmployeeLoanDetailQuery(id), cancellationToken);
+        return Json(detail);
+    }
+
+    [HttpPost("SettleLoanEarly")]
+    [Authorize(Policy = "Payroll.Calculate")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SettleLoanEarly(
+        int employeeLoanId,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var settled = await _mediator.Send(new SettleEmployeeLoanEarlyCommand(employeeLoanId, reason), cancellationToken);
+            TempData["PayrollSuccess"] = $"Đã tất toán sớm khoản vay #{employeeLoanId} (số tiền còn lại {settled:N0} đ).";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Operations));
+    }
+
+    [HttpGet("TerminationSettlements")]
+    [Authorize(Policy = "Payroll.Calculate")]
+    public async Task<IActionResult> TerminationSettlements(CancellationToken cancellationToken = default)
+    {
+        ViewData["Title"] = "Quyết toán Nghỉ việc (Final Settlement & Trợ cấp thôi việc)";
+        ViewData["BreadcrumbParent"] = "Chấm công & Tiền lương (C&B)";
+
+        var model = await _mediator.Send(new GetTerminationSettlementsOverviewQuery(), cancellationToken);
+        return View(model);
+    }
+
+    [HttpPost("CalculateTerminationSettlement")]
+    [Authorize(Policy = "Payroll.Calculate")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CalculateTerminationSettlement(
+        int employeeId,
+        DateOnly lastWorkingDate,
+        string terminationType = "Resignation",
+        decimal standardWorkdays = 26m,
+        decimal? unemploymentInsuranceCoveredMonthsOverride = null,
+        bool deductEmployeeInsuranceOnFinalMonth = true,
+        string? notes = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var res = await _mediator.Send(new CalculateTerminationSettlementCommand(
+                employeeId,
+                lastWorkingDate,
+                terminationType,
+                standardWorkdays,
+                unemploymentInsuranceCoveredMonthsOverride,
+                deductEmployeeInsuranceOnFinalMonth,
+                notes), cancellationToken);
+            TempData["PayrollSuccess"] = $"Đã lập phiếu quyết toán nghỉ việc {res.SettlementCode} cho {res.EmployeeName} — Thực nhận: {res.NetSettlementAmount:N0} đ.";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(TerminationSettlements));
+    }
+
+    [HttpPost("ApproveTerminationSettlement")]
+    [Authorize(Policy = "Payroll.Approve")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ApproveTerminationSettlement(
+        int id,
+        bool markAsPaid = true,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var code = await _mediator.Send(new ApproveAndSettleTerminationCommand(id, markAsPaid), cancellationToken);
+            TempData["PayrollSuccess"] = $"Đã phê duyệt & chốt quyết toán nghỉ việc {code} (đã cấn trừ tạm ứng & tất toán khoản vay).";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(TerminationSettlements));
+    }
+
+    [HttpGet("DownloadTerminationSettlementPdf")]
+    [Authorize(Policy = "Payroll.Calculate")]
+    public async Task<IActionResult> DownloadTerminationSettlementPdf(int id, CancellationToken cancellationToken = default)
+    {
+        var pdf = await _mediator.Send(new GetTerminationSettlementPdfQuery(id), cancellationToken);
+        return File(pdf.PdfBytes, "application/pdf", pdf.FileName);
     }
 }
 

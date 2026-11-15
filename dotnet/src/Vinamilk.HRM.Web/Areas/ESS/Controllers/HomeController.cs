@@ -60,6 +60,32 @@ public class HomeController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SubmitSalaryAdvance(
+        int employeeId,
+        DateOnly requestDate,
+        int targetYear,
+        int targetMonth,
+        decimal amount,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var res = await _mediator.Send(
+                new SubmitEssSalaryAdvanceCommand(employeeId, requestDate, targetYear, targetMonth, amount, reason),
+                cancellationToken);
+            TempData["EssMessage"] = $"Đã gửi đề nghị tạm ứng lương {res.AdvanceNumber} ({res.Amount:N0} đ) vào luồng phê duyệt (Workflow #{res.WorkflowInstanceId}).";
+        }
+        catch (Exception ex)
+        {
+            TempData["EssError"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index), new { employeeId, tab = "requests" });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     [Authorize(Roles = "SUPER_ADMIN,HR_DIRECTOR,HR_MANAGER,DEPARTMENT_MANAGER")]
     public async Task<IActionResult> ProcessMssApproval(
         int employeeId,
