@@ -95,6 +95,16 @@ public interface IPayrollDocumentService
         Employee employee);
 
     byte[] ExportDepartmentSummaryExcel(PayrollDepartmentSummaryReportDto report);
+
+    byte[] GenerateDetailedUnitPayrollA3LandscapePdf(DetailedUnitPayrollReportDto report);
+
+    byte[] GeneratePitWithholdingCertificatePdf(PitWithholdingCertificateDto certificate, Employee employee);
+
+    byte[] ExportSocialInsuranceExcel(SocialInsuranceMonthlyReportDto report, SocialInsuranceReportTemplate? template);
+
+    byte[] ExportPitSettlementExcel(PitAnnualFinalizationReportDto report);
+
+    byte[] ExportAccountingJournalFile(PayrollAccountingJournalDto journal, string format);
 }
 
 public interface IBankTransferTemplateFormatter

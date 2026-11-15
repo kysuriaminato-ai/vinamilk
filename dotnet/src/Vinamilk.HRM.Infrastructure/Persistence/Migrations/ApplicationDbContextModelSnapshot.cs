@@ -2578,6 +2578,95 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.ToTable("EmployeeTerminationSettlements", "payroll");
                 });
 
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.PayrollAccountingAccountConfig", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccountCode")
+                        .IsRequired()
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("AccountKey")
+                        .IsRequired()
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<string>("AccountName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CostCenterPattern")
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2(7)")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("system.job");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("LegalReference")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<bool>("NeedsHrVerification")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("NormalSide")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("varchar(10)")
+                        .HasDefaultValue("Credit");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountKey", "EffectiveFrom")
+                        .HasDatabaseName("IX_PayrollAccountingConfigs_Key_Eff");
+
+                    b.ToTable("PayrollAccountingAccountConfigs", "payroll");
+                });
+
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.PayrollAdjustment", b =>
                 {
                     b.Property<int>("Id")
@@ -3816,6 +3905,119 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.ToTable("PitBrackets", "payroll");
                 });
 
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.PitWithholdingCertificate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AnnualFinalTaxLiability")
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<decimal>("AssessableIncome")
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<string>("CertificateCode")
+                        .IsRequired()
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2(7)")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("system.job");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("GrossIncome")
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("IssuedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("IssuedByUsername")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("IssuedDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("LegalReference")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<bool>("NeedsHrVerification")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<decimal>("PitOverpaidOrUnderpaid")
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("varchar(30)")
+                        .HasDefaultValue("Issued");
+
+                    b.Property<int>("TaxYear")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TaxableIncome")
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<decimal>("TotalFamilyDeductions")
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<decimal>("TotalInsuranceDeducted")
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<decimal>("TotalPitWithheld")
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CertificateCode")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_PitCertificates_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("TaxYear", "EmployeeId")
+                        .HasDatabaseName("IX_PitCertificates_Year_Emp");
+
+                    b.ToTable("PitWithholdingCertificates", "payroll");
+                });
+
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.SalaryAdvance", b =>
                 {
                     b.Property<int>("Id")
@@ -4196,6 +4398,90 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("SalaryTemplateComponents", "payroll");
+                });
+
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.SocialInsuranceReportTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ColumnMappingsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2(7)")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("system.job");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("LegalReference")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<bool>("NeedsHrVerification")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SoftwareVendor")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("TemplateCode")
+                        .IsRequired()
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<string>("TemplateName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TemplateCode")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_SocialInsuranceTemplates_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("SocialInsuranceReportTemplates", "payroll");
                 });
 
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.TaxBracket", b =>
@@ -9417,6 +9703,17 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("PayrollPeriod");
+                });
+
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.PitWithholdingCertificate", b =>
+                {
+                    b.HasOne("Vinamilk.HRM.Domain.Entities.Core.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
                 });
 
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.SalaryAdvance", b =>

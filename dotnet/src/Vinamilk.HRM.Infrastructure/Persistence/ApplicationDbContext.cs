@@ -96,6 +96,9 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<PayrollAdjustment> PayrollAdjustments => Set<PayrollAdjustment>();
     public DbSet<PayrollPolicy> PayrollPolicies => Set<PayrollPolicy>();
     public DbSet<EmployeeTerminationSettlement> EmployeeTerminationSettlements => Set<EmployeeTerminationSettlement>();
+    public DbSet<PayrollAccountingAccountConfig> PayrollAccountingAccountConfigs => Set<PayrollAccountingAccountConfig>();
+    public DbSet<SocialInsuranceReportTemplate> SocialInsuranceReportTemplates => Set<SocialInsuranceReportTemplate>();
+    public DbSet<PitWithholdingCertificate> PitWithholdingCertificates => Set<PitWithholdingCertificate>();
 
     // Talent Schema
     public DbSet<RecruitmentRequest> RecruitmentRequests => Set<RecruitmentRequest>();

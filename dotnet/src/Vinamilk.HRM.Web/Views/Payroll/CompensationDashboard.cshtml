@@ -1,0 +1,139 @@
+@model Vinamilk.HRM.Application.Payroll.CompensationDashboardDto
+@{
+    ViewData["Title"] = "Dashboard Quản trị Tiền lương & Chi phí Nhân sự (C&B)";
+    var periods = ViewBag.Periods as IReadOnlyList<Vinamilk.HRM.Application.Payroll.PayrollPeriodRowDto> ?? Array.Empty<Vinamilk.HRM.Application.Payroll.PayrollPeriodRowDto>();
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Payroll" class="btn btn-outline-primary"><i class="ti ti-cash me-1"></i>1. Bảng lương</a>
+        <a href="/Payroll/Parameters" class="btn btn-outline-primary"><i class="ti ti-adjustments-horizontal me-1"></i>2. Tham số Luật</a>
+        <a href="/Payroll/SalaryStructures" class="btn btn-outline-primary"><i class="ti ti-calculator me-1"></i>3. Cấu trúc lương</a>
+        <a href="/Payroll/Operations" class="btn btn-outline-primary"><i class="ti ti-wallet me-1"></i>4. Tạm ứng / Vay / Truy lĩnh</a>
+        <a href="/Payroll/TerminationSettlements" class="btn btn-outline-danger"><i class="ti ti-user-minus me-1"></i>5. Quyết toán Nghỉ việc</a>
+        <a href="/Payroll/Reports" class="btn btn-outline-primary"><i class="ti ti-report-money me-1"></i>6. Báo cáo Tổng hợp &amp; Kế toán</a>
+        <a href="/Payroll/CompensationDashboard" class="btn vnm-btn-primary"><i class="ti ti-chart-bar me-1"></i>7. Dashboard C&amp;B</a>
+    </div>
+</div>
+
+<div class="vnm-card p-3 mb-4">
+    <form method="get" action="/Payroll/CompensationDashboard" class="row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label small fw-semibold">Kỳ lương trọng tâm</label>
+            <select name="periodId" class="form-select form-select-sm">
+                @foreach (var p in periods)
+                {
+                    <option value="@p.Id" selected="@(Model.FocusPeriodId == p.Id)">@p.PeriodCode - @p.PeriodTitle</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold">Năm xu hướng</label>
+            <input type="number" name="year" value="@Model.Year" class="form-control form-control-sm" />
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn vnm-btn-primary btn-sm w-100">Xem Dashboard</button>
+        </div>
+    </form>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="vnm-card p-3 h-100">
+            <div class="text-muted small">Tổng Thu nhập Gross (@Model.FocusPeriodCode)</div>
+            <div class="fs-4 fw-bold text-primary">@Model.FocusTotalGross.ToString("N0") đ</div>
+            <div class="small text-muted">Thực lĩnh Net: <strong class="text-success">@Model.FocusTotalNet.ToString("N0") đ</strong></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="vnm-card p-3 h-100">
+            <div class="text-muted small">Tỷ lệ Chi phí OT / Tổng Gross</div>
+            <div class="fs-4 fw-bold text-warning-emphasis">@Model.FocusOtSharePercent.ToString("0.##")%</div>
+            <div class="small text-muted">Quỹ OT kỳ: <strong>@Model.FocusOvertimePay.ToString("N0") đ</strong></div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="vnm-card p-3 h-100">
+            <div class="text-muted small">Tổng Nghĩa vụ Bảo hiểm &amp; CĐ</div>
+            <div class="fs-4 fw-bold text-info-emphasis">@Model.FocusTotalInsuranceCost.ToString("N0") đ</div>
+            <div class="small text-muted">NLĐ: @Model.FocusEmployeeInsurance.ToString("N0") | DN: @Model.FocusCompanyInsuranceAndUnion.ToString("N0")</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="vnm-card p-3 h-100">
+            <div class="text-muted small">Tổng Chi phí Doanh nghiệp</div>
+            <div class="fs-4 fw-bold text-danger">@Model.FocusTotalCompanyCost.ToString("N0") đ</div>
+            <div class="small text-muted">Thuế TNCN khấu trừ: <strong>@Model.FocusTotalPit.ToString("N0") đ</strong></div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-lg-5">
+        <div class="vnm-card p-3 h-100">
+            <h6 class="fw-bold mb-3">Cơ cấu Thu nhập Kỳ @Model.FocusPeriodCode</h6>
+            <ul class="list-group list-group-flush small">
+                <li class="list-group-item d-flex justify-content-between"><span>Lương cơ bản &amp; Phụ cấp</span><strong>@Model.FocusBaseAndAllowances.ToString("N0") đ</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Lương làm thêm giờ (OT)</span><strong>@Model.FocusOvertimePay.ToString("N0") đ (@Model.FocusOtSharePercent.ToString("0.##")%)</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Thưởng KPI, Doanh số, Truy lĩnh &amp; Phép</span><strong>@Model.FocusBonusesAndRetro.ToString("N0") đ</strong></li>
+                <li class="list-group-item d-flex justify-content-between bg-light fw-bold"><span>Tổng Quỹ Gross</span><span class="text-primary">@Model.FocusTotalGross.ToString("N0") đ</span></li>
+            </ul>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="vnm-card p-3 h-100">
+            <h6 class="fw-bold mb-3">Top 10 Nhân sự Biến động Lương Net cao nhất so với kỳ trước</h6>
+            @if (Model.TopVariances.Count == 0)
+            {
+                <div class="text-muted small">Chưa có dữ liệu so sánh kỳ trước cho kỳ trọng tâm này.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0" style="font-size: 0.82rem;">
+                        <thead class="table-light">
+                            <tr><th>Mã NV</th><th>Họ tên</th><th>Đơn vị</th><th class="text-end">Kỳ trước</th><th class="text-end">Kỳ này</th><th class="text-end">Biến động</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var v in Model.TopVariances)
+                            {
+                                <tr>
+                                    <td>@v.EmployeeCode</td>
+                                    <td class="fw-semibold">@v.FullName</td>
+                                    <td>@v.UnitName</td>
+                                    <td class="text-end">@v.PreviousNetSalary.ToString("N0")</td>
+                                    <td class="text-end fw-bold">@v.CurrentNetSalary.ToString("N0")</td>
+                                    <td class="text-end fw-bold @(v.VarianceAmount >= 0 ? "text-success" : "text-danger")">@v.VarianceAmount.ToString("+#,##0;-#,##0;0") (@v.VariancePercent.ToString("0.#")%)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="vnm-card p-3">
+    <h6 class="fw-bold mb-3">Xu hướng Quỹ lương theo Tháng trong Năm @Model.Year</h6>
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered mb-0">
+            <thead class="table-light">
+                <tr><th>Tháng</th><th class="text-end">Quân số</th><th class="text-end">Tổng Gross</th><th class="text-end">Thực lĩnh Net</th><th class="text-end">BH + CĐ DN</th><th class="text-end">Tổng Chi phí DN</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var b in Model.MonthlyFundTrend)
+                {
+                    <tr>
+                        <td>Tháng @b.Month/@b.Year</td>
+                        <td class="text-end">@b.Headcount</td>
+                        <td class="text-end">@b.TotalGross.ToString("N0")</td>
+                        <td class="text-end text-success fw-semibold">@b.TotalNetSalaryDisbursed.ToString("N0")</td>
+                        <td class="text-end">@b.TotalCompanyInsuranceAndUnion.ToString("N0")</td>
+                        <td class="text-end fw-bold">@b.TotalCompanyCost.ToString("N0")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

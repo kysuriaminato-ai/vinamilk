@@ -1,0 +1,523 @@
+@model Vinamilk.HRM.Web.Controllers.PayrollReportsWorkspaceViewModel
+@{
+    ViewData["Title"] = "Báo cáo Lương, BHXH (D02-LT), Thuế TNCN & Hạch toán Kế toán";
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Payroll" class="btn btn-outline-primary"><i class="ti ti-cash me-1"></i>1. Bảng lương &amp; Kỳ tính lương</a>
+        <a href="/Payroll/Parameters" class="btn btn-outline-primary"><i class="ti ti-adjustments-horizontal me-1"></i>2. Tham số Luật</a>
+        <a href="/Payroll/SalaryStructures" class="btn btn-outline-primary"><i class="ti ti-calculator me-1"></i>3. Cấu trúc lương</a>
+        <a href="/Payroll/Operations" class="btn btn-outline-primary"><i class="ti ti-wallet me-1"></i>4. Tạm ứng / Vay / Truy lĩnh / Net→Gross</a>
+        <a href="/Payroll/TerminationSettlements" class="btn btn-outline-danger"><i class="ti ti-user-minus me-1"></i>5. Quyết toán Nghỉ việc</a>
+        <a href="/Payroll/Reports" class="btn vnm-btn-primary"><i class="ti ti-report-money me-1"></i>6. Báo cáo Tổng hợp, BHXH, Thuế &amp; Kế toán</a>
+        <a href="/Payroll/CompensationDashboard" class="btn btn-outline-primary"><i class="ti ti-chart-bar me-1"></i>7. Dashboard C&amp;B</a>
+    </div>
+</div>
+
+@if (TempData["PayrollSuccess"] != null)
+{
+    <div class="alert alert-success border-0 shadow-sm mb-3">@TempData["PayrollSuccess"]</div>
+}
+@if (TempData["PayrollError"] != null)
+{
+    <div class="alert alert-danger border-0 shadow-sm mb-3">@TempData["PayrollError"]</div>
+}
+
+<!-- BỘ LỌC KỲ / NĂM / THÁNG / QUÝ -->
+<div class="vnm-card p-3 mb-4">
+    <form method="get" action="/Payroll/Reports" class="row g-2 align-items-end">
+        <input type="hidden" name="tab" value="@Model.ActiveTab" />
+        <div class="col-md-4">
+            <label class="form-label small fw-semibold">Kỳ tính lương đang xem</label>
+            <select name="periodId" class="form-select form-select-sm">
+                @foreach (var p in Model.Periods)
+                {
+                    <option value="@p.Id" selected="@(Model.SelectedPeriod?.Id == p.Id)">
+                        @p.PeriodCode - @p.PeriodTitle (@p.Status)
+                    </option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold">Năm báo cáo</label>
+            <input type="number" name="year" value="@Model.EffectiveYear" class="form-control form-control-sm" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold">Tháng (BHXH / PIT)</label>
+            <input type="number" name="month" min="1" max="12" value="@Model.EffectiveMonth" class="form-control form-control-sm" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold">Quý (05/KK-TNCN)</label>
+            <select name="quarter" class="form-select form-select-sm">
+                <option value="">Theo tháng</option>
+                @for (int q = 1; q <= 4; q++)
+                {
+                    <option value="@q" selected="@(Model.EffectiveQuarter == q)">Quý @q/@Model.EffectiveYear</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn vnm-btn-primary btn-sm w-100">
+                <i class="ti ti-filter me-1"></i>Lọc dữ liệu
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- THANH TAB CHỨC NĂNG BÁO CÁO -->
+<ul class="nav nav-pills gap-2 mb-3">
+    <li class="nav-item">
+        <a class="nav-link @(Model.ActiveTab == "unit" ? "active" : "")"
+           href="@Url.Action("Reports", new { periodId = Model.SelectedPeriod?.Id, year = Model.EffectiveYear, month = Model.EffectiveMonth, quarter = Model.EffectiveQuarter, tab = "unit" })">
+            <i class="ti ti-file-spreadsheet me-1"></i>1. Lương Đơn vị (A3) &amp; Cost Center
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(Model.ActiveTab == "fund" ? "active" : "")"
+           href="@Url.Action("Reports", new { periodId = Model.SelectedPeriod?.Id, year = Model.EffectiveYear, month = Model.EffectiveMonth, quarter = Model.EffectiveQuarter, tab = "fund" })">
+            <i class="ti ti-chart-area me-1"></i>2. Quỹ lương &amp; So sánh kỳ
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(Model.ActiveTab == "bhxh" ? "active" : "")"
+           href="@Url.Action("Reports", new { periodId = Model.SelectedPeriod?.Id, year = Model.EffectiveYear, month = Model.EffectiveMonth, quarter = Model.EffectiveQuarter, tab = "bhxh" })">
+            <i class="ti ti-shield-check me-1"></i>3. BHXH D02-LT &amp; Đối chiếu
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(Model.ActiveTab == "pit" ? "active" : "")"
+           href="@Url.Action("Reports", new { periodId = Model.SelectedPeriod?.Id, year = Model.EffectiveYear, month = Model.EffectiveMonth, quarter = Model.EffectiveQuarter, tab = "pit" })">
+            <i class="ti ti-receipt-tax me-1"></i>4. Thuế TNCN (05/KK &amp; 05/QTT)
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(Model.ActiveTab == "accounting" ? "active" : "")"
+           href="@Url.Action("Reports", new { periodId = Model.SelectedPeriod?.Id, year = Model.EffectiveYear, month = Model.EffectiveMonth, quarter = Model.EffectiveQuarter, tab = "accounting" })">
+            <i class="ti ti-books me-1"></i>5. Hạch toán Kế toán (TT200)
+        </a>
+    </li>
+</ul>
+
+@if (Model.ActiveTab == "unit")
+{
+    @if (Model.UnitReport is null)
+    {
+        <div class="alert alert-warning">Chưa có kỳ lương để xuất báo cáo chi tiết đơn vị.</div>
+    }
+    else
+    {
+        <div class="vnm-card p-3 mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div>
+                    <h5 class="fw-bold mb-0">Bảng lương Chi tiết theo Đơn vị – @Model.UnitReport.PeriodTitle (@Model.UnitReport.PeriodCode)</h5>
+                    <div class="text-muted small">Quân số: @Model.UnitReport.TotalEmployees NV • Tổng Thực lĩnh Net: <strong class="text-primary">@Model.UnitReport.GrandTotalNet.ToString("N0") đ</strong></div>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="/Payroll/ExportUnitPayrollA3Pdf?periodId=@Model.UnitReport.PayrollPeriodId" class="btn btn-danger btn-sm">
+                        <i class="ti ti-file-type-pdf me-1"></i>Xuất Bảng lương A3 Ngang (PDF có chữ ký)
+                    </a>
+                    <a href="/Payroll/ExportBankTransfer?periodId=@Model.UnitReport.PayrollPeriodId&format=excel" class="btn btn-outline-success btn-sm">
+                        <i class="ti ti-building-bank me-1"></i>UNC Ngân hàng
+                    </a>
+                </div>
+            </div>
+
+            @foreach (var grp in Model.UnitReport.UnitGroups)
+            {
+                <div class="border rounded p-2 mb-3">
+                    <div class="d-flex justify-content-between bg-light px-2 py-1 rounded mb-2">
+                        <strong class="text-primary">[@grp.UnitCode] @grp.UnitName • Cost Center: @grp.CostCenterCode (@grp.Headcount NV)</strong>
+                        <span class="small">Gross: <strong>@grp.SubtotalGross.ToString("N0")</strong> | Net: <strong class="text-success">@grp.SubtotalNet.ToString("N0")</strong></span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.82rem;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>STT</th>
+                                    <th>Mã NV</th>
+                                    <th>Họ tên</th>
+                                    <th>Chức danh</th>
+                                    <th class="text-end">Công</th>
+                                    <th class="text-end">Gross</th>
+                                    <th class="text-end">BH NLĐ</th>
+                                    <th class="text-end">Thuế TNCN</th>
+                                    <th class="text-end">Thực lĩnh Net</th>
+                                    <th class="text-end">Chi phí DN</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var emp in grp.Employees)
+                                {
+                                    <tr>
+                                        <td>@emp.Stt</td>
+                                        <td>@emp.EmployeeCode</td>
+                                        <td class="fw-semibold">@emp.FullName</td>
+                                        <td>@emp.PositionName</td>
+                                        <td class="text-end">@emp.PayableWorkdays.ToString("0.#")</td>
+                                        <td class="text-end">@emp.GrossIncome.ToString("N0")</td>
+                                        <td class="text-end text-danger">@emp.TotalEmployeeInsurance.ToString("N0")</td>
+                                        <td class="text-end text-danger">@emp.PersonalIncomeTax.ToString("N0")</td>
+                                        <td class="text-end fw-bold text-success">@emp.NetSalary.ToString("N0")</td>
+                                        <td class="text-end">@emp.TotalCompanyCost.ToString("N0")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (Model.CostCenterReport is not null)
+    {
+        <div class="vnm-card p-3">
+            <h6 class="fw-bold mb-3"><i class="ti ti-chart-pie text-primary me-1"></i>Phân bổ Chi phí Nhân công theo Cost Center (@Model.CostCenterReport.PeriodCode)</h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Cost Center</th>
+                            <th>Đơn vị trực thuộc</th>
+                            <th class="text-end">NV</th>
+                            <th class="text-end">Lương &amp; PC</th>
+                            <th class="text-end">OT &amp; Thưởng</th>
+                            <th class="text-end">Tổng Gross</th>
+                            <th class="text-end">BHXH/CĐ DN</th>
+                            <th class="text-end">Thuế TNCN</th>
+                            <th class="text-end">Thực lĩnh Net</th>
+                            <th class="text-end">Tổng Chi phí DN</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var cc in Model.CostCenterReport.CostCenters)
+                        {
+                            <tr>
+                                <td class="fw-bold text-primary">@cc.CostCenterCode</td>
+                                <td>@cc.UnitNamesSummary</td>
+                                <td class="text-end">@cc.Headcount</td>
+                                <td class="text-end">@cc.BaseAndAllowances.ToString("N0")</td>
+                                <td class="text-end">@cc.OtAndBonuses.ToString("N0")</td>
+                                <td class="text-end fw-semibold">@cc.TotalGross.ToString("N0")</td>
+                                <td class="text-end">@((cc.TotalCompanyInsuranceAndOa + cc.TotalCompanyUnionFee).ToString("N0"))</td>
+                                <td class="text-end">@cc.TotalPit.ToString("N0")</td>
+                                <td class="text-end fw-bold text-success">@cc.TotalNet.ToString("N0")</td>
+                                <td class="text-end fw-bold">@cc.TotalCompanyCost.ToString("N0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-primary fw-bold">
+                        <tr>
+                            <td colspan="5">TỔNG CỘNG TOÀN ĐƠN VỊ</td>
+                            <td class="text-end">@Model.CostCenterReport.GrandTotalGross.ToString("N0")</td>
+                            <td class="text-end">@Model.CostCenterReport.GrandTotalCompanyInsuranceAndUnion.ToString("N0")</td>
+                            <td class="text-end">@Model.CostCenterReport.GrandTotalPit.ToString("N0")</td>
+                            <td class="text-end">@Model.CostCenterReport.GrandTotalNet.ToString("N0")</td>
+                            <td class="text-end">@Model.CostCenterReport.GrandTotalCompanyCost.ToString("N0")</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    }
+}
+else if (Model.ActiveTab == "fund")
+{
+    <div class="vnm-card p-3 mb-4">
+        <h5 class="fw-bold mb-3">Tổng hợp Quỹ lương theo Tháng / Quý / Năm @Model.FundSummary.Year</h5>
+        <div class="row g-3 mb-3">
+            <div class="col-md-4"><div class="p-3 rounded bg-light"><div class="small text-muted">Tổng Gross cả năm</div><div class="fs-5 fw-bold">@Model.FundSummary.YearlyTotalGross.ToString("N0") đ</div></div></div>
+            <div class="col-md-4"><div class="p-3 rounded bg-light"><div class="small text-muted">Tổng Thực chi Net (đã trừ Tạm ứng/Khấu trừ)</div><div class="fs-5 fw-bold text-success">@Model.FundSummary.YearlyTotalNetSalaryDisbursed.ToString("N0") đ</div></div></div>
+            <div class="col-md-4"><div class="p-3 rounded bg-light"><div class="small text-muted">Tổng Chi phí Doanh nghiệp (Gross + BH/CĐ DN)</div><div class="fs-5 fw-bold text-primary">@Model.FundSummary.YearlyTotalCompanyCost.ToString("N0") đ</div></div></div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Tháng</th><th>Quý</th><th class="text-end">Nhân sự</th>
+                        <th class="text-end">Tổng Gross</th><th class="text-end">BH NLĐ</th>
+                        <th class="text-end">BH + CĐ DN</th><th class="text-end">Thuế TNCN</th>
+                        <th class="text-end">Thực lĩnh Net</th><th class="text-end">Chi phí DN</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in Model.FundSummary.MonthlyBuckets)
+                    {
+                        <tr>
+                            <td>Tháng @m.Month/@m.Year</td>
+                            <td>Q@m.Quarter</td>
+                            <td class="text-end">@m.Headcount</td>
+                            <td class="text-end">@m.TotalGross.ToString("N0")</td>
+                            <td class="text-end">@m.TotalEmployeeInsurance.ToString("N0")</td>
+                            <td class="text-end">@m.TotalCompanyInsuranceAndUnion.ToString("N0")</td>
+                            <td class="text-end">@m.TotalPit.ToString("N0")</td>
+                            <td class="text-end fw-bold text-success">@m.TotalNetSalaryDisbursed.ToString("N0")</td>
+                            <td class="text-end fw-bold">@m.TotalCompanyCost.ToString("N0")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if (Model.PeriodComparison is not null)
+    {
+        <div class="vnm-card p-3">
+            <h6 class="fw-bold mb-2">So sánh biến động kỳ @Model.PeriodComparison.CurrentPeriodCode vs @Model.PeriodComparison.PreviousPeriodCode</h6>
+            <div class="mb-2 small">
+                Chênh lệch Gross: <strong>@Model.PeriodComparison.GrossVariance.ToString("+#,##0;-#,##0;0") đ</strong> (@(Model.PeriodComparison.GrossVariancePercent?.ToString("0.##") ?? "0")%) •
+                Chênh lệch Net: <strong>@Model.PeriodComparison.NetVariance.ToString("+#,##0;-#,##0;0") đ</strong> (@(Model.PeriodComparison.NetVariancePercent?.ToString("0.##") ?? "0")%)
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0">
+                    <thead class="table-light">
+                        <tr><th>Đơn vị</th><th class="text-end">NV kỳ này/trước</th><th class="text-end">Gross kỳ này</th><th class="text-end">Gross kỳ trước</th><th class="text-end">Biến động Gross</th><th class="text-end">Biến động Net</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var u in Model.PeriodComparison.UnitComparisons)
+                        {
+                            <tr>
+                                <td>[@u.UnitCode] @u.UnitName</td>
+                                <td class="text-end">@u.CurrentHeadcount / @u.PreviousHeadcount</td>
+                                <td class="text-end">@u.CurrentGross.ToString("N0")</td>
+                                <td class="text-end">@u.PreviousGross.ToString("N0")</td>
+                                <td class="text-end fw-semibold">@u.GrossVariance.ToString("+#,##0;-#,##0;0")</td>
+                                <td class="text-end fw-semibold">@u.NetVariance.ToString("+#,##0;-#,##0;0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+else if (Model.ActiveTab == "bhxh")
+{
+    @if (Model.SocialInsuranceReport is null)
+    {
+        <div class="alert alert-warning">Chưa có dữ liệu kỳ lương tháng @Model.EffectiveMonth/@Model.EffectiveYear để lập D02-LT.</div>
+    }
+    else
+    {
+        var si = Model.SocialInsuranceReport;
+        <div class="vnm-card p-3 mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div>
+                    <h5 class="fw-bold mb-0">Báo cáo Biến động BHXH (D02-LT) Tháng @si.Month/@si.Year</h5>
+                    <div class="small text-muted">
+                        Tăng mới: <strong class="text-success">@si.IncreaseCount</strong> •
+                        Giảm nghỉ: <strong class="text-danger">@si.DecreaseCount</strong> •
+                        Điều chỉnh mức: <strong class="text-primary">@si.SalaryAdjustmentCount</strong> •
+                        Chênh lệch đối chiếu phải nộp: <strong class="@(si.Reconciliation.ReconciliationDifference == 0m ? "text-success" : "text-danger")">@si.Reconciliation.ReconciliationDifference.ToString("N0") đ</strong>
+                    </div>
+                </div>
+                <a href="/Payroll/ExportSocialInsuranceExcel?year=@si.Year&month=@si.Month&periodId=@Model.SelectedPeriod?.Id" class="btn btn-success btn-sm">
+                    <i class="ti ti-file-spreadsheet me-1"></i>Xuất Excel D02-LT (Template động)
+                </a>
+            </div>
+            <div class="table-responsive mb-3">
+                <table class="table table-sm table-hover mb-0" style="font-size: 0.82rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th>STT</th><th>Mã NV</th><th>Họ tên</th><th>Mã số BHXH</th><th>Đơn vị</th>
+                            <th>Biến động</th><th class="text-end">Mức đóng trước</th><th class="text-end">Mức đóng này</th><th class="text-end">Chênh lệch</th><th>Ghi chú</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in si.Movements)
+                        {
+                            <tr>
+                                <td>@r.Stt</td><td>@r.EmployeeCode</td><td class="fw-semibold">@r.FullName</td><td>@r.SocialInsuranceNumber</td><td>@r.UnitName</td>
+                                <td><span class="badge bg-info-subtle text-dark">@r.ChangeCode</span> @r.ChangeLabel</td>
+                                <td class="text-end">@r.PreviousSalaryBase.ToString("N0")</td>
+                                <td class="text-end fw-semibold">@r.CurrentSalaryBase.ToString("N0")</td>
+                                <td class="text-end">@r.SalaryBaseDelta.ToString("+#,##0;-#,##0;0")</td>
+                                <td class="small text-muted">@r.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="alert alert-light border small mb-0">
+                <strong>Đối chiếu cơ quan BHXH (@si.Reconciliation.LegalReference):</strong>
+                Quỹ lương BHXH-BHYT = <strong>@si.Reconciliation.TotalInsuranceSalaryBase.ToString("N0") đ</strong> •
+                NLĐ đóng = <strong>@si.Reconciliation.ExpectedEmployeeContribution.ToString("N0") đ</strong> (Thực tế: @si.Reconciliation.ActualEmployeeContributionFromRecords.ToString("N0") đ) •
+                DN đóng = <strong>@si.Reconciliation.ExpectedCompanyContribution.ToString("N0") đ</strong> (Thực tế: @si.Reconciliation.ActualCompanyContributionFromRecords.ToString("N0") đ) •
+                Tổng phải nộp: <strong>@si.Reconciliation.TotalExpectedPayableToAgency.ToString("N0") đ</strong> (Lệch: @si.Reconciliation.ReconciliationDifference.ToString("N0") đ).
+            </div>
+        </div>
+    }
+
+    <div class="vnm-card p-3">
+        <h6 class="fw-bold mb-2">Cấu hình Mapping Cột Excel BHXH (VNPT-BHXH / eBHXH – Đổi cấu trúc không cần sửa code)</h6>
+        @foreach (var tpl in Model.SocialInsuranceTemplates)
+        {
+            <form method="post" action="/Payroll/SaveSocialInsuranceTemplate" class="row g-2 border rounded p-2 mb-2">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@tpl.Id" />
+                <input type="hidden" name="periodId" value="@Model.SelectedPeriod?.Id" />
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">Mã mẫu / Phần mềm</label>
+                    <input type="text" name="softwareVendor" value="@tpl.SoftwareVendor" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">Căn cứ pháp lý</label>
+                    <input type="text" name="legalReference" value="@tpl.LegalReference" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label small fw-semibold">JSON Mapping Cột (@tpl.TemplateCode)</label>
+                    <textarea name="columnMappingsJson" rows="3" class="form-control form-control-sm font-monospace">@tpl.ColumnMappingsJson</textarea>
+                </div>
+                <div class="col-md-12 text-end">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Lưu cấu hình cột @tpl.TemplateCode</button>
+                </div>
+            </form>
+        }
+    </div>
+}
+else if (Model.ActiveTab == "pit")
+{
+    <div class="vnm-card p-3 mb-4">
+        <h5 class="fw-bold mb-2">Tờ khai Khấu trừ Thuế TNCN (Mẫu 05/KK-TNCN) – @Model.PitDeclaration.PeriodLabel</h5>
+        <div class="small text-muted mb-3">Tổng NLĐ phát sinh thu nhập/thuế: @Model.PitDeclaration.TotalEmployeesTaxed • Tổng Thuế TNCN đã khấu trừ: <strong class="text-danger">@Model.PitDeclaration.GrandTotalPitWithheld.ToString("N0") đ</strong></div>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0">
+                <thead class="table-light">
+                    <tr><th>Nhóm đối tượng</th><th class="text-end">Số NV</th><th class="text-end">Tổng Gross</th><th class="text-end">TN chịu thuế</th><th class="text-end">TN tính thuế</th><th class="text-end">Thuế TNCN khấu trừ</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.PitDeclaration.ResidencyRows)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@row.ResidencyLabel</td>
+                            <td class="text-end">@row.EmployeeCount</td>
+                            <td class="text-end">@row.TotalGrossIncome.ToString("N0")</td>
+                            <td class="text-end">@row.TotalTaxableIncome.ToString("N0")</td>
+                            <td class="text-end">@row.TotalAssessableIncome.ToString("N0")</td>
+                            <td class="text-end fw-bold text-danger">@row.TotalPitWithheld.ToString("N0")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="vnm-card p-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h5 class="fw-bold mb-0">Quyết toán Thuế TNCN Năm @Model.PitFinalization.TaxYear (Mẫu 05/QTT-TNCN)</h5>
+                <div class="small text-muted">Đã khấu trừ: <strong>@Model.PitFinalization.GrandTotalPitWithheld.ToString("N0") đ</strong> • Nghĩa vụ cả năm: <strong>@Model.PitFinalization.GrandTotalFinalTaxLiability.ToString("N0") đ</strong> • Nộp thêm: <strong class="text-danger">@Model.PitFinalization.GrandTotalAdditionalPayable.ToString("N0") đ</strong> • Nộp thừa/Hoàn: <strong class="text-success">@Model.PitFinalization.GrandTotalRefundable.ToString("N0") đ</strong></div>
+            </div>
+            <a href="/Payroll/ExportPitSettlementExcel?taxYear=@Model.PitFinalization.TaxYear" class="btn btn-success btn-sm">
+                <i class="ti ti-file-spreadsheet me-1"></i>Xuất Excel 05-1/05-2/QTT
+            </a>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.8rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th>STT</th><th>Mã NV</th><th>Họ tên</th><th>MST</th><th class="text-end">Tháng</th>
+                        <th class="text-end">Gross năm</th><th class="text-end">Giảm trừ</th><th class="text-end">TN tính thuế</th>
+                        <th class="text-end">Thuế QTT</th><th class="text-end">Đã khấu trừ</th><th class="text-end">Nộp thêm / (Hoàn)</th><th>Chứng từ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var e in Model.PitFinalization.Employees)
+                    {
+                        var netDiff = e.AdditionalTaxPayable - e.RefundableTax;
+                        <tr>
+                            <td>@e.Stt</td><td>@e.EmployeeCode</td><td class="fw-semibold">@e.FullName</td><td>@e.TaxCode</td><td class="text-end">@e.ActiveMonthsInYear</td>
+                            <td class="text-end">@e.TotalGrossIncome.ToString("N0")</td>
+                            <td class="text-end">@e.TotalFamilyDeductions.ToString("N0")</td>
+                            <td class="text-end">@e.AnnualAssessableIncome.ToString("N0")</td>
+                            <td class="text-end">@e.AnnualFinalTaxLiability.ToString("N0")</td>
+                            <td class="text-end">@e.TotalPitWithheld.ToString("N0")</td>
+                            <td class="text-end fw-bold @(netDiff > 0 ? "text-danger" : netDiff < 0 ? "text-success" : "")">@netDiff.ToString("+#,##0;-#,##0;0")</td>
+                            <td>
+                                <a href="/Payroll/DownloadPitCertificatePdf?employeeId=@e.EmployeeId&taxYear=@Model.PitFinalization.TaxYear" class="btn btn-xs btn-outline-primary">
+                                    <i class="ti ti-file-type-pdf me-1"></i>Cấp Chứng từ
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+else if (Model.ActiveTab == "accounting")
+{
+    @if (Model.AccountingJournal is null)
+    {
+        <div class="alert alert-warning">Chưa có kỳ lương để sinh bút toán hạch toán kế toán.</div>
+    }
+    else
+    {
+        var j = Model.AccountingJournal;
+        <div class="vnm-card p-3 mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div>
+                    <h5 class="fw-bold mb-0">Bút toán Hạch toán Lương Kế toán – @j.PeriodTitle (@j.PeriodCode)</h5>
+                    <div class="small text-muted">
+                        Tổng Nợ = <strong>@j.TotalDebit.ToString("N0") đ</strong> • Tổng Có = <strong>@j.TotalCredit.ToString("N0") đ</strong> •
+                        Cân đối: <strong class="@(j.IsBalanced ? "text-success" : "text-danger")">@(j.IsBalanced ? "CÂN BẰNG 100%" : "LỆCH")</strong> •
+                        Dư Có TK 3341 (Thực chi): <strong class="text-primary">@j.PayableToEmployeesAccount334.ToString("N0") đ</strong>
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="/Payroll/ExportAccountingJournal?periodId=@j.PayrollPeriodId&format=excel" class="btn btn-success btn-sm"><i class="ti ti-file-spreadsheet me-1"></i>Xuất Excel</a>
+                    <a href="/Payroll/ExportAccountingJournal?periodId=@j.PayrollPeriodId&format=csv" class="btn btn-outline-secondary btn-sm"><i class="ti ti-file-text me-1"></i>Xuất CSV ERP</a>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr><th>#</th><th>Mã khóa</th><th>TK Nợ</th><th>TK Có</th><th>Cost Center</th><th>Diễn giải nghiệp vụ</th><th class="text-end">Số tiền (VNĐ)</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in j.Lines)
+                        {
+                            <tr>
+                                <td>@line.LineNo</td>
+                                <td><code>@line.AccountKey</code></td>
+                                <td class="fw-bold text-primary">@line.DebitAccountCode</td>
+                                <td class="fw-bold text-success">@line.CreditAccountCode</td>
+                                <td>@line.CostCenterCode</td>
+                                <td>@line.Description</td>
+                                <td class="text-end fw-semibold">@line.Amount.ToString("N0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <div class="vnm-card p-3">
+        <h6 class="fw-bold mb-2">Cấu hình Tài khoản Kế toán (DB-Driven – Không hardcode trong Engine)</h6>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light"><tr><th>Khóa</th><th>Tên khoản mục</th><th>Số TK</th><th>Pattern Cost Center</th><th>Căn cứ pháp lý</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var cfg in Model.AccountingConfigs)
+                    {
+                        <tr>
+                            <form method="post" action="/Payroll/SaveAccountingAccountConfig">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@cfg.Id" />
+                                <input type="hidden" name="periodId" value="@Model.SelectedPeriod?.Id" />
+                                <td><code>@cfg.AccountKey</code></td>
+                                <td class="small">@cfg.AccountName</td>
+                                <td><input type="text" name="accountCode" value="@cfg.AccountCode" class="form-control form-control-sm" style="width:90px" /></td>
+                                <td><input type="text" name="costCenterPattern" value="@cfg.CostCenterPattern" class="form-control form-control-sm" /></td>
+                                <td><input type="text" name="legalReference" value="@cfg.LegalReference" class="form-control form-control-sm" /></td>
+                                <td><button type="submit" class="btn btn-sm btn-outline-primary">Lưu</button></td>
+                            </form>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

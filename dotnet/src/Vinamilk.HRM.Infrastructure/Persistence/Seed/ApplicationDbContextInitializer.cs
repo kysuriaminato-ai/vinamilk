@@ -408,6 +408,18 @@ public sealed class ApplicationDbContextInitializer
             await _context.SaveChangesAsync(cancellationToken);
         }
 
+        if (!await _context.PayrollAccountingAccountConfigs.AnyAsync(cancellationToken))
+        {
+            await _context.PayrollAccountingAccountConfigs.AddRangeAsync(BuildDefaultAccountingConfigs(), cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        if (!await _context.SocialInsuranceReportTemplates.AnyAsync(cancellationToken))
+        {
+            await _context.SocialInsuranceReportTemplates.AddRangeAsync(BuildDefaultSocialInsuranceTemplates(), cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
         // 5. Seed 55 Nhân viên từ database/vinamilk_hrm.sql + Hợp đồng + Người phụ thuộc + Công + Lương + Tài khoản
         if (!await _context.Employees.AnyAsync(cancellationToken))
         {
@@ -1735,5 +1747,52 @@ public sealed class ApplicationDbContextInitializer
             }
         ];
     }
+
+    public static List<PayrollAccountingAccountConfig> BuildDefaultAccountingConfigs() =>
+    [
+        new() { AccountKey = "EXPENSE_SALARY_PROD", AccountCode = "6221", AccountName = "Chi phí nhân công trực tiếp (Nhà máy/Sản xuất)", NormalSide = "Debit", CostCenterPattern = "NM_*;MFG*;PROD*;SX*", EffectiveFrom = new DateOnly(2024, 1, 1), LegalReference = "Thông tư 200/2014/TT-BTC", NeedsHrVerification = true, IsActive = true, SortOrder = 1 },
+        new() { AccountKey = "EXPENSE_SALARY_SALES", AccountCode = "6411", AccountName = "Chi phí nhân viên bán hàng", NormalSide = "Debit", CostCenterPattern = "SALES*;KD*;CN_*", EffectiveFrom = new DateOnly(2024, 1, 1), LegalReference = "Thông tư 200/2014/TT-BTC", NeedsHrVerification = true, IsActive = true, SortOrder = 2 },
+        new() { AccountKey = "EXPENSE_SALARY_ADMIN", AccountCode = "6421", AccountName = "Chi phí nhân viên quản lý doanh nghiệp", NormalSide = "Debit", CostCenterPattern = "*", EffectiveFrom = new DateOnly(2024, 1, 1), LegalReference = "Thông tư 200/2014/TT-BTC", NeedsHrVerification = true, IsActive = true, SortOrder = 3 },
+        new() { AccountKey = "EXPENSE_INSURANCE_COMP", AccountCode = "6421", AccountName = "Chi phí BHXH, BHYT, BHTN, BHTNLĐ phần DN đóng", NormalSide = "Debit", CostCenterPattern = "*", EffectiveFrom = new DateOnly(2024, 1, 1), LegalReference = "Thông tư 200/2014/TT-BTC", NeedsHrVerification = true, IsActive = true, SortOrder = 4 },
+        new() { AccountKey = "EXPENSE_UNION_COMP", AccountCode = "6421", AccountName = "Chi phí Kinh phí công đoàn phần DN đóng", NormalSide = "Debit", CostCenterPattern = "*", EffectiveFrom = new DateOnly(2024, 1, 1), LegalReference = "Thông tư 200/2014/TT-BTC", NeedsHrVerification = true, IsActive = true, SortOrder = 5 },
+        new() { AccountKey = "PAYABLE_EMPLOYEE", AccountCode = "3341", AccountName = "Phải trả người lao động (Thực lĩnh)", NormalSide = "Credit", CostCenterPattern = "*", EffectiveFrom = new DateOnly(2024, 1, 1), LegalReference = "Thông tư 200/2014/TT-BTC", NeedsHrVerification = true, IsActive = true, SortOrder = 10 },
+        new() { AccountKey = "PAYABLE_SI", AccountCode = "3383", AccountName = "Bảo hiểm xã hội phải nộp (NLĐ + DN)", NormalSide = "Credit", CostCenterPattern = "*", EffectiveFrom = new DateOnly(2024, 1, 1), LegalReference = "Thông tư 200/2014/TT-BTC", NeedsHrVerification = true, IsActive = true, SortOrder = 11 },
+        new() { AccountKey = "PAYABLE_HI", AccountCode = "3384", AccountName = "Bảo hiểm y tế phải nộp (NLĐ + DN)", NormalSide = "Credit", CostCenterPattern = "*", EffectiveFrom = new DateOnly(2024, 1, 1), LegalReference = "Thông tư 200/2014/TT-BTC", NeedsHrVerification = true, IsActive = true, SortOrder = 12 },
+        new() { AccountKey = "PAYABLE_UI", AccountCode = "3386", AccountName = "Bảo hiểm thất nghiệp phải nộp (NLĐ + DN)", NormalSide = "Credit", CostCenterPattern = "*", EffectiveFrom = new DateOnly(2024, 1, 1), LegalReference = "Thông tư 200/2014/TT-BTC", NeedsHrVerification = true, IsActive = true, SortOrder = 13 },
+        new() { AccountKey = "PAYABLE_OA", AccountCode = "3389", AccountName = "Bảo hiểm TNLĐ-BNN phải nộp (DN)", NormalSide = "Credit", CostCenterPattern = "*", EffectiveFrom = new DateOnly(2024, 1, 1), LegalReference = "Thông tư 200/2014/TT-BTC", NeedsHrVerification = true, IsActive = true, SortOrder = 14 },
+        new() { AccountKey = "PAYABLE_UNION", AccountCode = "3382", AccountName = "Kinh phí công đoàn phải nộp (NLĐ + DN)", NormalSide = "Credit", CostCenterPattern = "*", EffectiveFrom = new DateOnly(2024, 1, 1), LegalReference = "Thông tư 200/2014/TT-BTC", NeedsHrVerification = true, IsActive = true, SortOrder = 15 },
+        new() { AccountKey = "PAYABLE_PIT", AccountCode = "3335", AccountName = "Thuế thu nhập cá nhân phải nộp", NormalSide = "Credit", CostCenterPattern = "*", EffectiveFrom = new DateOnly(2024, 1, 1), LegalReference = "Thông tư 200/2014/TT-BTC", NeedsHrVerification = true, IsActive = true, SortOrder = 16 },
+        new() { AccountKey = "RECEIVABLE_ADVANCE", AccountCode = "1411", AccountName = "Thu hồi tạm ứng lương người lao động", NormalSide = "Credit", CostCenterPattern = "*", EffectiveFrom = new DateOnly(2024, 1, 1), LegalReference = "Thông tư 200/2014/TT-BTC", NeedsHrVerification = true, IsActive = true, SortOrder = 17 },
+        new() { AccountKey = "OTHER_RECOVERY", AccountCode = "1388", AccountName = "Thu hồi khoản vay, phạt kỷ luật, truy thu khác", NormalSide = "Credit", CostCenterPattern = "*", EffectiveFrom = new DateOnly(2024, 1, 1), LegalReference = "Thông tư 200/2014/TT-BTC", NeedsHrVerification = true, IsActive = true, SortOrder = 18 }
+    ];
+
+    public static List<SocialInsuranceReportTemplate> BuildDefaultSocialInsuranceTemplates() =>
+    [
+        new()
+        {
+            TemplateCode = "D02-LT",
+            TemplateName = "Mẫu D02-LT: Danh sách lao động tham gia BHXH, BHYT, BHTN, BHTNLĐ-BNN",
+            SoftwareVendor = "VNPT-BHXH / eBHXH / KBHXH",
+            EffectiveFrom = new DateOnly(2024, 1, 1),
+            LegalReference = "Quyết định 490/QĐ-BHXH (Mẫu D02-LT)",
+            NeedsHrVerification = true,
+            IsActive = true,
+            ColumnMappingsJson = System.Text.Json.JsonSerializer.Serialize(new[]
+            {
+                new { ColumnIndex = 1, HeaderText = "STT", FieldKey = "Stt", Width = 6 },
+                new { ColumnIndex = 2, HeaderText = "Mã NV", FieldKey = "EmployeeCode", Width = 12 },
+                new { ColumnIndex = 3, HeaderText = "Họ và tên", FieldKey = "FullName", Width = 24 },
+                new { ColumnIndex = 4, HeaderText = "Mã số BHXH", FieldKey = "SocialInsuranceNumber", Width = 16 },
+                new { ColumnIndex = 5, HeaderText = "Đơn vị / Phòng ban", FieldKey = "UnitName", Width = 22 },
+                new { ColumnIndex = 6, HeaderText = "Chức vụ / Công việc", FieldKey = "PositionName", Width = 20 },
+                new { ColumnIndex = 7, HeaderText = "Loại biến động (PA)", FieldKey = "ChangeCode", Width = 18 },
+                new { ColumnIndex = 8, HeaderText = "Diễn giải biến động", FieldKey = "ChangeLabel", Width = 28 },
+                new { ColumnIndex = 9, HeaderText = "Mức đóng tháng trước (đ)", FieldKey = "PreviousSalaryBase", Width = 20 },
+                new { ColumnIndex = 10, HeaderText = "Mức đóng tháng này (đ)", FieldKey = "CurrentSalaryBase", Width = 20 },
+                new { ColumnIndex = 11, HeaderText = "Chênh lệch mức đóng (đ)", FieldKey = "SalaryBaseDelta", Width = 20 },
+                new { ColumnIndex = 12, HeaderText = "Số tháng BHTN / Ghi chú", FieldKey = "Notes", Width = 30 }
+            })
+        }
+    ];
 }
 

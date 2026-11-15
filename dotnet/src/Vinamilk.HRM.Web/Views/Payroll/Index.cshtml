@@ -20,6 +20,12 @@
         <a href="/Payroll/TerminationSettlements" class="btn btn-outline-danger">
             <i class="ti ti-user-minus me-1"></i>5. Quyết toán Nghỉ việc
         </a>
+        <a href="/Payroll/Reports" class="btn btn-outline-primary">
+            <i class="ti ti-report-money me-1"></i>6. Báo cáo Lương, BHXH, Thuế &amp; Kế toán
+        </a>
+        <a href="/Payroll/CompensationDashboard" class="btn btn-outline-primary">
+            <i class="ti ti-chart-bar me-1"></i>7. Dashboard C&amp;B
+        </a>
         @if (Model.SelectedPeriod is not null)
         {
             <a href="/Payroll/Simulation?periodId=@Model.SelectedPeriod.Id" class="btn btn-outline-warning text-dark fw-semibold">

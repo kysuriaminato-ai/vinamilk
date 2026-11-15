@@ -545,3 +545,67 @@ public class EmployeeTerminationSettlement : BaseAuditableEntity
     public Employee Employee { get; set; } = null!;
 }
 
+/// <summary>
+/// Cấu hình tài khoản hạch toán kế toán tiền lương, BHXH, thuế TNCN (dễ điều chỉnh theo TT 200 / TT 133 hoặc ERP).
+/// </summary>
+public class PayrollAccountingAccountConfig : BaseAuditableEntity
+{
+    /// <summary>EXPENSE_SALARY_ADMIN | EXPENSE_SALARY_PROD | EXPENSE_INSURANCE | EXPENSE_UNION | PAYABLE_EMPLOYEE | PAYABLE_SI | PAYABLE_HI | PAYABLE_UI | PAYABLE_OA | PAYABLE_UNION | PAYABLE_PIT | RECEIVABLE_ADVANCE | OTHER_RECOVERY</summary>
+    public string AccountKey { get; set; } = string.Empty;
+    public string AccountCode { get; set; } = string.Empty;
+    public string AccountName { get; set; } = string.Empty;
+    /// <summary>Debit | Credit</summary>
+    public string NormalSide { get; set; } = "Credit";
+    /// <summary>Khớp CostCenterCode (VD: PROD*, MFG*, *). Null hoặc * áp dụng mặc định.</summary>
+    public string? CostCenterPattern { get; set; }
+    public DateOnly EffectiveFrom { get; set; } = new(2024, 1, 1);
+    public DateOnly? EffectiveTo { get; set; }
+    public string? LegalReference { get; set; }
+    public bool NeedsHrVerification { get; set; } = true;
+    public bool IsActive { get; set; } = true;
+    public int SortOrder { get; set; } = 0;
+}
+
+/// <summary>
+/// Cấu hình mẫu biểu xuất Excel BHXH (VD: D02-LT) cho phép HR cập nhật cột/ánh xạ khi cơ quan BHXH thay đổi biểu mẫu.
+/// </summary>
+public class SocialInsuranceReportTemplate : BaseAuditableEntity
+{
+    public string TemplateCode { get; set; } = "D02-LT";
+    public string TemplateName { get; set; } = string.Empty;
+    public string SoftwareVendor { get; set; } = "VNPT-BHXH / eBHXH";
+    public DateOnly EffectiveFrom { get; set; } = new(2024, 1, 1);
+    public DateOnly? EffectiveTo { get; set; }
+    public string ColumnMappingsJson { get; set; } = "[]";
+    public string? LegalReference { get; set; }
+    public bool NeedsHrVerification { get; set; } = true;
+    public bool IsActive { get; set; } = true;
+}
+
+/// <summary>
+/// Chứng từ khấu trừ thuế TNCN phát hành theo năm/kỳ cho nhân viên (NĐ 123/2020, NĐ 70/2025, TT 80/2021).
+/// </summary>
+public class PitWithholdingCertificate : BaseAuditableEntity
+{
+    public string CertificateCode { get; set; } = string.Empty;
+    public int TaxYear { get; set; }
+    public int EmployeeId { get; set; }
+    public decimal GrossIncome { get; set; }
+    public decimal TotalInsuranceDeducted { get; set; }
+    public decimal TotalFamilyDeductions { get; set; }
+    public decimal TaxableIncome { get; set; }
+    public decimal AssessableIncome { get; set; }
+    public decimal TotalPitWithheld { get; set; }
+    public decimal AnnualFinalTaxLiability { get; set; }
+    public decimal PitOverpaidOrUnderpaid { get; set; }
+    public DateOnly IssuedDate { get; set; }
+    public int IssuedByUserId { get; set; }
+    public string IssuedByUsername { get; set; } = string.Empty;
+    /// <summary>Issued | Cancelled</summary>
+    public string Status { get; set; } = "Issued";
+    public string? LegalReference { get; set; }
+    public bool NeedsHrVerification { get; set; } = true;
+
+    public Employee Employee { get; set; } = null!;
+}
+

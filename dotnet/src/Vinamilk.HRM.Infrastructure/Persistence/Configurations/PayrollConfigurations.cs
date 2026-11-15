@@ -621,3 +621,77 @@ public class EmployeeTerminationSettlementConfiguration : IEntityTypeConfigurati
     }
 }
 
+public class PayrollAccountingAccountConfigConfiguration : IEntityTypeConfiguration<PayrollAccountingAccountConfig>
+{
+    public void Configure(EntityTypeBuilder<PayrollAccountingAccountConfig> builder)
+    {
+        builder.ConfigureBaseAuditable<PayrollAccountingAccountConfig, int>("PayrollAccountingAccountConfigs", "payroll");
+
+        builder.Property(x => x.AccountKey).HasColumnType("varchar(60)").IsRequired();
+        builder.Property(x => x.AccountCode).HasColumnType("varchar(30)").IsRequired();
+        builder.Property(x => x.AccountName).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.NormalSide).HasColumnType("varchar(10)").HasDefaultValue("Credit");
+        builder.Property(x => x.CostCenterPattern).HasColumnType("varchar(50)");
+        builder.Property(x => x.LegalReference).HasMaxLength(300);
+        builder.Property(x => x.NeedsHrVerification).HasDefaultValue(true);
+
+        builder.HasIndex(x => new { x.AccountKey, x.EffectiveFrom })
+            .HasDatabaseName("IX_PayrollAccountingConfigs_Key_Eff");
+    }
+}
+
+public class SocialInsuranceReportTemplateConfiguration : IEntityTypeConfiguration<SocialInsuranceReportTemplate>
+{
+    public void Configure(EntityTypeBuilder<SocialInsuranceReportTemplate> builder)
+    {
+        builder.ConfigureBaseAuditable<SocialInsuranceReportTemplate, int>("SocialInsuranceReportTemplates", "payroll");
+
+        builder.Property(x => x.TemplateCode).HasColumnType("varchar(40)").IsRequired();
+        builder.Property(x => x.TemplateName).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.SoftwareVendor).HasMaxLength(150).IsRequired();
+        builder.Property(x => x.ColumnMappingsJson).HasColumnType("nvarchar(max)").IsRequired();
+        builder.Property(x => x.LegalReference).HasMaxLength(300);
+        builder.Property(x => x.NeedsHrVerification).HasDefaultValue(true);
+
+        builder.HasIndex(x => x.TemplateCode)
+            .IsUnique()
+            .HasDatabaseName("UQ_SocialInsuranceTemplates_Code")
+            .HasFilter("[IsDeleted] = 0");
+    }
+}
+
+public class PitWithholdingCertificateConfiguration : IEntityTypeConfiguration<PitWithholdingCertificate>
+{
+    public void Configure(EntityTypeBuilder<PitWithholdingCertificate> builder)
+    {
+        builder.ConfigureBaseAuditable<PitWithholdingCertificate, int>("PitWithholdingCertificates", "payroll");
+
+        builder.Property(x => x.CertificateCode).HasColumnType("varchar(50)").IsRequired();
+        builder.Property(x => x.GrossIncome).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.TotalInsuranceDeducted).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.TotalFamilyDeductions).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.TaxableIncome).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.AssessableIncome).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.TotalPitWithheld).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.AnnualFinalTaxLiability).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.PitOverpaidOrUnderpaid).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.IssuedByUsername).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("Issued");
+        builder.Property(x => x.LegalReference).HasMaxLength(300);
+        builder.Property(x => x.NeedsHrVerification).HasDefaultValue(true);
+
+        builder.HasIndex(x => x.CertificateCode)
+            .IsUnique()
+            .HasDatabaseName("UQ_PitCertificates_Code")
+            .HasFilter("[IsDeleted] = 0");
+
+        builder.HasIndex(x => new { x.TaxYear, x.EmployeeId })
+            .HasDatabaseName("IX_PitCertificates_Year_Emp");
+
+        builder.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+

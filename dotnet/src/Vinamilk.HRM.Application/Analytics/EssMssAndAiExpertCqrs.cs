@@ -59,6 +59,39 @@ public sealed record MssPendingApprovalDto(
 
 public sealed record EssLeaveTypeOptionDto(int Id, string LeaveName);
 
+public sealed record EssDailyAttendanceRowDto(
+    DateOnly AttendanceDate,
+    string ShiftName,
+    string AttendanceSymbol,
+    DateTime? CheckInTime,
+    DateTime? CheckOutTime,
+    decimal WorkingHours,
+    decimal WorkdayCount,
+    decimal OvertimeHours,
+    int LateMinutes,
+    int EarlyLeaveMinutes,
+    decimal PaidLeaveDays,
+    decimal UnpaidLeaveDays);
+
+public sealed record EssLeaveBalanceRowDto(
+    string LeaveTypeCode,
+    string LeaveTypeName,
+    decimal StandardEntitlement,
+    decimal SeniorityExtraDays,
+    decimal CarriedForwardDays,
+    decimal UsedDays,
+    decimal PendingDays,
+    decimal RemainingDays,
+    decimal CompensatoryHoursBalance);
+
+public sealed record EssAnnualPitSummaryDto(
+    int TaxYear,
+    int MonthsPaid,
+    decimal TotalGrossIncome,
+    decimal TotalInsuranceDeducted,
+    decimal TotalPitWithheld,
+    string? IssuedCertificateCode);
+
 public sealed record EssMssPortalDto(
     EssProfileDto Profile,
     EssPayslipDto? LatestPayslip,
@@ -68,9 +101,16 @@ public sealed record EssMssPortalDto(
     List<MssPendingApprovalDto> PendingApprovals,
     List<EssLeaveTypeOptionDto> LeaveTypes,
     bool IsManager,
-    EssSalaryAdvanceQuotaDto? AdvanceQuota = null);
+    EssSalaryAdvanceQuotaDto? AdvanceQuota = null,
+    List<EssDailyAttendanceRowDto>? MonthlyTimesheet = null,
+    List<EssLeaveBalanceRowDto>? LeaveBalanceDetails = null,
+    EssAnnualPitSummaryDto? AnnualPitSummary = null);
 
-public sealed record GetEssMssPortalQuery(int? EmployeeId = null) : IRequest<EssMssPortalDto>;
+public sealed record GetEssMssPortalQuery(
+    int? EmployeeId = null,
+    int? TimesheetYear = null,
+    int? TimesheetMonth = null,
+    int? PitYear = null) : IRequest<EssMssPortalDto>;
 
 public class GetEssMssPortalQueryHandler : IRequestHandler<GetEssMssPortalQuery, EssMssPortalDto>
 {
@@ -249,6 +289,74 @@ public class GetEssMssPortalQueryHandler : IRequestHandler<GetEssMssPortalQuery,
             .Select(t => new EssLeaveTypeOptionDto(t.Id, t.LeaveTypeName))
             .ToListAsync(cancellationToken);
 
+        var targetTsYear = request.TimesheetYear ?? currentAttendance.Year;
+        var targetTsMonth = request.TimesheetMonth ?? currentAttendance.Month;
+        var tsStart = new DateOnly(targetTsYear, targetTsMonth, 1);
+        var tsEnd = new DateOnly(targetTsYear, targetTsMonth, DateTime.DaysInMonth(targetTsYear, targetTsMonth));
+
+        var monthlyTimesheet = await _context.DailyAttendances
+            .AsNoTracking()
+            .Include(d => d.WorkShift)
+            .Where(d => d.EmployeeId == targetEmp.Id && d.AttendanceDate >= tsStart && d.AttendanceDate <= tsEnd)
+            .OrderBy(d => d.AttendanceDate)
+            .Select(d => new EssDailyAttendanceRowDto(
+                d.AttendanceDate,
+                d.WorkShift != null ? d.WorkShift.ShiftName : "Ca hành chính",
+                d.AttendanceSymbol,
+                d.CheckInTime,
+                d.CheckOutTime,
+                d.WorkingHours,
+                d.WorkdayCount,
+                d.OvertimeHours150 + d.OvertimeHours200 + d.OvertimeHours300,
+                d.LateMinutes,
+                d.EarlyLeaveMinutes,
+                d.PaidLeaveDays,
+                d.UnpaidLeaveDays))
+            .ToListAsync(cancellationToken);
+
+        var leaveBalanceDetails = await _context.LeaveBalances
+            .AsNoTracking()
+            .Include(b => b.LeaveType)
+            .Where(b => b.EmployeeId == targetEmp.Id && b.Year == targetTsYear)
+            .OrderBy(b => b.LeaveType.DisplayOrder)
+            .ThenBy(b => b.LeaveTypeId)
+            .Select(b => new EssLeaveBalanceRowDto(
+                b.LeaveType.LeaveTypeCode,
+                b.LeaveType.LeaveTypeName,
+                b.StandardEntitlement,
+                b.SeniorityExtraDays,
+                b.CarriedForwardDays,
+                b.UsedDays,
+                b.PendingDays,
+                b.RemainingDays,
+                b.CompensatoryHoursBalance))
+            .ToListAsync(cancellationToken);
+
+        var pitYear = request.PitYear ?? payrollList.FirstOrDefault()?.PayrollPeriod.Year ?? now.Year;
+        var yearPayrollRecords = await _context.PayrollRecords
+            .AsNoTracking()
+            .Include(r => r.PayrollPeriod)
+            .Where(r => r.EmployeeId == targetEmp.Id
+                        && r.PayrollPeriod.Year == pitYear
+                        && (r.PayrollPeriod.Status == "Approved"
+                            || r.PayrollPeriod.Status == "Locked"
+                            || r.PayrollPeriod.Status == "Paid"))
+            .ToListAsync(cancellationToken);
+
+        var existingCert = await _context.PitWithholdingCertificates
+            .AsNoTracking()
+            .Where(c => c.EmployeeId == targetEmp.Id && c.TaxYear == pitYear && c.Status == "Issued")
+            .OrderByDescending(c => c.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var annualPitSummary = new EssAnnualPitSummaryDto(
+            pitYear,
+            yearPayrollRecords.Select(r => r.PayrollPeriod.Month).Distinct().Count(),
+            yearPayrollRecords.Where(r => r.PayrollPeriod.PeriodType != "MidMonthAdvance").Sum(r => r.GrossIncome),
+            yearPayrollRecords.Where(r => r.PayrollPeriod.PeriodType != "MidMonthAdvance").Sum(r => r.TotalEmployeeInsurance),
+            yearPayrollRecords.Sum(r => r.PersonalIncomeTax),
+            existingCert?.CertificateCode);
+
         return new EssMssPortalDto(
             profile,
             latestPayslip,
@@ -258,7 +366,10 @@ public class GetEssMssPortalQueryHandler : IRequestHandler<GetEssMssPortalQuery,
             pendingWorkflows,
             leaveTypes,
             isManager,
-            advanceQuota);
+            advanceQuota,
+            monthlyTimesheet,
+            leaveBalanceDetails,
+            annualPitSummary);
     }
 }
 

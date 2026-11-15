@@ -16,9 +16,17 @@ public class HomeController : Controller
 
     public HomeController(IMediator mediator) => _mediator = mediator;
 
-    public async Task<IActionResult> Index(int? employeeId = null, string tab = "home", CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Index(
+        int? employeeId = null,
+        string tab = "home",
+        int? timesheetYear = null,
+        int? timesheetMonth = null,
+        int? pitYear = null,
+        CancellationToken cancellationToken = default)
     {
-        var model = await _mediator.Send(new GetEssMssPortalQuery(employeeId), cancellationToken);
+        var model = await _mediator.Send(
+            new GetEssMssPortalQuery(employeeId, timesheetYear, timesheetMonth, pitYear),
+            cancellationToken);
         ViewBag.ActiveTab = tab.ToLowerInvariant();
         return View(model);
     }
@@ -107,6 +115,26 @@ public class HomeController : Controller
         try
         {
             var result = await _mediator.Send(new GetPayrollRecordPdfQuery(payrollRecordId, EnforceSelfOnly: true), cancellationToken);
+            return File(result.PdfBytes, "application/pdf", result.FileName);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> DownloadPitCertificate(int employeeId, int taxYear, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await _mediator.Send(
+                new IssueAndGetPitCertificatePdfQuery(employeeId, taxYear, PersistCertificate: true, EnforceSelfOnly: true),
+                cancellationToken);
             return File(result.PdfBytes, "application/pdf", result.FileName);
         }
         catch (UnauthorizedAccessException)

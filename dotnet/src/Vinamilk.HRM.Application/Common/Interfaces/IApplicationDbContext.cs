@@ -88,6 +88,9 @@ public interface IApplicationDbContext
     DbSet<PayrollAdjustment> PayrollAdjustments { get; }
     DbSet<PayrollPolicy> PayrollPolicies { get; }
     DbSet<EmployeeTerminationSettlement> EmployeeTerminationSettlements { get; }
+    DbSet<PayrollAccountingAccountConfig> PayrollAccountingAccountConfigs { get; }
+    DbSet<SocialInsuranceReportTemplate> SocialInsuranceReportTemplates { get; }
+    DbSet<PitWithholdingCertificate> PitWithholdingCertificates { get; }
 
     // Talent Schema
     DbSet<RecruitmentRequest> RecruitmentRequests { get; }

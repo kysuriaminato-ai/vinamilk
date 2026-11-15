@@ -121,6 +121,125 @@
             </div>
         </div>
     }
+
+    @if (Model.AnnualPitSummary is not null)
+    {
+        var pit = Model.AnnualPitSummary;
+        <div class="ess-card p-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold mb-0"><i class="ti ti-file-certificate me-1 text-primary"></i>Chứng từ Khấu trừ Thuế TNCN (Năm @pit.TaxYear)</h6>
+                @if (!string.IsNullOrWhiteSpace(pit.IssuedCertificateCode))
+                {
+                    <span class="badge bg-info-subtle text-info">@pit.IssuedCertificateCode</span>
+                }
+            </div>
+            <div class="row g-2 small text-center mb-2">
+                <div class="col-4 border-end">
+                    <div class="text-muted">Tháng tính thuế</div>
+                    <strong>@pit.MonthsPaid tháng</strong>
+                </div>
+                <div class="col-4 border-end">
+                    <div class="text-muted">Tổng Gross</div>
+                    <strong>@pit.TotalGrossIncome.ToString("N0") đ</strong>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted">Thuế đã khấu trừ</div>
+                    <strong class="text-danger">@pit.TotalPitWithheld.ToString("N0") đ</strong>
+                </div>
+            </div>
+            <div class="d-flex justify-content-end">
+                <a href="/ESS/Home/DownloadPitCertificate?employeeId=@Model.Profile.EmployeeId&taxYear=@pit.TaxYear"
+                   class="btn btn-sm btn-outline-primary">
+                    <i class="ti ti-file-type-pdf me-1"></i>Tải Chứng từ Thuế TNCN (PDF)
+                </a>
+            </div>
+        </div>
+    }
+}
+else if (activeTab == "timesheet")
+{
+    <div class="ess-card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="fw-bold mb-0"><i class="ti ti-calendar-time me-1 text-primary"></i>Bảng công Chi tiết (Tháng @Model.CurrentAttendance.Month/@Model.CurrentAttendance.Year)</h6>
+            <span class="badge bg-primary-subtle text-primary">@((Model.MonthlyTimesheet?.Count ?? 0)) ngày ghi nhận</span>
+        </div>
+        @if (Model.MonthlyTimesheet is null || Model.MonthlyTimesheet.Count == 0)
+        {
+            <div class="text-muted small">Chưa có dữ liệu chấm công hàng ngày cho kỳ này.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.78rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Ngày</th>
+                            <th>Ca</th>
+                            <th>Ký hiệu</th>
+                            <th>Vào / Ra</th>
+                            <th class="text-end">Công</th>
+                            <th class="text-end">OT (h)</th>
+                            <th class="text-end">Trễ/Sớm (p)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in Model.MonthlyTimesheet)
+                        {
+                            <tr>
+                                <td class="fw-semibold">@d.AttendanceDate.ToString("dd/MM")</td>
+                                <td>@d.ShiftName</td>
+                                <td><span class="badge bg-secondary-subtle text-dark">@d.AttendanceSymbol</span></td>
+                                <td>@(d.CheckInTime?.ToString("HH:mm") ?? "--:--") - @(d.CheckOutTime?.ToString("HH:mm") ?? "--:--")</td>
+                                <td class="text-end">@d.WorkdayCount.ToString("0.##")</td>
+                                <td class="text-end text-primary">@d.OvertimeHours.ToString("0.#")</td>
+                                <td class="text-end text-danger">@(d.LateMinutes + d.EarlyLeaveMinutes)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <div class="ess-card p-3 mb-3">
+        <h6 class="fw-bold mb-2"><i class="ti ti-beach me-1 text-success"></i>Quỹ Nghỉ phép & Nghỉ bù Chi tiết</h6>
+        @if (Model.LeaveBalanceDetails is null || Model.LeaveBalanceDetails.Count == 0)
+        {
+            <div class="text-muted small">Chưa có sổ theo dõi quỹ phép trong năm.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0" style="font-size: 0.78rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Loại phép</th>
+                            <th class="text-end">Tiêu chuẩn</th>
+                            <th class="text-end">Thâm niên</th>
+                            <th class="text-end">Tồn chuyển</th>
+                            <th class="text-end">Đã dùng</th>
+                            <th class="text-end">Còn lại</th>
+                            <th class="text-end">Giờ nghỉ bù</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var b in Model.LeaveBalanceDetails)
+                        {
+                            <tr>
+                                <td class="fw-semibold">@b.LeaveTypeName (@b.LeaveTypeCode)</td>
+                                <td class="text-end">@b.StandardEntitlement.ToString("0.#")</td>
+                                <td class="text-end">@b.SeniorityExtraDays.ToString("0.#")</td>
+                                <td class="text-end">@b.CarriedForwardDays.ToString("0.#")</td>
+                                <td class="text-end text-warning-emphasis">@b.UsedDays.ToString("0.#")</td>
+                                <td class="text-end fw-bold text-success">@b.RemainingDays.ToString("0.#")</td>
+                                <td class="text-end text-info-emphasis">@b.CompensatoryHoursBalance.ToString("0.#")h</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
 }
 else if (activeTab == "requests")
 {
@@ -265,6 +384,10 @@ else if (activeTab == "mss")
     <a href="@Url.Action("Index", new { employeeId = Model.Profile.EmployeeId, tab = "home" })"
        class="ess-nav-item @(activeTab == "home" ? "active" : "")">
         <i class="ti ti-home"></i><span>Tổng quan</span>
+    </a>
+    <a href="@Url.Action("Index", new { employeeId = Model.Profile.EmployeeId, tab = "timesheet" })"
+       class="ess-nav-item @(activeTab == "timesheet" ? "active" : "")">
+        <i class="ti ti-calendar-stats"></i><span>Công & Phép</span>
     </a>
     <a href="@Url.Action("Index", new { employeeId = Model.Profile.EmployeeId, tab = "requests" })"
        class="ess-nav-item @(activeTab == "requests" ? "active" : "")">

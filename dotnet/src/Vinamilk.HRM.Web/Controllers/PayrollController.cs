@@ -858,5 +858,228 @@ public class PayrollController : Controller
         var pdf = await _mediator.Send(new GetTerminationSettlementPdfQuery(id), cancellationToken);
         return File(pdf.PdfBytes, "application/pdf", pdf.FileName);
     }
+
+    // =========================================================================
+    // CL8: BÁO CÁO LƯƠNG, BHXH (D02-LT), THUẾ TNCN, HẠCH TOÁN KẾ TOÁN & DASHBOARD C&B
+    // =========================================================================
+
+    [HttpGet("Reports")]
+    public async Task<IActionResult> Reports(
+        int? periodId = null,
+        int? year = null,
+        int? month = null,
+        int? quarter = null,
+        int? comparePrevPeriodId = null,
+        int? organizationUnitId = null,
+        string tab = "unit",
+        CancellationToken cancellationToken = default)
+    {
+        ViewData["Title"] = "Báo cáo Lương, BHXH (D02-LT), Thuế TNCN & Hạch toán Kế toán";
+        ViewData["BreadcrumbParent"] = "Chấm công & Tiền lương (C&B)";
+
+        var overview = await _mediator.Send(new GetPayrollManagementOverviewQuery(periodId), cancellationToken);
+        var selectedPeriod = overview.SelectedPeriod ?? overview.Periods.FirstOrDefault();
+
+        int effectiveYear = year ?? selectedPeriod?.Year ?? DateTime.Today.Year;
+        int effectiveMonth = month ?? selectedPeriod?.Month ?? DateTime.Today.Month;
+
+        DetailedUnitPayrollReportDto? unitReport = null;
+        CostCenterLaborCostReportDto? costCenterReport = null;
+        PayrollAccountingJournalDto? accountingJournal = null;
+        PayrollPeriodComparisonDto? comparison = null;
+        SocialInsuranceMonthlyReportDto? siReport = null;
+
+        if (selectedPeriod is not null)
+        {
+            unitReport = await _mediator.Send(new GetDetailedUnitPayrollReportQuery(selectedPeriod.Id, organizationUnitId), cancellationToken);
+            costCenterReport = await _mediator.Send(new GetCostCenterLaborCostQuery(selectedPeriod.Id), cancellationToken);
+            accountingJournal = await _mediator.Send(new GeneratePayrollAccountingEntriesQuery(selectedPeriod.Id), cancellationToken);
+
+            var prevId = comparePrevPeriodId
+                ?? overview.Periods.FirstOrDefault(p => p.Id != selectedPeriod.Id && (p.Year < selectedPeriod.Year || (p.Year == selectedPeriod.Year && p.Month < selectedPeriod.Month)))?.Id;
+            if (prevId.HasValue)
+            {
+                comparison = await _mediator.Send(new ComparePayrollPeriodsQuery(selectedPeriod.Id, prevId.Value), cancellationToken);
+            }
+
+            try
+            {
+                siReport = await _mediator.Send(
+                    new GetSocialInsuranceMonthlyReportQuery(effectiveYear, effectiveMonth, selectedPeriod.Id),
+                    cancellationToken);
+            }
+            catch (KeyNotFoundException)
+            {
+                siReport = null;
+            }
+        }
+
+        var fundSummary = await _mediator.Send(new GetPayrollFundSummaryQuery(effectiveYear), cancellationToken);
+        var pitDeclaration = await _mediator.Send(new GetPitDeclarationSummaryQuery(effectiveYear, quarter.HasValue ? null : effectiveMonth, quarter), cancellationToken);
+        var pitFinalization = await _mediator.Send(new GetAnnualPitFinalizationQuery(effectiveYear), cancellationToken);
+        var accountConfigs = await _mediator.Send(new GetAccountingAccountConfigsQuery(), cancellationToken);
+        var siTemplates = await _mediator.Send(new GetSocialInsuranceTemplatesQuery(), cancellationToken);
+
+        var vm = new PayrollReportsWorkspaceViewModel(
+            ActiveTab: tab.ToLowerInvariant(),
+            EffectiveYear: effectiveYear,
+            EffectiveMonth: effectiveMonth,
+            EffectiveQuarter: quarter,
+            OrganizationUnitId: organizationUnitId,
+            ComparePreviousPeriodId: comparePrevPeriodId,
+            Periods: overview.Periods,
+            SelectedPeriod: selectedPeriod,
+            UnitReport: unitReport,
+            FundSummary: fundSummary,
+            PeriodComparison: comparison,
+            CostCenterReport: costCenterReport,
+            SocialInsuranceReport: siReport,
+            PitDeclaration: pitDeclaration,
+            PitFinalization: pitFinalization,
+            AccountingJournal: accountingJournal,
+            AccountingConfigs: accountConfigs,
+            SocialInsuranceTemplates: siTemplates);
+
+        return View(vm);
+    }
+
+    [HttpGet("CompensationDashboard")]
+    public async Task<IActionResult> CompensationDashboard(int? year = null, int? periodId = null, CancellationToken cancellationToken = default)
+    {
+        ViewData["Title"] = "Dashboard Quản trị Tiền lương & Chi phí Nhân sự (C&B)";
+        ViewData["BreadcrumbParent"] = "Chấm công & Tiền lương (C&B)";
+
+        var overview = await _mediator.Send(new GetPayrollManagementOverviewQuery(periodId), cancellationToken);
+        int effectiveYear = year ?? overview.SelectedPeriod?.Year ?? overview.Periods.FirstOrDefault()?.Year ?? DateTime.Today.Year;
+        int? focusId = periodId ?? overview.SelectedPeriod?.Id;
+
+        var dashboard = await _mediator.Send(new GetCompensationDashboardQuery(effectiveYear, focusId), cancellationToken);
+        ViewBag.Periods = overview.Periods;
+        return View(dashboard);
+    }
+
+    [HttpGet("ExportUnitPayrollA3Pdf")]
+    [Authorize(Policy = "Payroll.Export")]
+    public async Task<IActionResult> ExportUnitPayrollA3Pdf(int periodId, int? organizationUnitId = null, CancellationToken cancellationToken = default)
+    {
+        var pdf = await _mediator.Send(new ExportDetailedUnitPayrollA3PdfQuery(periodId, organizationUnitId), cancellationToken);
+        return File(pdf.PdfBytes, "application/pdf", pdf.FileName);
+    }
+
+    [HttpGet("ExportSocialInsuranceExcel")]
+    [Authorize(Policy = "Payroll.Export")]
+    public async Task<IActionResult> ExportSocialInsuranceExcel(
+        int year,
+        int month,
+        int? periodId = null,
+        string templateCode = "D02-LT",
+        CancellationToken cancellationToken = default)
+    {
+        var file = await _mediator.Send(new ExportSocialInsuranceExcelQuery(year, month, templateCode, periodId), cancellationToken);
+        return File(file.FileBytes, file.ContentType, file.FileName);
+    }
+
+    [HttpGet("DownloadPitCertificatePdf")]
+    [Authorize(Policy = "Payroll.Export")]
+    public async Task<IActionResult> DownloadPitCertificatePdf(
+        int employeeId,
+        int taxYear,
+        bool persist = true,
+        CancellationToken cancellationToken = default)
+    {
+        var pdf = await _mediator.Send(new IssueAndGetPitCertificatePdfQuery(employeeId, taxYear, persist, EnforceSelfOnly: false), cancellationToken);
+        return File(pdf.PdfBytes, "application/pdf", pdf.FileName);
+    }
+
+    [HttpGet("ExportPitSettlementExcel")]
+    [Authorize(Policy = "Payroll.Export")]
+    public async Task<IActionResult> ExportPitSettlementExcel(int taxYear, CancellationToken cancellationToken = default)
+    {
+        var file = await _mediator.Send(new ExportPitSettlementExcelQuery(taxYear), cancellationToken);
+        return File(file.FileBytes, file.ContentType, file.FileName);
+    }
+
+    [HttpGet("ExportAccountingJournal")]
+    [Authorize(Policy = "Payroll.Export")]
+    public async Task<IActionResult> ExportAccountingJournal(
+        int periodId,
+        string format = "excel",
+        CancellationToken cancellationToken = default)
+    {
+        var file = await _mediator.Send(new ExportAccountingJournalQuery(periodId, format), cancellationToken);
+        return File(file.FileBytes, file.ContentType, file.FileName);
+    }
+
+    [HttpPost("SaveAccountingAccountConfig")]
+    [Authorize(Policy = "Payroll.Parameters")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveAccountingAccountConfig(
+        int id,
+        string accountCode,
+        string costCenterPattern,
+        string legalReference,
+        bool needsHrVerification = false,
+        int? periodId = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _mediator.Send(
+                new SaveAccountingAccountConfigCommand(id, accountCode, costCenterPattern, legalReference, needsHrVerification),
+                cancellationToken);
+            TempData["PayrollSuccess"] = $"Đã cập nhật cấu hình tài khoản kế toán #{id} ({accountCode}).";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Reports), new { periodId, tab = "accounting" });
+    }
+
+    [HttpPost("SaveSocialInsuranceTemplate")]
+    [Authorize(Policy = "Payroll.Parameters")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveSocialInsuranceTemplate(
+        int id,
+        string columnMappingsJson,
+        string softwareVendor,
+        string legalReference,
+        bool needsHrVerification = false,
+        int? periodId = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _mediator.Send(
+                new SaveSocialInsuranceTemplateCommand(id, columnMappingsJson, softwareVendor, legalReference, needsHrVerification),
+                cancellationToken);
+            TempData["PayrollSuccess"] = $"Đã cập nhật cấu hình cột mẫu BHXH #{id} (không cần sửa code).";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Reports), new { periodId, tab = "bhxh" });
+    }
 }
+
+public sealed record PayrollReportsWorkspaceViewModel(
+    string ActiveTab,
+    int EffectiveYear,
+    int EffectiveMonth,
+    int? EffectiveQuarter,
+    int? OrganizationUnitId,
+    int? ComparePreviousPeriodId,
+    IReadOnlyList<PayrollPeriodRowDto> Periods,
+    PayrollPeriodRowDto? SelectedPeriod,
+    DetailedUnitPayrollReportDto? UnitReport,
+    PayrollFundSummaryReportDto FundSummary,
+    PayrollPeriodComparisonDto? PeriodComparison,
+    CostCenterLaborCostReportDto? CostCenterReport,
+    SocialInsuranceMonthlyReportDto? SocialInsuranceReport,
+    PitDeclarationSummaryDto PitDeclaration,
+    PitAnnualFinalizationReportDto PitFinalization,
+    PayrollAccountingJournalDto? AccountingJournal,
+    IReadOnlyList<Domain.Entities.Payroll.PayrollAccountingAccountConfig> AccountingConfigs,
+    IReadOnlyList<Domain.Entities.Payroll.SocialInsuranceReportTemplate> SocialInsuranceTemplates);
 
