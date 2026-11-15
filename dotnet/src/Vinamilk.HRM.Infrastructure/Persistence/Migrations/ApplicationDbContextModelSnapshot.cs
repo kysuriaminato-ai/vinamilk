@@ -5034,6 +5034,202 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.ToTable("AttendanceLogs", "time");
                 });
 
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.AttendancePolicy", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2(7)")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("system.job");
+
+                    b.Property<int>("GraceEarlyMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("GraceLateMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("HalfDayLateThresholdMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("MaxMissedPunchExplanationsPerMonth")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("MaxWeeklyWorkingHoursOverride")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<string>("MissedPunchOverQuotaAction")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("varchar(30)")
+                        .HasDefaultValue("FixedFine");
+
+                    b.Property<decimal>("MissedPunchPenaltyAmount")
+                        .HasColumnType("decimal(18,0)");
+
+                    b.Property<int>("PolicyGroupId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("RequireApprovedOvertimeRequest")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("RoundingIntervalMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RoundingMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("varchar(20)")
+                        .HasDefaultValue("Nearest");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("WeeklyWorkdaysMask")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("varchar(80)")
+                        .HasDefaultValue("Mon,Tue,Wed,Thu,Fri");
+
+                    b.Property<int>("ZeroDayLateThresholdMinutes")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PolicyGroupId")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_AttendancePolicies_PolicyGroupId")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("AttendancePolicies", "time");
+                });
+
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.AttendanceStatutoryParameter", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2(7)")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("system.job");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("HolidayOtMultiplier")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("LegalReference")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<decimal>("MaxMonthlyOvertimeHours")
+                        .HasColumnType("decimal(6,2)");
+
+                    b.Property<decimal>("MaxNormalDailyHours")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("MaxNormalWeeklyHours")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("MaxYearlyOvertimeHours")
+                        .HasColumnType("decimal(6,2)");
+
+                    b.Property<decimal>("MinInterShiftRestHours")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<bool>("NeedsHrVerification")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("NightOtExtraBonusRate")
+                        .HasColumnType("decimal(5,4)");
+
+                    b.Property<decimal>("NightShiftBonusRate")
+                        .HasColumnType("decimal(5,4)");
+
+                    b.Property<TimeOnly>("NightWorkEndTime")
+                        .HasColumnType("time");
+
+                    b.Property<TimeOnly>("NightWorkStartTime")
+                        .HasColumnType("time");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("WeekdayOtMultiplier")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("WeeklyDayOffOtMultiplier")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EffectiveFrom", "EffectiveTo")
+                        .HasDatabaseName("IX_AttendanceStatutoryParameters_Effective");
+
+                    b.ToTable("AttendanceStatutoryParameters", "time");
+                });
+
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.DailyAttendance", b =>
                 {
                     b.Property<long>("Id")
@@ -5165,6 +5361,9 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
+                    b.Property<bool>("IsCompensatoryDay")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -5172,6 +5371,16 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsPaidHoliday")
                         .HasColumnType("bit");
+
+                    b.Property<string>("LegalReference")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<bool>("NeedsHrVerification")
+                        .HasColumnType("bit");
+
+                    b.Property<DateOnly?>("OriginalHolidayDate")
+                        .HasColumnType("date");
 
                     b.Property<decimal>("OvertimeMultiplier")
                         .HasColumnType("decimal(5,2)");
@@ -5504,6 +5713,12 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int>("MissedPunchOverQuotaCount")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("MissedPunchPenaltyAmount")
+                        .HasColumnType("decimal(18,0)");
+
                     b.Property<int>("Month")
                         .HasColumnType("int");
 
@@ -5650,6 +5865,224 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.ToTable("OvertimeRequests", "time");
                 });
 
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.PolicyGroup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2(7)")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("system.job");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsCompanyDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("PolicyCode")
+                        .IsRequired()
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<string>("PolicyName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PolicyCode")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_PolicyGroups_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("PolicyGroups", "time");
+                });
+
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.PolicyGroupAssignment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2(7)")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("system.job");
+
+                    b.Property<DateOnly?>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int?>("OrganizationUnitId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PolicyGroupId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PositionId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("OrganizationUnitId");
+
+                    b.HasIndex("PositionId");
+
+                    b.HasIndex("PolicyGroupId", "EmployeeId", "PositionId", "OrganizationUnitId")
+                        .HasDatabaseName("IX_PolicyGroupAssignments_Scope");
+
+                    b.ToTable("PolicyGroupAssignments", "time");
+                });
+
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.ShiftRotationPattern", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2(7)")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("system.job");
+
+                    b.Property<int>("CrewCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CrewOffsetDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CycleDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("PatternCode")
+                        .IsRequired()
+                        .HasColumnType("varchar(40)");
+
+                    b.Property<string>("PatternName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("ShiftSequenceCsv")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PatternCode")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_ShiftRotationPatterns_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("ShiftRotationPatterns", "time");
+                });
+
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.ShiftSchedule", b =>
                 {
                     b.Property<long>("Id")
@@ -5657,6 +6090,10 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .HasColumnType("bigint");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ConflictWarning")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -5708,12 +6145,99 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("WorkShiftId");
 
-                    b.HasIndex("EmployeeId", "WorkDate")
+                    b.HasIndex("EmployeeId", "WorkDate", "WorkShiftId")
                         .IsUnique()
-                        .HasDatabaseName("UQ_ShiftSchedules_Emp_Date")
+                        .HasDatabaseName("UQ_ShiftSchedules_Emp_Date_Shift")
                         .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("ShiftSchedules", "time");
+                });
+
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.ShiftSwapRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ApprovedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ApproverComment")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2(7)")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("system.job");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("RequesterEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RequesterOriginalShiftId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("RequesterWorkDate")
+                        .HasColumnType("date");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("varchar(30)")
+                        .HasDefaultValue("Pending");
+
+                    b.Property<int>("TargetEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TargetOriginalShiftId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("TargetWorkDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TargetEmployeeId");
+
+                    b.HasIndex("RequesterEmployeeId", "TargetEmployeeId", "Status")
+                        .HasDatabaseName("IX_ShiftSwapRequests_Emp_Status");
+
+                    b.ToTable("ShiftSwapRequests", "time");
                 });
 
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.WorkShift", b =>
@@ -5728,6 +6252,12 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .HasColumnType("time");
 
                     b.Property<TimeOnly?>("BreakStartTime")
+                        .HasColumnType("time");
+
+                    b.Property<TimeOnly?>("CoreEndTime")
+                        .HasColumnType("time");
+
+                    b.Property<TimeOnly?>("CoreStartTime")
                         .HasColumnType("time");
 
                     b.Property<DateTime>("CreatedAt")
@@ -5748,6 +6278,9 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.Property<int>("GraceLateMinutes")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsBreakPaid")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -5755,6 +6288,12 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsOvernight")
                         .HasColumnType("bit");
+
+                    b.Property<int>("MaxEarlyCheckInMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxLateCheckOutMinutes")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("NightShiftAllowanceRate")
                         .HasColumnType("decimal(5,2)");
@@ -5773,6 +6312,18 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ShiftType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("varchar(20)")
+                        .HasDefaultValue("Fixed");
+
+                    b.Property<TimeOnly?>("SplitEndTime2")
+                        .HasColumnType("time");
+
+                    b.Property<TimeOnly?>("SplitStartTime2")
+                        .HasColumnType("time");
 
                     b.Property<decimal>("StandardHours")
                         .HasColumnType("decimal(5,2)");
@@ -6500,6 +7051,17 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.AttendancePolicy", b =>
+                {
+                    b.HasOne("Vinamilk.HRM.Domain.Entities.Time.PolicyGroup", "PolicyGroup")
+                        .WithMany("AttendancePolicies")
+                        .HasForeignKey("PolicyGroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PolicyGroup");
+                });
+
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.DailyAttendance", b =>
                 {
                     b.HasOne("Vinamilk.HRM.Domain.Entities.Core.Employee", "Employee")
@@ -6578,6 +7140,38 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.PolicyGroupAssignment", b =>
+                {
+                    b.HasOne("Vinamilk.HRM.Domain.Entities.Core.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Vinamilk.HRM.Domain.Entities.Core.OrganizationUnit", "OrganizationUnit")
+                        .WithMany()
+                        .HasForeignKey("OrganizationUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Vinamilk.HRM.Domain.Entities.Time.PolicyGroup", "PolicyGroup")
+                        .WithMany("Assignments")
+                        .HasForeignKey("PolicyGroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Vinamilk.HRM.Domain.Entities.Core.Position", "Position")
+                        .WithMany()
+                        .HasForeignKey("PositionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("OrganizationUnit");
+
+                    b.Navigation("PolicyGroup");
+
+                    b.Navigation("Position");
+                });
+
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.ShiftSchedule", b =>
                 {
                     b.HasOne("Vinamilk.HRM.Domain.Entities.Core.Employee", "Employee")
@@ -6595,6 +7189,25 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.Navigation("Employee");
 
                     b.Navigation("WorkShift");
+                });
+
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.ShiftSwapRequest", b =>
+                {
+                    b.HasOne("Vinamilk.HRM.Domain.Entities.Core.Employee", "RequesterEmployee")
+                        .WithMany()
+                        .HasForeignKey("RequesterEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Vinamilk.HRM.Domain.Entities.Core.Employee", "TargetEmployee")
+                        .WithMany()
+                        .HasForeignKey("TargetEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RequesterEmployee");
+
+                    b.Navigation("TargetEmployee");
                 });
 
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Core.EducationLevel", b =>
@@ -6766,6 +7379,13 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.Navigation("LeaveBalances");
 
                     b.Navigation("LeaveRequests");
+                });
+
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.PolicyGroup", b =>
+                {
+                    b.Navigation("Assignments");
+
+                    b.Navigation("AttendancePolicies");
                 });
 
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Time.WorkShift", b =>

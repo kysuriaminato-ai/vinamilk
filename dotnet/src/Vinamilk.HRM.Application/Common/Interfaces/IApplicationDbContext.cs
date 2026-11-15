@@ -49,6 +49,12 @@ public interface IApplicationDbContext
     DbSet<LeaveType> LeaveTypes { get; }
     DbSet<LeaveBalance> LeaveBalances { get; }
     DbSet<LeaveRequest> LeaveRequests { get; }
+    DbSet<AttendanceStatutoryParameter> AttendanceStatutoryParameters { get; }
+    DbSet<PolicyGroup> PolicyGroups { get; }
+    DbSet<PolicyGroupAssignment> PolicyGroupAssignments { get; }
+    DbSet<AttendancePolicy> AttendancePolicies { get; }
+    DbSet<ShiftRotationPattern> ShiftRotationPatterns { get; }
+    DbSet<ShiftSwapRequest> ShiftSwapRequests { get; }
 
     // Payroll Schema
     DbSet<PayrollStatutoryParameter> PayrollStatutoryParameters { get; }

@@ -12,6 +12,7 @@ public class WorkShiftConfiguration : IEntityTypeConfiguration<WorkShift>
 
         builder.Property(x => x.ShiftCode).HasColumnType("varchar(30)").IsRequired();
         builder.Property(x => x.ShiftName).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.ShiftType).HasColumnType("varchar(20)").HasDefaultValue("Fixed");
         builder.Property(x => x.StandardHours).HasColumnType("decimal(5,2)");
         builder.Property(x => x.WorkdayValue).HasColumnType("decimal(5,2)");
         builder.Property(x => x.NightShiftAllowanceRate).HasColumnType("decimal(5,2)");
@@ -30,10 +31,11 @@ public class ShiftScheduleConfiguration : IEntityTypeConfiguration<ShiftSchedule
         builder.ConfigureBaseAuditable<ShiftSchedule, long>("ShiftSchedules", "time");
 
         builder.Property(x => x.Notes).HasMaxLength(200);
+        builder.Property(x => x.ConflictWarning).HasMaxLength(500);
 
-        builder.HasIndex(x => new { x.EmployeeId, x.WorkDate })
+        builder.HasIndex(x => new { x.EmployeeId, x.WorkDate, x.WorkShiftId })
             .IsUnique()
-            .HasDatabaseName("UQ_ShiftSchedules_Emp_Date")
+            .HasDatabaseName("UQ_ShiftSchedules_Emp_Date_Shift")
             .HasFilter("[IsDeleted] = 0");
 
         builder.HasOne(x => x.Employee)
@@ -56,6 +58,7 @@ public class HolidayConfiguration : IEntityTypeConfiguration<Holiday>
 
         builder.Property(x => x.HolidayName).HasMaxLength(150).IsRequired();
         builder.Property(x => x.OvertimeMultiplier).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.LegalReference).HasMaxLength(250);
 
         builder.HasIndex(x => x.HolidayDate)
             .IsUnique()
@@ -140,6 +143,7 @@ public class MonthlyAttendanceSummaryConfiguration : IEntityTypeConfiguration<Mo
         builder.Property(x => x.TotalNightHours).HasColumnType("decimal(5,2)");
         builder.Property(x => x.TotalPayableWorkdays).HasColumnType("decimal(5,2)");
         builder.Property(x => x.LockedBy).HasMaxLength(100);
+        builder.Property(x => x.MissedPunchPenaltyAmount).HasColumnType("decimal(18,0)");
 
         builder.HasIndex(x => new { x.EmployeeId, x.Year, x.Month })
             .IsUnique()
@@ -251,4 +255,144 @@ public class LeaveRequestConfiguration : IEntityTypeConfiguration<LeaveRequest>
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class AttendanceStatutoryParameterConfiguration : IEntityTypeConfiguration<AttendanceStatutoryParameter>
+{
+    public void Configure(EntityTypeBuilder<AttendanceStatutoryParameter> builder)
+    {
+        builder.ConfigureBaseAuditable<AttendanceStatutoryParameter, int>("AttendanceStatutoryParameters", "time");
+
+        builder.Property(x => x.LegalReference).HasMaxLength(300).IsRequired();
+        builder.Property(x => x.MinInterShiftRestHours).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.MaxNormalDailyHours).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.MaxNormalWeeklyHours).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.MaxMonthlyOvertimeHours).HasColumnType("decimal(6,2)");
+        builder.Property(x => x.MaxYearlyOvertimeHours).HasColumnType("decimal(6,2)");
+        builder.Property(x => x.WeekdayOtMultiplier).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.WeeklyDayOffOtMultiplier).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.HolidayOtMultiplier).HasColumnType("decimal(5,2)");
+        builder.Property(x => x.NightShiftBonusRate).HasColumnType("decimal(5,4)");
+        builder.Property(x => x.NightOtExtraBonusRate).HasColumnType("decimal(5,4)");
+        builder.Property(x => x.Notes).HasMaxLength(500);
+
+        builder.HasIndex(x => new { x.EffectiveFrom, x.EffectiveTo })
+            .HasDatabaseName("IX_AttendanceStatutoryParameters_Effective");
+    }
+}
+
+public class PolicyGroupConfiguration : IEntityTypeConfiguration<PolicyGroup>
+{
+    public void Configure(EntityTypeBuilder<PolicyGroup> builder)
+    {
+        builder.ConfigureBaseAuditable<PolicyGroup, int>("PolicyGroups", "time");
+
+        builder.Property(x => x.PolicyCode).HasColumnType("varchar(40)").IsRequired();
+        builder.Property(x => x.PolicyName).HasMaxLength(150).IsRequired();
+        builder.Property(x => x.Description).HasMaxLength(500);
+
+        builder.HasIndex(x => x.PolicyCode)
+            .IsUnique()
+            .HasDatabaseName("UQ_PolicyGroups_Code")
+            .HasFilter("[IsDeleted] = 0");
+    }
+}
+
+public class PolicyGroupAssignmentConfiguration : IEntityTypeConfiguration<PolicyGroupAssignment>
+{
+    public void Configure(EntityTypeBuilder<PolicyGroupAssignment> builder)
+    {
+        builder.ConfigureBaseAuditable<PolicyGroupAssignment, int>("PolicyGroupAssignments", "time");
+
+        builder.HasIndex(x => new { x.PolicyGroupId, x.EmployeeId, x.PositionId, x.OrganizationUnitId })
+            .HasDatabaseName("IX_PolicyGroupAssignments_Scope");
+
+        builder.HasOne(x => x.PolicyGroup)
+            .WithMany(g => g.Assignments)
+            .HasForeignKey(x => x.PolicyGroupId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.Position)
+            .WithMany()
+            .HasForeignKey(x => x.PositionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.OrganizationUnit)
+            .WithMany()
+            .HasForeignKey(x => x.OrganizationUnitId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class AttendancePolicyConfiguration : IEntityTypeConfiguration<AttendancePolicy>
+{
+    public void Configure(EntityTypeBuilder<AttendancePolicy> builder)
+    {
+        builder.ConfigureBaseAuditable<AttendancePolicy, int>("AttendancePolicies", "time");
+
+        builder.Property(x => x.RoundingMode).HasColumnType("varchar(20)").HasDefaultValue("Nearest");
+        builder.Property(x => x.MissedPunchOverQuotaAction).HasColumnType("varchar(30)").HasDefaultValue("FixedFine");
+        builder.Property(x => x.MissedPunchPenaltyAmount).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.WeeklyWorkdaysMask).HasColumnType("varchar(80)").HasDefaultValue("Mon,Tue,Wed,Thu,Fri");
+        builder.Property(x => x.MaxWeeklyWorkingHoursOverride).HasColumnType("decimal(5,2)");
+
+        builder.HasIndex(x => x.PolicyGroupId)
+            .IsUnique()
+            .HasDatabaseName("UQ_AttendancePolicies_PolicyGroupId")
+            .HasFilter("[IsDeleted] = 0");
+
+        builder.HasOne(x => x.PolicyGroup)
+            .WithMany(g => g.AttendancePolicies)
+            .HasForeignKey(x => x.PolicyGroupId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class ShiftRotationPatternConfiguration : IEntityTypeConfiguration<ShiftRotationPattern>
+{
+    public void Configure(EntityTypeBuilder<ShiftRotationPattern> builder)
+    {
+        builder.ConfigureBaseAuditable<ShiftRotationPattern, int>("ShiftRotationPatterns", "time");
+
+        builder.Property(x => x.PatternCode).HasColumnType("varchar(40)").IsRequired();
+        builder.Property(x => x.PatternName).HasMaxLength(150).IsRequired();
+        builder.Property(x => x.ShiftSequenceCsv).HasMaxLength(500).IsRequired();
+        builder.Property(x => x.Description).HasMaxLength(500);
+
+        builder.HasIndex(x => x.PatternCode)
+            .IsUnique()
+            .HasDatabaseName("UQ_ShiftRotationPatterns_Code")
+            .HasFilter("[IsDeleted] = 0");
+    }
+}
+
+public class ShiftSwapRequestConfiguration : IEntityTypeConfiguration<ShiftSwapRequest>
+{
+    public void Configure(EntityTypeBuilder<ShiftSwapRequest> builder)
+    {
+        builder.ConfigureBaseAuditable<ShiftSwapRequest, int>("ShiftSwapRequests", "time");
+
+        builder.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+        builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("Pending");
+        builder.Property(x => x.ApproverComment).HasMaxLength(500);
+
+        builder.HasIndex(x => new { x.RequesterEmployeeId, x.TargetEmployeeId, x.Status })
+            .HasDatabaseName("IX_ShiftSwapRequests_Emp_Status");
+
+        builder.HasOne(x => x.RequesterEmployee)
+            .WithMany()
+            .HasForeignKey(x => x.RequesterEmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.TargetEmployee)
+            .WithMany()
+            .HasForeignKey(x => x.TargetEmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 

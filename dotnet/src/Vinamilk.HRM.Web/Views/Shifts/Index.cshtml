@@ -42,6 +42,13 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
+@if (TempData["WarningMessage"] != null)
+{
+    <div class="alert alert-warning alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-alert-circle me-2"></i>@TempData["WarningMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
 
 <!-- KPI Cards -->
 <div class="row g-3 mb-4">
@@ -90,6 +97,16 @@
     <li class="nav-item">
         <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-holidays" type="button">
             <i class="ti ti-calendar-star me-1"></i>Lịch Ngày Lễ, Tết Việt Nam (@Model.Holidays.Count)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-rotation-swap" type="button">
+            <i class="ti ti-arrows-exchange me-1"></i>Xoay ca & Đổi ca
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-policies" type="button">
+            <i class="ti ti-shield-cog me-1"></i>Nhóm chính sách & Quy định
         </button>
     </li>
 </ul>
@@ -148,6 +165,19 @@
             </div>
         </div>
 
+        @if (Model.ConflictWarnings is { Count: > 0 })
+        {
+            <div class="alert alert-warning border-warning mb-3" role="alert">
+                <div class="fw-bold mb-1"><i class="ti ti-alert-triangle me-1"></i>Phát hiện @Model.ConflictWarnings.Count cảnh báo xếp ca / giờ làm việc:</div>
+                <ul class="mb-0 ps-3 fs-7">
+                    @foreach (var w in Model.ConflictWarnings.Take(8))
+                    {
+                        <li><strong>@w.EmployeeCode - @w.EmployeeName (@w.WorkDate.ToString("dd/MM")):</strong> @w.Message</li>
+                    }
+                </ul>
+            </div>
+        }
+
         <div class="vnm-card overflow-hidden">
             <div class="table-responsive">
                 <table class="table table-bordered align-middle mb-0 text-center">
@@ -185,9 +215,13 @@
                                                 <i class="ti ti-flag me-1"></i>LỄ: @cell.HolidayName
                                             </div>
                                         }
-                                        <div class="shift-cell-badge badge border w-100 py-2 @cell.BadgeColorClass">
+                                        <div class="shift-cell-badge badge border w-100 py-2 @cell.BadgeColorClass @(string.IsNullOrEmpty(cell.ConflictWarning) ? "" : "border-danger border-2")">
                                             <div class="fw-bold fs-6 shift-code-label">@cell.ShiftCode</div>
                                             <div class="fs-7 fw-normal mt-1 shift-time-label">@cell.TimeRangeText</div>
+                                            @if (!string.IsNullOrEmpty(cell.ConflictWarning))
+                                            {
+                                                <div class="text-danger fs-7 mt-1" title="@cell.ConflictWarning"><i class="ti ti-alert-triangle"></i> Cảnh báo</div>
+                                            }
                                         </div>
                                     </td>
                                 }
@@ -207,6 +241,7 @@
                     <thead class="table-light">
                         <tr>
                             <th>Mã Ca</th>
+                            <th>Loại ca</th>
                             <th>Tên Ca làm việc</th>
                             <th>Giờ làm việc</th>
                             <th>Nghỉ giữa ca</th>
@@ -221,10 +256,21 @@
                         {
                             <tr>
                                 <td><span class="badge border px-2 py-1 @s.BadgeColorClass">@s.ShiftCode</span></td>
+                                <td><span class="badge bg-info-subtle text-info border border-info-subtle">@s.ShiftType</span></td>
                                 <td class="fw-bold">@s.ShiftName</td>
-                                <td class="font-monospace">@s.StartTime.ToString("HH:mm") — @s.EndTime.ToString("HH:mm")</td>
                                 <td class="font-monospace">
-                                    @(s.BreakStartTime.HasValue ? $"{s.BreakStartTime:HH\\:mm} - {s.BreakEndTime:HH\\:mm}" : "Ăn ca theo dây chuyền")
+                                    @s.StartTime.ToString("HH:mm") — @s.EndTime.ToString("HH:mm")
+                                    @if (s.ShiftType == "Split" && s.SplitStartTime2.HasValue && s.SplitEndTime2.HasValue)
+                                    {
+                                        <div class="fs-7 text-muted">+ @s.SplitStartTime2.Value.ToString("HH:mm") — @s.SplitEndTime2.Value.ToString("HH:mm")</div>
+                                    }
+                                    @if (s.ShiftType == "Flexible" && s.CoreStartTime.HasValue && s.CoreEndTime.HasValue)
+                                    {
+                                        <div class="fs-7 text-primary">Core: @s.CoreStartTime.Value.ToString("HH:mm")-@s.CoreEndTime.Value.ToString("HH:mm")</div>
+                                    }
+                                </td>
+                                <td class="font-monospace">
+                                    @(s.BreakStartTime.HasValue ? $"{s.BreakStartTime:HH\\:mm} - {s.BreakEndTime:HH\\:mm}" + (s.IsBreakPaid ? " (Có lương)" : "") : "Ăn ca theo dây chuyền")
                                 </td>
                                 <td>@s.StandardHours.ToString("0.#") giờ (@s.WorkdayValue công)</td>
                                 <td>
@@ -268,7 +314,17 @@
                             <tr>
                                 <td class="font-monospace fw-bold text-danger">@h.HolidayDate.ToString("dd/MM/yyyy")</td>
                                 <td>@h.DayOfWeekVi</td>
-                                <td class="fw-semibold">@h.HolidayName</td>
+                                <td class="fw-semibold">
+                                    @h.HolidayName
+                                    @if (h.IsCompensatoryDay)
+                                    {
+                                        <span class="badge bg-info-subtle text-info ms-1">Nghỉ bù (@h.OriginalHolidayDate?.ToString("dd/MM"))</span>
+                                    }
+                                    @if (h.NeedsHrVerification)
+                                    {
+                                        <span class="badge bg-warning-subtle text-warning ms-1" title="@h.LegalReference">Cần HR đối chiếu</span>
+                                    }
+                                </td>
                                 <td>
                                     <span class="badge bg-success-subtle text-success">100% lương cơ bản</span>
                                 </td>
@@ -288,6 +344,269 @@
                         }
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 4: XOAY CA TỰ ĐỘNG (3 CA 4 KÍP) & ĐỔI CA GIỮA 2 NHÂN VIÊN -->
+    <div class="tab-pane fade" id="tab-rotation-swap">
+        <div class="row g-3">
+            <div class="col-lg-5">
+                <div class="vnm-card p-3 h-100">
+                    <h6 class="fw-bold mb-3"><i class="ti ti-rotate me-1 text-primary"></i>Sinh lịch Xoay ca Tự động (3 ca 4 kíp)</h6>
+                    <form asp-action="GenerateRotation" method="post">
+                        @Html.AntiForgeryToken()
+                        <div class="mb-2">
+                            <label class="form-label fs-7 fw-semibold">Mẫu xoay ca</label>
+                            <select name="patternId" class="form-select form-select-sm" required>
+                                @foreach (var p in (Model.RotationPatterns ?? Array.Empty<Vinamilk.HRM.Application.TimeAttendance.ShiftRotationPatternDto>()))
+                                {
+                                    <option value="@p.Id">@p.PatternName (@p.ShiftSequenceCsv)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fs-7 fw-semibold">Đơn vị áp dụng</label>
+                            <select name="organizationUnitId" class="form-select form-select-sm">
+                                <option value="">Tất cả nhân viên đang làm việc</option>
+                                @foreach (var u in Model.Units)
+                                {
+                                    <option value="@u.Id">@u.Name (@u.Code)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label fs-7 fw-semibold">Từ ngày</label>
+                                <input type="date" name="startDate" class="form-control form-control-sm" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" required />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fs-7 fw-semibold">Số tuần sinh lịch</label>
+                                <input type="number" name="weeksCount" class="form-control form-control-sm" value="4" min="1" max="52" required />
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm w-100">
+                            <i class="ti ti-sparkles me-1"></i>Sinh lịch xoay ca tự động
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="col-lg-7">
+                <div class="vnm-card p-3 h-100">
+                    <h6 class="fw-bold mb-3"><i class="ti ti-arrows-exchange me-1 text-success"></i>Đề nghị Đổi ca giữa 2 Nhân viên</h6>
+                    <form asp-action="SubmitSwap" method="post" class="row g-2 mb-3 border-bottom pb-3">
+                        @Html.AntiForgeryToken()
+                        <div class="col-md-6">
+                            <label class="form-label fs-7 fw-semibold">Nhân viên đề nghị</label>
+                            <select name="requesterEmployeeId" class="form-select form-select-sm" required>
+                                @foreach (var e in (Model.EmployeesLookup ?? Array.Empty<Vinamilk.HRM.Application.Workflows.SimpleLookupDto>()))
+                                {
+                                    <option value="@e.Id">@e.Code - @e.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fs-7 fw-semibold">Ngày của NV đề nghị</label>
+                            <input type="date" name="requesterWorkDate" class="form-control form-control-sm" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fs-7 fw-semibold">Nhân viên đổi cùng</label>
+                            <select name="targetEmployeeId" class="form-select form-select-sm" required>
+                                @foreach (var e in (Model.EmployeesLookup ?? Array.Empty<Vinamilk.HRM.Application.Workflows.SimpleLookupDto>()))
+                                {
+                                    <option value="@e.Id">@e.Code - @e.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fs-7 fw-semibold">Ngày của NV đổi cùng</label>
+                            <input type="date" name="targetWorkDate" class="form-control form-control-sm" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="col-md-9">
+                            <input type="text" name="reason" class="form-control form-control-sm" placeholder="Lý do đổi ca..." required />
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-outline-primary btn-sm w-100">Gửi đơn đổi ca</button>
+                        </div>
+                    </form>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>NV Đề nghị</th>
+                                    <th>NV Đổi cùng</th>
+                                    <th>Lý do</th>
+                                    <th>Trạng thái</th>
+                                    <th class="text-end">Duyệt</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var r in (Model.ShiftSwapRequests ?? Array.Empty<Vinamilk.HRM.Application.TimeAttendance.ShiftSwapRequestItemDto>()))
+                                {
+                                    <tr>
+                                        <td class="fs-7"><strong>@r.RequesterName</strong><br /><span class="text-muted">@r.RequesterWorkDate.ToString("dd/MM/yyyy")</span></td>
+                                        <td class="fs-7"><strong>@r.TargetName</strong><br /><span class="text-muted">@r.TargetWorkDate.ToString("dd/MM/yyyy")</span></td>
+                                        <td class="fs-7">@r.Reason</td>
+                                        <td><span class="badge @(r.Status == "Approved" ? "bg-success-subtle text-success" : r.Status == "Rejected" ? "bg-danger-subtle text-danger" : "bg-warning-subtle text-warning")">@r.Status</span></td>
+                                        <td class="text-end">
+                                            @if (r.Status == "Pending")
+                                            {
+                                                <form asp-action="ProcessSwap" method="post" class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="requestId" value="@r.Id" />
+                                                    <input type="hidden" name="approve" value="true" />
+                                                    <button type="submit" class="btn btn-xs btn-success" title="Duyệt"><i class="ti ti-check"></i></button>
+                                                </form>
+                                                <form asp-action="ProcessSwap" method="post" class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="requestId" value="@r.Id" />
+                                                    <input type="hidden" name="approve" value="false" />
+                                                    <button type="submit" class="btn btn-xs btn-outline-danger" title="Từ chối"><i class="ti ti-x"></i></button>
+                                                </form>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 5: NHÓM CHÍNH SÁCH (POLICY GROUP) & THAM SỐ PHÁP LÝ -->
+    <div class="tab-pane fade" id="tab-policies">
+        @if (Model.StatutoryParameter != null)
+        {
+            var st = Model.StatutoryParameter;
+            <div class="alert alert-info border-info mb-3 fs-7">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <strong><i class="ti ti-scale me-1"></i>Tham số Pháp lý Chấm công (hiệu lực từ @st.EffectiveFrom.ToString("dd/MM/yyyy")):</strong>
+                    @if (st.NeedsHrVerification)
+                    {
+                        <span class="badge bg-warning text-dark">NeedsHrVerification = true (Cần HR đối chiếu)</span>
+                    }
+                </div>
+                <div>
+                    Giờ làm đêm: <strong>@st.NightWorkStartTime.ToString("HH:mm")–@st.NightWorkEndTime.ToString("HH:mm")</strong> |
+                    Nghỉ tối thiểu giữa 2 ca: <strong>@st.MinInterShiftRestHours.ToString("0.#")h</strong> |
+                    Trần giờ thường tuần: <strong>@st.MaxNormalWeeklyHours.ToString("0.#")h</strong> |
+                    Trần OT: <strong>@st.MaxMonthlyOvertimeHours.ToString("0.#")h/tháng</strong>, <strong>@st.MaxYearlyOvertimeHours.ToString("0.#")h/năm</strong> |
+                    Căn cứ: <em>@st.LegalReference</em>
+                </div>
+            </div>
+        }
+
+        <div class="row g-3">
+            <div class="col-lg-7">
+                <div class="vnm-card overflow-hidden">
+                    <div class="p-3 border-bottom fw-bold"><i class="ti ti-list-check me-1 text-primary"></i>Danh sách Nhóm chính sách chấm công</div>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm align-middle mb-0 fs-7">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Mã</th>
+                                    <th>Tên nhóm</th>
+                                    <th>Ân hạn</th>
+                                    <th>Làm tròn</th>
+                                    <th>Ngưỡng 1/2 & 0 công</th>
+                                    <th>Quota giải trình</th>
+                                    <th>Đang gán</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var pg in (Model.PolicyGroups ?? Array.Empty<Vinamilk.HRM.Application.TimeAttendance.PolicyGroupSummaryDto>()))
+                                {
+                                    <tr>
+                                        <td>
+                                            <strong>@pg.PolicyCode</strong>
+                                            @if (pg.IsCompanyDefault)
+                                            {
+                                                <span class="badge bg-primary-subtle text-primary">Mặc định</span>
+                                            }
+                                        </td>
+                                        <td>@pg.PolicyName</td>
+                                        <td>@pg.GraceLateMinutes p</td>
+                                        <td>@pg.RoundingIntervalMinutes p (@pg.RoundingMode)</td>
+                                        <td>&gt;@pg.HalfDayLateThresholdMinutes p / &gt;@pg.ZeroDayLateThresholdMinutes p</td>
+                                        <td>@pg.MaxMissedPunchExplanationsPerMonth/tháng (@pg.MissedPunchOverQuotaAction)</td>
+                                        <td><span class="badge bg-secondary-subtle text-secondary">@pg.AssignmentCount phạm vi</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="vnm-card p-3 mb-3">
+                    <h6 class="fw-bold mb-2">Tạo / Cập nhật Nhóm chính sách</h6>
+                    <form asp-action="SavePolicyGroup" method="post" class="row g-2 fs-7">
+                        @Html.AntiForgeryToken()
+                        <div class="col-4"><input name="policyCode" class="form-control form-control-sm" placeholder="Mã (VD: PLANT_PRO)" required /></div>
+                        <div class="col-8"><input name="policyName" class="form-control form-control-sm" placeholder="Tên nhóm chính sách" required /></div>
+                        <div class="col-4"><label class="form-label mb-0">Ân hạn trễ (p)</label><input type="number" name="graceLateMinutes" value="5" class="form-control form-control-sm" /></div>
+                        <div class="col-4"><label class="form-label mb-0">Bước tròn (p)</label><select name="roundingIntervalMinutes" class="form-select form-select-sm"><option value="0">0</option><option value="5" selected>5</option><option value="10">10</option><option value="15">15</option></select></div>
+                        <div class="col-4"><label class="form-label mb-0">Kiểu tròn</label><select name="roundingMode" class="form-select form-select-sm"><option value="None">None</option><option value="Nearest" selected>Nearest</option><option value="Ceiling">Ceiling</option><option value="Floor">Floor</option></select></div>
+                        <div class="col-4"><label class="form-label mb-0">Nửa công (&gt;p)</label><input type="number" name="halfDayLateThresholdMinutes" value="60" class="form-control form-control-sm" /></div>
+                        <div class="col-4"><label class="form-label mb-0">Mất công (&gt;p)</label><input type="number" name="zeroDayLateThresholdMinutes" value="240" class="form-control form-control-sm" /></div>
+                        <div class="col-4"><label class="form-label mb-0">Quota quên công</label><input type="number" name="maxMissedPunchExplanationsPerMonth" value="3" class="form-control form-control-sm" /></div>
+                        <div class="col-6"><label class="form-label mb-0">Xử lý vượt quota</label><select name="missedPunchOverQuotaAction" class="form-select form-select-sm"><option value="FixedFine">Phạt tiền</option><option value="DeductHalfDay">Trừ 0.5 công</option><option value="DeductFullDay">Trừ 1 công</option></select></div>
+                        <div class="col-6"><label class="form-label mb-0">Tiền phạt (VNĐ)</label><input type="number" name="missedPunchPenaltyAmount" value="100000" class="form-control form-control-sm" /></div>
+                        <div class="col-8"><label class="form-label mb-0">Ngày làm trong tuần</label><input name="weeklyWorkdaysMask" value="Mon,Tue,Wed,Thu,Fri" class="form-control form-control-sm" /></div>
+                        <div class="col-4"><label class="form-label mb-0">Trần tuần (h)</label><input type="number" step="0.5" name="maxWeeklyWorkingHoursOverride" class="form-control form-control-sm" /></div>
+                        <input type="hidden" name="graceEarlyMinutes" value="5" />
+                        <input type="hidden" name="requireApprovedOvertimeRequest" value="true" />
+                        <div class="col-12 mt-2"><button type="submit" class="btn btn-primary btn-sm w-100">Lưu Nhóm chính sách</button></div>
+                    </form>
+                </div>
+
+                <div class="vnm-card p-3">
+                    <h6 class="fw-bold mb-2">Gán Nhóm chính sách (NV &gt; Chức danh &gt; Đơn vị)</h6>
+                    <form asp-action="AssignPolicyGroup" method="post" class="row g-2 fs-7">
+                        @Html.AntiForgeryToken()
+                        <div class="col-12">
+                            <select name="policyGroupId" class="form-select form-select-sm" required>
+                                @foreach (var pg in (Model.PolicyGroups ?? Array.Empty<Vinamilk.HRM.Application.TimeAttendance.PolicyGroupSummaryDto>()))
+                                {
+                                    <option value="@pg.Id">@pg.PolicyCode - @pg.PolicyName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <select name="employeeId" class="form-select form-select-sm">
+                                <option value="">-- Hoặc gán theo Nhân viên (Ưu tiên 1) --</option>
+                                @foreach (var e in (Model.EmployeesLookup ?? Array.Empty<Vinamilk.HRM.Application.Workflows.SimpleLookupDto>()))
+                                {
+                                    <option value="@e.Id">@e.Code - @e.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <select name="positionId" class="form-select form-select-sm">
+                                <option value="">-- Hoặc Chức danh (Ưu tiên 2) --</option>
+                                @foreach (var pos in (Model.PositionsLookup ?? Array.Empty<Vinamilk.HRM.Application.Workflows.SimpleLookupDto>()))
+                                {
+                                    <option value="@pos.Id">@pos.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <select name="organizationUnitId" class="form-select form-select-sm">
+                                <option value="">-- Hoặc Đơn vị (Ưu tiên 3) --</option>
+                                @foreach (var u in Model.Units)
+                                {
+                                    <option value="@u.Id">@u.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12"><button type="submit" class="btn btn-outline-primary btn-sm w-100">Áp dụng Chính sách</button></div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -380,7 +699,37 @@
                         <input type="number" step="0.05" name="nightShiftAllowanceRate" class="form-control" value="0.00" />
                     </div>
                     <div class="col-12 mt-2">
+                        <label class="form-label fw-semibold">Loại Ca làm việc</label>
+                        <select name="shiftType" class="form-select">
+                            <option value="Fixed">Fixed (Cố định giờ vào/ra)</option>
+                            <option value="Flexible">Flexible (Linh hoạt + Core Time)</option>
+                            <option value="Overnight">Overnight (Ca đêm qua 00:00)</option>
+                            <option value="Split">Split (Ca gãy 2 khung giờ)</option>
+                            <option value="Hourly">Hourly (Tính công theo giờ)</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Core Start (Flexible)</label>
+                        <input type="time" name="coreStartTime" class="form-control" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Core End (Flexible)</label>
+                        <input type="time" name="coreEndTime" class="form-control" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Khung 2 Bắt đầu (Split)</label>
+                        <input type="time" name="splitStartTime2" class="form-control" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Khung 2 Kết thúc (Split)</label>
+                        <input type="time" name="splitEndTime2" class="form-control" />
+                    </div>
+                    <div class="col-12 mt-2">
                         <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="isBreakPaid" value="true" id="chkBreakPaid" />
+                            <label class="form-check-label" for="chkBreakPaid">Nghỉ giữa ca có tính hưởng lương</label>
+                        </div>
+                        <div class="form-check mt-1">
                             <input class="form-check-input" type="checkbox" name="isOvernight" value="true" id="chkOvernight" />
                             <label class="form-check-label" for="chkOvernight">Ca làm việc qua đêm (hưởng phụ cấp đêm theo Điều 98 BLLĐ 2019)</label>
                         </div>
@@ -416,6 +765,10 @@
                 <div class="mb-2">
                     <label class="form-label fw-semibold">Hệ số tính lương OT ngày lễ</label>
                     <input type="number" step="0.5" name="overtimeMultiplier" class="form-control" value="3.0" />
+                </div>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" name="autoGenerateCompensatoryIfWeekend" value="true" checked id="chkAutoCompHoliday" />
+                    <label class="form-check-label" for="chkAutoCompHoliday">Tự động sinh ngày nghỉ bù nếu rơi vào cuối tuần / ngày nghỉ tuần</label>
                 </div>
             </div>
             <div class="modal-footer">
@@ -480,6 +833,9 @@
                 const json = await resp.json();
                 if (window.VnmUI && window.VnmUI.toast) {
                     window.VnmUI.toast(json.message || 'Đã cập nhật lịch phân ca!', 'success');
+                    if (json.warnings && json.warnings.length > 0) {
+                        window.VnmUI.toast('Cảnh báo xếp ca: ' + json.warnings.join('; '), 'warning');
+                    }
                 }
             } catch (err) {
                 if (window.VnmUI && window.VnmUI.toast) {

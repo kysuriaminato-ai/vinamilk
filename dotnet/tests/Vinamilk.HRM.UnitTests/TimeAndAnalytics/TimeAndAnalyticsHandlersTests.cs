@@ -71,7 +71,44 @@ public class TimeAndAnalyticsHandlersTests
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
-        return new ApplicationDbContext(options);
+        var db = new ApplicationDbContext(options);
+        db.AttendanceStatutoryParameters.Add(new AttendanceStatutoryParameter
+        {
+            EffectiveFrom = new DateOnly(2021, 1, 1),
+            EffectiveTo = null,
+            LegalReference = "BLLD 2019",
+            NeedsHrVerification = true,
+            NightWorkStartTime = new TimeOnly(22, 0),
+            NightWorkEndTime = new TimeOnly(6, 0),
+            MinInterShiftRestHours = 12m,
+            MaxNormalDailyHours = 8m,
+            MaxNormalWeeklyHours = 48m,
+            MaxMonthlyOvertimeHours = 40m,
+            MaxYearlyOvertimeHours = 200m
+        });
+        var defGroup = new PolicyGroup
+        {
+            PolicyCode = "DEFAULT",
+            PolicyName = "Default",
+            IsCompanyDefault = true,
+            IsActive = true
+        };
+        defGroup.AttendancePolicies.Add(new AttendancePolicy
+        {
+            GraceLateMinutes = 5,
+            GraceEarlyMinutes = 5,
+            RoundingIntervalMinutes = 5,
+            RoundingMode = "Nearest",
+            HalfDayLateThresholdMinutes = 60,
+            ZeroDayLateThresholdMinutes = 240,
+            MaxMissedPunchExplanationsPerMonth = 3,
+            MissedPunchOverQuotaAction = "FixedFine",
+            MissedPunchPenaltyAmount = 100000m,
+            WeeklyWorkdaysMask = "Mon,Tue,Wed,Thu,Fri"
+        });
+        db.PolicyGroups.Add(defGroup);
+        db.SaveChanges();
+        return db;
     }
 
     [Fact]

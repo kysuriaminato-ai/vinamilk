@@ -392,7 +392,7 @@ public static class AttendanceBoardSeeder
             if (existingSummaries.TryGetValue(empId, out var existing) && existing.IsLocked)
                 continue;
 
-            decimal actualDays = group.Where(x => x.AttendanceSymbol is "X" or "X/2" or "CT").Sum(x => x.WorkdayCount);
+            decimal actualDays = group.Where(x => x.AttendanceSymbol is "X" or "X/2" or "CT" or "M").Sum(x => x.WorkdayCount);
             decimal paidLeave = group.Where(x => x.AttendanceSymbol is "P" or "P/2").Sum(x => x.WorkdayCount);
             decimal holidayDays = group.Where(x => x.AttendanceSymbol == "L").Sum(x => x.WorkdayCount);
             decimal siLeave = group.Where(x => x.AttendanceSymbol is "Om" or "TS").Count();
@@ -404,6 +404,13 @@ public static class AttendanceBoardSeeder
             decimal ot300 = group.Sum(x => x.OvertimeHours300);
             decimal nightHours = group.Sum(x => x.NightShiftHours);
             decimal payable = actualDays + paidLeave + holidayDays;
+
+            var resolvedPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(context, empId, monthStart, cancellationToken);
+            int missedPunchCount = group.Count(x => !string.IsNullOrEmpty(x.EditReason) && x.EditReason.Contains("Đề xuất giờ:", StringComparison.OrdinalIgnoreCase));
+            int overQuotaCount = Math.Max(0, missedPunchCount - resolvedPolicy.Policy.MaxMissedPunchExplanationsPerMonth);
+            decimal missedPunchPenalty = string.Equals(resolvedPolicy.Policy.MissedPunchOverQuotaAction, "FixedFine", StringComparison.OrdinalIgnoreCase)
+                ? decimal.Round(overQuotaCount * resolvedPolicy.Policy.MissedPunchPenaltyAmount, 0, MidpointRounding.AwayFromZero)
+                : 0m;
 
             if (existing != null)
             {
@@ -420,6 +427,8 @@ public static class AttendanceBoardSeeder
                 existing.TotalOtHours300 = ot300;
                 existing.TotalNightHours = nightHours;
                 existing.TotalPayableWorkdays = payable;
+                existing.MissedPunchOverQuotaCount = overQuotaCount;
+                existing.MissedPunchPenaltyAmount = missedPunchPenalty;
             }
             else
             {
@@ -441,6 +450,8 @@ public static class AttendanceBoardSeeder
                     TotalOtHours300 = ot300,
                     TotalNightHours = nightHours,
                     TotalPayableWorkdays = payable,
+                    MissedPunchOverQuotaCount = overQuotaCount,
+                    MissedPunchPenaltyAmount = missedPunchPenalty,
                     IsLocked = false
                 }, cancellationToken);
             }
@@ -750,7 +761,8 @@ public record WebCheckInCommand(
     string SourceType, // MobileGps, WebQr
     double Latitude,
     double Longitude,
-    string? QrToken = null) : IRequest<string>;
+    string? QrToken = null,
+    DateTime? OverridePunchTime = null) : IRequest<string>;
 
 public class WebCheckInCommandHandler : IRequestHandler<WebCheckInCommand, string>
 {
@@ -768,15 +780,20 @@ public class WebCheckInCommandHandler : IRequestHandler<WebCheckInCommand, strin
             .FirstOrDefaultAsync(e => e.Id == request.EmployeeId, cancellationToken)
             ?? throw new KeyNotFoundException("Không tìm thấy nhân viên chấm công.");
 
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var nowLocal = request.OverridePunchTime ?? DateTime.Now;
 
-        // Kiểm tra bảng công tháng đã khóa chưa
+        // Xác định ca làm việc và NGÀY BẮT ĐẦU CA (ca qua đêm gán về ngày bắt đầu ca)
+        var resolvedShift = await AttendancePolicyAndShiftEngine.ResolveShiftForPunchAsync(_context, emp.Id, nowLocal, cancellationToken);
+        var shift = resolvedShift?.Shift;
+        var workDate = resolvedShift?.AttributedDate ?? DateOnly.FromDateTime(nowLocal);
+
+        // Kiểm tra bảng công tháng đã khóa chưa theo ngày công được quy đổi
         var isLocked = await _context.MonthlyAttendanceSummaries
             .AsNoTracking()
-            .AnyAsync(m => m.Month == today.Month && m.Year == today.Year && m.IsLocked, cancellationToken);
+            .AnyAsync(m => m.Month == workDate.Month && m.Year == workDate.Year && m.IsLocked, cancellationToken);
 
         if (isLocked)
-            throw new InvalidOperationException($"Bảng chấm công tháng {today.Month:D2}/{today.Year} đã khóa, không thể chấm công bổ sung.");
+            throw new InvalidOperationException($"Bảng chấm công tháng {workDate.Month:D2}/{workDate.Year} đã khóa, không thể chấm công bổ sung.");
 
         // Đánh giá tọa độ GPS Haversine
         var (nearestLoc, distMeters, isWithinGeofence) = VinamilkGeofenceCalculator.EvaluateGps(request.Latitude, request.Longitude);
@@ -789,7 +806,6 @@ public class WebCheckInCommandHandler : IRequestHandler<WebCheckInCommand, strin
                 throw new InvalidOperationException($"Mã QR động '{request.QrToken}' không hợp lệ hoặc đã hết hạn 5 phút (Mã hiện hành: {expectedQr}).");
         }
 
-        var nowLocal = DateTime.Now;
         var addressNote = $"{nearestLoc.Name} (Khoảng cách GPS: {distMeters:0.#}m - {(isWithinGeofence ? "Hợp lệ trong bán kính" : "Ngoài bán kính chuẩn")})";
 
         await _context.AttendanceLogs.AddAsync(new AttendanceLog
@@ -804,62 +820,64 @@ public class WebCheckInCommandHandler : IRequestHandler<WebCheckInCommand, strin
             LocationAddress = addressNote
         }, cancellationToken);
 
-        var shift = await _context.WorkShifts
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.ShiftCode == "HC", cancellationToken);
-
         var daily = await _context.DailyAttendances
-            .FirstOrDefaultAsync(d => d.EmployeeId == emp.Id && d.AttendanceDate == today, cancellationToken);
-
-        var shiftStart = shift?.StartTime ?? new TimeOnly(8, 0);
-        var graceMins = shift?.GraceLateMinutes ?? 5;
-        int lateMins = 0;
-
-        if (request.PunchType == "CheckIn")
-        {
-            var punchTimeOnly = TimeOnly.FromDateTime(nowLocal);
-            var threshold = shiftStart.AddMinutes(graceMins);
-            if (punchTimeOnly > threshold)
-                lateMins = (int)(punchTimeOnly - shiftStart).TotalMinutes;
-        }
+            .FirstOrDefaultAsync(d => d.EmployeeId == emp.Id && d.AttendanceDate == workDate, cancellationToken);
 
         if (daily == null)
         {
             daily = new DailyAttendance
             {
                 EmployeeId = emp.Id,
-                AttendanceDate = today,
+                AttendanceDate = workDate,
                 WorkShiftId = shift?.Id,
                 CheckInTime = request.PunchType == "CheckIn" ? nowLocal : null,
-                CheckOutTime = request.PunchType == "CheckOut" ? nowLocal : null,
-                AttendanceSymbol = "X",
-                WorkingHours = 8.0m,
-                WorkdayCount = 1.0m,
-                LateMinutes = lateMins,
-                EditReason = addressNote
+                CheckOutTime = request.PunchType == "CheckOut" ? nowLocal : null
             };
             await _context.DailyAttendances.AddAsync(daily, cancellationToken);
         }
         else
         {
+            if (shift != null)
+            {
+                daily.WorkShiftId = shift.Id;
+            }
             if (request.PunchType == "CheckIn")
             {
                 daily.CheckInTime = nowLocal;
-                daily.LateMinutes = lateMins;
             }
             else
             {
                 daily.CheckOutTime = nowLocal;
             }
+        }
+
+        if (shift != null)
+        {
+            var statutory = await AttendancePolicyAndShiftEngine.ResolveStatutoryParameterAsync(_context, workDate, cancellationToken);
+            var resolvedPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(_context, emp.Id, workDate, cancellationToken);
+            var calc = AttendancePolicyAndShiftEngine.CalculatePunchAttendance(
+                workDate, shift, daily.CheckInTime, daily.CheckOutTime, resolvedPolicy.Policy, statutory);
+
+            daily.AttendanceSymbol = calc.AttendanceSymbol;
+            daily.WorkingHours = calc.WorkingHours;
+            daily.NightShiftHours = calc.NightShiftHours;
+            daily.WorkdayCount = calc.WorkdayCount;
+            daily.LateMinutes = calc.LateMinutes;
+            daily.EarlyLeaveMinutes = calc.EarlyLeaveMinutes;
+            daily.EditReason = $"{addressNote} | {calc.CalculationNotes}";
+        }
+        else
+        {
             daily.AttendanceSymbol = "X";
+            daily.WorkingHours = 8.0m;
             daily.WorkdayCount = 1.0m;
             daily.EditReason = addressNote;
         }
 
         await _context.SaveChangesAsync(cancellationToken);
-        await AttendanceBoardSeeder.RecalculateSummariesInternalAsync(_context, today.Month, today.Year, cancellationToken);
+        await AttendanceBoardSeeder.RecalculateSummariesInternalAsync(_context, workDate.Month, workDate.Year, cancellationToken);
 
-        return $"Chấm công {request.PunchType} thành công cho {emp.FullName} lúc {nowLocal:HH:mm:ss} tại {addressNote}.";
+        return $"Chấm công {request.PunchType} thành công cho {emp.FullName} lúc {nowLocal:HH:mm:ss} (Ngày công: {workDate:dd/MM/yyyy}) tại {addressNote}.";
     }
 }
 
@@ -895,7 +913,9 @@ public class SubmitOvertimeRequestCommandHandler : IRequestHandler<SubmitOvertim
         if (requestedHours <= 0 || requestedHours > 12)
             throw new InvalidOperationException("Số giờ đăng ký OT trong ngày phải từ 0.5 đến 12 giờ.");
 
-        // Kiểm tra trần OT 40 giờ/tháng và 200 giờ/năm theo Điều 107 BLLĐ 2019
+        var statutory = await AttendancePolicyAndShiftEngine.ResolveStatutoryParameterAsync(_context, request.OvertimeDate, cancellationToken);
+
+        // Kiểm tra trần OT tháng và năm từ bảng AttendanceStatutoryParameter
         var monthOt = await _context.OvertimeRequests
             .AsNoTracking()
             .Where(o => o.EmployeeId == request.EmployeeId &&
@@ -904,8 +924,8 @@ public class SubmitOvertimeRequestCommandHandler : IRequestHandler<SubmitOvertim
                         o.Status != "Rejected" && o.Status != "Cancelled")
             .SumAsync(o => o.RequestedHours, cancellationToken);
 
-        if (monthOt + requestedHours > 40m)
-            throw new InvalidOperationException($"Vượt trần làm thêm giờ tháng! Tổng OT tháng hiện tại ({monthOt:0.#}h) + đơn mới ({requestedHours:0.#}h) vượt giới hạn 40 giờ/tháng theo Điều 107 BLLĐ 2019.");
+        if (monthOt + requestedHours > statutory.MaxMonthlyOvertimeHours)
+            throw new InvalidOperationException($"Vượt trần làm thêm giờ tháng! Tổng OT tháng hiện tại ({monthOt:0.#}h) + đơn mới ({requestedHours:0.#}h) vượt giới hạn {statutory.MaxMonthlyOvertimeHours:0.#} giờ/tháng theo {statutory.LegalReference}.");
 
         var yearOt = await _context.OvertimeRequests
             .AsNoTracking()
@@ -914,8 +934,8 @@ public class SubmitOvertimeRequestCommandHandler : IRequestHandler<SubmitOvertim
                         o.Status != "Rejected" && o.Status != "Cancelled")
             .SumAsync(o => o.RequestedHours, cancellationToken);
 
-        if (yearOt + requestedHours > 200m)
-            throw new InvalidOperationException($"Vượt trần làm thêm giờ năm ({yearOt + requestedHours:0.#}/200 giờ) theo quy định Bộ luật Lao động 2019.");
+        if (yearOt + requestedHours > statutory.MaxYearlyOvertimeHours)
+            throw new InvalidOperationException($"Vượt trần làm thêm giờ năm ({yearOt + requestedHours:0.#}/{statutory.MaxYearlyOvertimeHours:0.#} giờ) theo {statutory.LegalReference}.");
 
         var otEntity = new OvertimeRequest
         {
@@ -980,10 +1000,44 @@ public class SubmitAttendanceExplanationCommandHandler : IRequestHandler<SubmitA
         if (isLocked)
             throw new InvalidOperationException($"Bảng công tháng {request.AttendanceDate.Month:D2}/{request.AttendanceDate.Year} đã khóa, không thể gửi giải trình.");
 
+        var resolvedPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(
+            _context, request.EmployeeId, request.AttendanceDate, cancellationToken);
+        var monthStart = new DateOnly(request.AttendanceDate.Year, request.AttendanceDate.Month, 1);
+        var monthEnd = new DateOnly(request.AttendanceDate.Year, request.AttendanceDate.Month, DateTime.DaysInMonth(request.AttendanceDate.Year, request.AttendanceDate.Month));
+
+        var existingExplainCount = await _context.DailyAttendances
+            .AsNoTracking()
+            .CountAsync(d => d.EmployeeId == request.EmployeeId
+                && d.AttendanceDate >= monthStart
+                && d.AttendanceDate <= monthEnd
+                && d.AttendanceDate != request.AttendanceDate
+                && d.EditReason != null
+                && d.EditReason.Contains("Đề xuất giờ:"), cancellationToken);
+
+        int projectedMonthExplainCount = existingExplainCount + 1;
+        bool isOverQuota = projectedMonthExplainCount > resolvedPolicy.Policy.MaxMissedPunchExplanationsPerMonth;
+
         var daily = await _context.DailyAttendances
             .FirstOrDefaultAsync(d => d.EmployeeId == request.EmployeeId && d.AttendanceDate == request.AttendanceDate, cancellationToken);
 
-        var explainDetail = $"Đề xuất giờ: {request.ProposedCheckIn:HH\\:mm}-{request.ProposedCheckOut:HH\\:mm} | Lý do: {request.Reason.Trim()}";
+        var explainDetail = $"Đề xuất giờ: {request.ProposedCheckIn:HH\\:mm}-{request.ProposedCheckOut:HH\\:mm} | Lý do: {request.Reason.Trim()}"
+            + (isOverQuota ? $" | [VƯỢT QUOTA {projectedMonthExplainCount}/{resolvedPolicy.Policy.MaxMissedPunchExplanationsPerMonth}: {resolvedPolicy.Policy.MissedPunchOverQuotaAction}]" : string.Empty);
+
+        decimal penaltyWorkday = 1m;
+        string symbol = "M";
+        if (isOverQuota)
+        {
+            if (string.Equals(resolvedPolicy.Policy.MissedPunchOverQuotaAction, "DeductHalfDay", StringComparison.OrdinalIgnoreCase))
+            {
+                penaltyWorkday = 0.5m;
+                symbol = "X/2";
+            }
+            else if (string.Equals(resolvedPolicy.Policy.MissedPunchOverQuotaAction, "DeductFullDay", StringComparison.OrdinalIgnoreCase))
+            {
+                penaltyWorkday = 0m;
+                symbol = "V";
+            }
+        }
 
         if (daily == null)
         {
@@ -993,9 +1047,9 @@ public class SubmitAttendanceExplanationCommandHandler : IRequestHandler<SubmitA
                 AttendanceDate = request.AttendanceDate,
                 CheckInTime = request.AttendanceDate.ToDateTime(request.ProposedCheckIn),
                 CheckOutTime = request.AttendanceDate.ToDateTime(request.ProposedCheckOut),
-                AttendanceSymbol = "M",
-                WorkingHours = 8m,
-                WorkdayCount = 1m,
+                AttendanceSymbol = symbol,
+                WorkingHours = penaltyWorkday * 8m,
+                WorkdayCount = penaltyWorkday,
                 IsManualEdited = false,
                 EditReason = explainDetail
             };
@@ -1004,9 +1058,15 @@ public class SubmitAttendanceExplanationCommandHandler : IRequestHandler<SubmitA
         else
         {
             daily.EditReason = explainDetail;
+            if (isOverQuota && resolvedPolicy.Policy.MissedPunchOverQuotaAction is "DeductHalfDay" or "DeductFullDay")
+            {
+                daily.WorkdayCount = penaltyWorkday;
+                daily.AttendanceSymbol = symbol;
+            }
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+        await AttendanceBoardSeeder.RecalculateSummariesInternalAsync(_context, request.AttendanceDate.Month, request.AttendanceDate.Year, cancellationToken);
 
         var wfId = await _sender.Send(new StartWorkflowInstanceCommand(
             "AttendanceExplanation",
@@ -1064,17 +1124,33 @@ public class ToggleLockMonthlyAttendanceCommandHandler : IRequestHandler<ToggleL
 
     public async Task<string> Handle(ToggleLockMonthlyAttendanceCommand request, CancellationToken cancellationToken)
     {
+        var actorUserId = _currentUser.RequireUserId();
+        var actor = _currentUser.RequireUsername();
+
         var summaries = await _context.MonthlyAttendanceSummaries
             .Where(m => m.Month == request.Month && m.Year == request.Year)
             .ToListAsync(cancellationToken);
 
-        var actor = _currentUser.Username ?? "huyen.ntt (CHRO)";
         foreach (var s in summaries)
         {
             s.IsLocked = request.LockState;
             s.LockedAt = request.LockState ? DateTime.UtcNow : null;
             s.LockedBy = request.LockState ? actor : null;
         }
+
+        await _context.AuditLogs.AddAsync(new Domain.Entities.SystemEntities.AuditLog
+        {
+            UserId = actorUserId,
+            Username = actor,
+            ActionType = request.LockState ? "Lock" : "Unlock",
+            ModuleName = "TimeAttendance",
+            EntityName = "MonthlyAttendanceSummary",
+            EntityId = $"{request.Year}-{request.Month:D2}",
+            NewValuesJson = $"{{\"summary\":\"{(request.LockState ? "Khóa" : "Mở khóa")} bảng chấm công tháng {request.Month:D2}/{request.Year} ({summaries.Count} NV)\"}}",
+            IpAddress = _currentUser.IpAddress,
+            UserAgent = _currentUser.UserAgent,
+            CreatedAt = DateTime.UtcNow
+        }, cancellationToken);
 
         await _context.SaveChangesAsync(cancellationToken);
 

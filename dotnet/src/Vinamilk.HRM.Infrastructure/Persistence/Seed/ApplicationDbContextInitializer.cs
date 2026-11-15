@@ -345,10 +345,13 @@ public sealed class ApplicationDbContextInitializer
         {
             var shifts = new List<WorkShift>
             {
-                new() { ShiftCode = "HC", ShiftName = "Ca Hành chính (08:00 - 17:00)", StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(17, 0), BreakStartTime = new TimeOnly(12, 0), BreakEndTime = new TimeOnly(13, 0), StandardHours = 8m, WorkdayValue = 1m },
-                new() { ShiftCode = "CA1", ShiftName = "Ca 1 Sản xuất (06:00 - 14:00)", StartTime = new TimeOnly(6, 0), EndTime = new TimeOnly(14, 0), StandardHours = 8m, WorkdayValue = 1m },
-                new() { ShiftCode = "CA2", ShiftName = "Ca 2 Sản xuất (14:00 - 22:00)", StartTime = new TimeOnly(14, 0), EndTime = new TimeOnly(22, 0), StandardHours = 8m, WorkdayValue = 1m },
-                new() { ShiftCode = "CA3", ShiftName = "Ca 3 Đêm (22:00 - 06:00)", StartTime = new TimeOnly(22, 0), EndTime = new TimeOnly(6, 0), IsOvernight = true, StandardHours = 8m, WorkdayValue = 1m, NightShiftAllowanceRate = 0.30m }
+                new() { ShiftCode = "HC", ShiftName = "Ca Hành chính (08:00 - 17:00)", ShiftType = "Fixed", StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(17, 0), BreakStartTime = new TimeOnly(12, 0), BreakEndTime = new TimeOnly(13, 0), IsBreakPaid = false, StandardHours = 8m, WorkdayValue = 1m },
+                new() { ShiftCode = "CA1", ShiftName = "Ca 1 Sản xuất (06:00 - 14:00)", ShiftType = "Fixed", StartTime = new TimeOnly(6, 0), EndTime = new TimeOnly(14, 0), StandardHours = 8m, WorkdayValue = 1m },
+                new() { ShiftCode = "CA2", ShiftName = "Ca 2 Sản xuất (14:00 - 22:00)", ShiftType = "Fixed", StartTime = new TimeOnly(14, 0), EndTime = new TimeOnly(22, 0), StandardHours = 8m, WorkdayValue = 1m },
+                new() { ShiftCode = "CA3", ShiftName = "Ca 3 Đêm (22:00 - 06:00)", ShiftType = "Overnight", StartTime = new TimeOnly(22, 0), EndTime = new TimeOnly(6, 0), IsOvernight = true, StandardHours = 8m, WorkdayValue = 1m, NightShiftAllowanceRate = 0.30m },
+                new() { ShiftCode = "LINH_HOAT", ShiftName = "Ca Linh hoạt (Core 09:30 - 15:30)", ShiftType = "Flexible", StartTime = new TimeOnly(7, 30), EndTime = new TimeOnly(18, 30), CoreStartTime = new TimeOnly(9, 30), CoreEndTime = new TimeOnly(15, 30), BreakStartTime = new TimeOnly(12, 0), BreakEndTime = new TimeOnly(13, 0), IsBreakPaid = false, StandardHours = 8m, WorkdayValue = 1m },
+                new() { ShiftCode = "CA_GAY", ShiftName = "Ca Gãy (08:00-12:00 & 14:00-18:00)", ShiftType = "Split", StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(12, 0), SplitStartTime2 = new TimeOnly(14, 0), SplitEndTime2 = new TimeOnly(18, 0), IsBreakPaid = false, StandardHours = 8m, WorkdayValue = 1m },
+                new() { ShiftCode = "THEO_GIO", ShiftName = "Ca Theo giờ (Part-time / Bán thời gian)", ShiftType = "Hourly", StartTime = new TimeOnly(7, 0), EndTime = new TimeOnly(22, 0), StandardHours = 4m, WorkdayValue = 0.5m }
             };
             await _context.WorkShifts.AddRangeAsync(shifts, cancellationToken);
 
@@ -743,7 +746,93 @@ public sealed class ApplicationDbContextInitializer
             await _context.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Đã Seed thành công 55 nhân viên Vinamilk HRM cùng toàn bộ danh mục và nghiệp vụ.");
         }
+
+        // Idempotent seed cho CL1: Tham số pháp lý chấm công, Nhóm chính sách mặc định và Mẫu xoay ca 3 ca 4 kíp
+        if (!await _context.AttendanceStatutoryParameters.AnyAsync(cancellationToken))
+        {
+            await _context.AttendanceStatutoryParameters.AddRangeAsync(BuildDefaultAttendanceStatutoryParameters(), cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        if (!await _context.PolicyGroups.AnyAsync(cancellationToken))
+        {
+            var defaultGroup = BuildDefaultCompanyPolicyGroup();
+            await _context.PolicyGroups.AddAsync(defaultGroup, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        if (!await _context.ShiftRotationPatterns.AnyAsync(cancellationToken))
+        {
+            await _context.ShiftRotationPatterns.AddRangeAsync(BuildDefaultShiftRotationPatterns(), cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
     }
+
+    public static List<AttendanceStatutoryParameter> BuildDefaultAttendanceStatutoryParameters() =>
+    [
+        new()
+        {
+            EffectiveFrom = new DateOnly(2021, 1, 1),
+            EffectiveTo = null,
+            LegalReference = "Bộ luật Lao động 45/2019/QH14 (Điều 105, 106, 107, 109, 112); NĐ 145/2020/NĐ-CP",
+            NeedsHrVerification = true,
+            NightWorkStartTime = new TimeOnly(22, 0),
+            NightWorkEndTime = new TimeOnly(6, 0),
+            MinInterShiftRestHours = 12m,
+            MaxNormalDailyHours = 8m,
+            MaxNormalWeeklyHours = 48m,
+            MaxMonthlyOvertimeHours = 40m,
+            MaxYearlyOvertimeHours = 200m,
+            WeekdayOtMultiplier = 1.5m,
+            WeeklyDayOffOtMultiplier = 2.0m,
+            HolidayOtMultiplier = 3.0m,
+            NightShiftBonusRate = 0.30m,
+            NightOtExtraBonusRate = 0.20m,
+            Notes = "Tham số pháp lý chấm công/OT/giờ đêm chuẩn BLLĐ 2019 — Cần HR đối chiếu khi ban hành văn bản mới"
+        }
+    ];
+
+    public static PolicyGroup BuildDefaultCompanyPolicyGroup()
+    {
+        var group = new PolicyGroup
+        {
+            PolicyCode = "DEFAULT_COMPANY",
+            PolicyName = "Chính sách chấm công mặc định Toàn Công ty",
+            IsCompanyDefault = true,
+            IsActive = true,
+            Description = "Áp dụng mặc định khi Nhân viên, Chức danh và Đơn vị không có PolicyGroup riêng"
+        };
+        group.AttendancePolicies.Add(new AttendancePolicy
+        {
+            GraceLateMinutes = 5,
+            GraceEarlyMinutes = 5,
+            RoundingIntervalMinutes = 5,
+            RoundingMode = "Nearest",
+            HalfDayLateThresholdMinutes = 60,
+            ZeroDayLateThresholdMinutes = 240,
+            MaxMissedPunchExplanationsPerMonth = 3,
+            MissedPunchOverQuotaAction = "FixedFine",
+            MissedPunchPenaltyAmount = 100000m,
+            RequireApprovedOvertimeRequest = true,
+            WeeklyWorkdaysMask = "Mon,Tue,Wed,Thu,Fri"
+        });
+        return group;
+    }
+
+    public static List<ShiftRotationPattern> BuildDefaultShiftRotationPatterns() =>
+    [
+        new()
+        {
+            PatternCode = "3CA_4KIP",
+            PatternName = "Xoay ca sản xuất 3 ca 4 kíp (8 ngày/chu kỳ)",
+            CycleDays = 8,
+            CrewCount = 4,
+            ShiftSequenceCsv = "CA1,CA1,CA2,CA2,CA3,CA3,OFF,OFF",
+            CrewOffsetDays = 2,
+            IsActive = true,
+            Description = "Mỗi kíp làm 2 ngày Ca 1, 2 ngày Ca 2, 2 ngày Ca 3 đêm, nghỉ 2 ngày xoay vòng"
+        }
+    ];
 
     public static List<PayrollStatutoryParameter> BuildDefaultStatutoryParameters() =>
     [

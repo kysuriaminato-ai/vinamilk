@@ -57,6 +57,12 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<LeaveType> LeaveTypes => Set<LeaveType>();
     public DbSet<LeaveBalance> LeaveBalances => Set<LeaveBalance>();
     public DbSet<LeaveRequest> LeaveRequests => Set<LeaveRequest>();
+    public DbSet<AttendanceStatutoryParameter> AttendanceStatutoryParameters => Set<AttendanceStatutoryParameter>();
+    public DbSet<PolicyGroup> PolicyGroups => Set<PolicyGroup>();
+    public DbSet<PolicyGroupAssignment> PolicyGroupAssignments => Set<PolicyGroupAssignment>();
+    public DbSet<AttendancePolicy> AttendancePolicies => Set<AttendancePolicy>();
+    public DbSet<ShiftRotationPattern> ShiftRotationPatterns => Set<ShiftRotationPattern>();
+    public DbSet<ShiftSwapRequest> ShiftSwapRequests => Set<ShiftSwapRequest>();
 
     // Payroll Schema
     public DbSet<PayrollStatutoryParameter> PayrollStatutoryParameters => Set<PayrollStatutoryParameter>();
