@@ -555,6 +555,26 @@ public static class VietnamPayrollEngine
     }
 
     /// <summary>
+    /// Xác định mức lương đóng BHXH áp dụng từ hồ sơ lương nhân viên:
+    /// nhóm thử việc (<see cref="EmployeeSalaryProfile.IsProbation"/>), HĐ ngắn hạn (&lt; 3 tháng / ResidentShortTerm)
+    /// hoặc không cư trú (NonResident) giữ nguyên giá trị 0 khi chưa tham gia BHXH bắt buộc.
+    /// </summary>
+    internal static decimal? ResolveInsuranceOverride(EmployeeSalaryProfile? profile)
+    {
+        if (profile is null)
+            return null;
+
+        if (profile.InsuranceSalary > 0m)
+            return profile.InsuranceSalary;
+
+        bool exemptIfZero = profile.IsProbation
+            || string.Equals(profile.TaxResidencyMode, "NonResident", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(profile.TaxResidencyMode, "ResidentShortTerm", StringComparison.OrdinalIgnoreCase);
+
+        return exemptIfZero ? 0m : null;
+    }
+
+    /// <summary>
     /// Quy đổi Net → Gross bằng tìm kiếm nhị phân theo quy tắc BHXH/BHYT/BHTN và thuế TNCN hiện hành,
     /// hội tụ sai số <= 1 đồng VND.
     /// </summary>
@@ -879,11 +899,8 @@ public static class VietnamPayrollEngine
         if (solvedBaseSalaryOverride.HasValue)
             latestProfile = slices[^1].Profile;
 
-        decimal insContractSalary = string.Equals(latestProfile.TaxResidencyMode, "NonResident", StringComparison.OrdinalIgnoreCase)
-            ? latestProfile.InsuranceSalary
-            : (latestProfile.InsuranceSalary > 0m
-                ? latestProfile.InsuranceSalary
-                : (latestSlice.BaseSalary + latestProfile.PositionAllowance));
+        decimal insContractSalary = ResolveInsuranceOverride(latestProfile)
+            ?? (latestSlice.BaseSalary + latestProfile.PositionAllowance);
 
         decimal? insOverride = insContractSalary;
 
@@ -1915,7 +1932,7 @@ public static class PayrollPeriodEvaluator
                         sourcePeriodAdjustedTaxableExcluded: sourcePeriodAdjustedTaxableExcluded,
                         targetPeriodTaxableDeductionFromRetro: targetPeriodTaxableDeductionFromRetro);
 
-                    decimal? fixedIns = lastProf.InsuranceSalary > 0m ? lastProf.InsuranceSalary : null;
+                    decimal? fixedIns = VietnamPayrollEngine.ResolveInsuranceOverride(lastProf);
                     netToGrossSol = VietnamPayrollEngine.SolveGrossFromNet(
                         new NetToGrossInput(
                             TargetNetSalary: lastProf.TargetNetSalary.Value,
@@ -2071,7 +2088,7 @@ public static class PayrollPeriodEvaluator
                             DependentCount: deps,
                             IsUnionMember: isUnion,
                             WageRegion: wageRegion,
-                            FixedInsuranceContractSalary: latestProfile.InsuranceSalary > 0m ? latestProfile.InsuranceSalary : null,
+                            FixedInsuranceContractSalary: VietnamPayrollEngine.ResolveInsuranceOverride(latestProfile),
                             TaxResidencyMode: residencyMode,
                             HasPitCommitment08: commitment08,
                             OtHours150Night: ot150Night,
@@ -2114,9 +2131,7 @@ public static class PayrollPeriodEvaluator
                     unusedLeavePayout,
                     InsuranceContractSalaryOverride: isBonusPeriodOnly
                         ? 0m
-                        : (string.Equals(residencyMode, "NonResident", StringComparison.OrdinalIgnoreCase)
-                            ? latestProfile?.InsuranceSalary
-                            : (latestProfile?.InsuranceSalary > 0m ? latestProfile.InsuranceSalary : null)),
+                        : VietnamPayrollEngine.ResolveInsuranceOverride(latestProfile),
                     OtHours150Night: ot150Night,
                     OtHours200Night: ot200Night,
                     OtHours300Night: ot300Night,
