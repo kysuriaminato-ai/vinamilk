@@ -3553,7 +3553,9 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .HasDefaultValue(0.005m);
 
                     b.Property<decimal>("CompanySiRate")
-                        .HasColumnType("decimal(7,4)");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("decimal(7,4)")
+                        .HasDefaultValue(0.17m);
 
                     b.Property<decimal>("CompanyUiRate")
                         .HasColumnType("decimal(7,4)");

@@ -192,6 +192,15 @@ public class ShiftsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SelectNationalDayAdjacentHoliday(int year, string choice, CancellationToken cancellationToken = default)
+    {
+        var chosenDate = await _sender.Send(new SelectNationalDayAdjacentHolidayCommand(year, choice), cancellationToken);
+        TempData["SuccessMessage"] = $"Đã xác nhận ngày nghỉ liền kề Quốc khánh {year}: {chosenDate:dd/MM/yyyy} (đã bỏ cờ chờ HR đối chiếu).";
+        return RedirectToAction(nameof(Index), new { year });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> GenerateRotation(
         int patternId,
         DateOnly startDate,

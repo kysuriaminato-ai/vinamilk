@@ -253,13 +253,13 @@ public class PayrollIntegrationReportsCl8Tests
             new PayrollRecord { Id = 3, PayrollPeriodId = 1, EmployeeId = 3, OrganizationUnitId = 1, PositionId = 1, InsuranceSalaryBase = 10_000_000m, UnemploymentInsuranceBase = 10_000_000m });
 
         // Tháng 6: NV01 (20M - giữ nguyên), NV02 (22M - tăng 7M), NV04 (18M - tăng mới)
-        // Tổng quỹ BH T6 = 60,000,000 -> NLĐ 10.5% = 6,300,000; DN (17.5% + 3% + 1% + 0.5% = 22%) = 13,200,000 -> Tổng 19,500,000
+        // Tổng quỹ BH T6 = 60,000,000 -> NLĐ 10.5% = 6,300,000; DN (17% + 0.5% TNLĐ + 3% + 1% = 21.5%) = 12,900,000 -> Tổng 19,200,000
         static PayrollRecord MakeJuneSiRecord(long id, int empId, int unitId, int posId, decimal siBase)
         {
             decimal eSi = Math.Round(siBase * 0.08m, 0);
             decimal eHi = Math.Round(siBase * 0.015m, 0);
             decimal eUi = Math.Round(siBase * 0.01m, 0);
-            decimal cSi = Math.Round(siBase * 0.175m, 0);
+            decimal cSi = Math.Round(siBase * 0.17m, 0);
             decimal cHi = Math.Round(siBase * 0.03m, 0);
             decimal cUi = Math.Round(siBase * 0.01m, 0);
             decimal cOa = Math.Round(siBase * 0.005m, 0);
@@ -292,8 +292,8 @@ public class PayrollIntegrationReportsCl8Tests
         report.Movements.Should().Contain(m => m.EmployeeCode == "NV03" && m.ChangeCode == "GIAM_NGHI_VIEC");
         report.Movements.Should().Contain(m => m.EmployeeCode == "NV02" && m.ChangeCode == "DIEU_CHINH_TANG" && m.SalaryBaseDelta == 7_000_000m);
 
-        report.Reconciliation.TotalExpectedPayableToAgency.Should().Be(19_500_000m);
-        report.Reconciliation.TotalActualFromPayrollRecords.Should().Be(19_500_000m);
+        report.Reconciliation.TotalExpectedPayableToAgency.Should().Be(19_200_000m);
+        report.Reconciliation.TotalActualFromPayrollRecords.Should().Be(19_200_000m);
         report.Reconciliation.ReconciliationDifference.Should().Be(0m);
 
         // Đổi cấu trúc cột trong DB mà không sửa code

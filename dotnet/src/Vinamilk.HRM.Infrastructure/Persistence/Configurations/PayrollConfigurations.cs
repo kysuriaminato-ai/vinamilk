@@ -22,7 +22,7 @@ public class PayrollStatutoryParameterConfiguration : IEntityTypeConfiguration<P
         builder.Property(x => x.EmployeeSiRate).HasColumnType("decimal(7,4)");
         builder.Property(x => x.EmployeeHiRate).HasColumnType("decimal(7,4)");
         builder.Property(x => x.EmployeeUiRate).HasColumnType("decimal(7,4)");
-        builder.Property(x => x.CompanySiRate).HasColumnType("decimal(7,4)");
+        builder.Property(x => x.CompanySiRate).HasColumnType("decimal(7,4)").HasDefaultValue(0.17m);
         builder.Property(x => x.CompanyHiRate).HasColumnType("decimal(7,4)");
         builder.Property(x => x.CompanyUiRate).HasColumnType("decimal(7,4)");
         builder.Property(x => x.CompanyUnionFeeRate).HasColumnType("decimal(7,4)");

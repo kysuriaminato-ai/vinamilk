@@ -151,17 +151,17 @@ public static class ShiftAndHolidaySeeder
         {
             var holidays = new List<Holiday>
             {
-                new() { HolidayDate = new DateOnly(year, 1, 1), HolidayName = "Tết Dương lịch", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m },
-                new() { HolidayDate = new DateOnly(year, 2, 16), HolidayName = "Nghỉ Tết Nguyên đán (29 Tết)", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m },
-                new() { HolidayDate = new DateOnly(year, 2, 17), HolidayName = "Mùng 1 Tết Nguyên đán", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m },
-                new() { HolidayDate = new DateOnly(year, 2, 18), HolidayName = "Mùng 2 Tết Nguyên đán", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m },
-                new() { HolidayDate = new DateOnly(year, 2, 19), HolidayName = "Mùng 3 Tết Nguyên đán", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m },
-                new() { HolidayDate = new DateOnly(year, 2, 20), HolidayName = "Mùng 4 Tết Nguyên đán", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m },
-                new() { HolidayDate = new DateOnly(year, 4, 26), HolidayName = "Giỗ Tổ Hùng Vương (10/3 Âm lịch)", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m },
-                new() { HolidayDate = new DateOnly(year, 4, 30), HolidayName = "Ngày Giải phóng miền Nam 30/4", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m },
-                new() { HolidayDate = new DateOnly(year, 5, 1), HolidayName = "Ngày Quốc tế Lao động 1/5", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m },
-                new() { HolidayDate = new DateOnly(year, 9, 2), HolidayName = "Quốc khánh nước CHXHCN Việt Nam 2/9", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m },
-                new() { HolidayDate = new DateOnly(year, 9, 3), HolidayName = "Nghỉ liền kề Quốc khánh 2/9", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m }
+                new() { HolidayDate = new DateOnly(year, 1, 1), HolidayName = "Tết Dương lịch", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.a BLLĐ 2019", NeedsHrVerification = false },
+                new() { HolidayDate = new DateOnly(year, 2, 16), HolidayName = "Nghỉ Tết Nguyên đán (29 Tết)", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
+                new() { HolidayDate = new DateOnly(year, 2, 17), HolidayName = "Mùng 1 Tết Nguyên đán", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
+                new() { HolidayDate = new DateOnly(year, 2, 18), HolidayName = "Mùng 2 Tết Nguyên đán", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
+                new() { HolidayDate = new DateOnly(year, 2, 19), HolidayName = "Mùng 3 Tết Nguyên đán", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
+                new() { HolidayDate = new DateOnly(year, 2, 20), HolidayName = "Mùng 4 Tết Nguyên đán", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.b BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
+                new() { HolidayDate = new DateOnly(year, 4, 26), HolidayName = "Giỗ Tổ Hùng Vương (10/3 Âm lịch)", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.e BLLĐ 2019 (lịch Âm)", NeedsHrVerification = true },
+                new() { HolidayDate = new DateOnly(year, 4, 30), HolidayName = "Ngày Giải phóng miền Nam 30/4", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.c BLLĐ 2019", NeedsHrVerification = false },
+                new() { HolidayDate = new DateOnly(year, 5, 1), HolidayName = "Ngày Quốc tế Lao động 1/5", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.d BLLĐ 2019", NeedsHrVerification = false },
+                new() { HolidayDate = new DateOnly(year, 9, 2), HolidayName = "Quốc khánh nước CHXHCN Việt Nam 2/9", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.đ BLLĐ 2019", NeedsHrVerification = false },
+                new() { HolidayDate = new DateOnly(year, 9, 3), HolidayName = "Nghỉ liền kề Quốc khánh 2/9 (Dự kiến sau - HR xác nhận 01/09 hoặc 03/09)", Year = year, IsPaidHoliday = true, OvertimeMultiplier = 3.0m, LegalReference = "Điều 112.1.đ BLLĐ 2019 (chọn 01/09 trước hoặc 03/09 sau theo QĐ Thủ tướng)", NeedsHrVerification = true }
             };
             await context.Holidays.AddRangeAsync(holidays, cancellationToken);
             await context.SaveChangesAsync(cancellationToken);
@@ -866,6 +866,68 @@ public class DeleteHolidayCommandHandler : IRequestHandler<DeleteHolidayCommand,
         holiday.IsDeleted = true;
         await _context.SaveChangesAsync(cancellationToken);
         return true;
+    }
+}
+
+/// <summary>
+/// Cho phép HR chọn ngày nghỉ liền kề Quốc khánh 2/9 ("Before" = 01/09 hoặc "After" = 03/09) theo Quyết định của Thủ tướng Chính phủ.
+/// </summary>
+public record SelectNationalDayAdjacentHolidayCommand(int Year, string Choice) : IRequest<DateOnly>;
+
+public class SelectNationalDayAdjacentHolidayCommandHandler : IRequestHandler<SelectNationalDayAdjacentHolidayCommand, DateOnly>
+{
+    private readonly IApplicationDbContext _context;
+
+    public SelectNationalDayAdjacentHolidayCommandHandler(IApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<DateOnly> Handle(SelectNationalDayAdjacentHolidayCommand request, CancellationToken cancellationToken)
+    {
+        bool chooseBefore = string.Equals(request.Choice?.Trim(), "Before", StringComparison.OrdinalIgnoreCase);
+        var selectedDate = new DateOnly(request.Year, 9, chooseBefore ? 1 : 3);
+        var unselectedDate = new DateOnly(request.Year, 9, chooseBefore ? 3 : 1);
+
+        var other = await _context.Holidays.FirstOrDefaultAsync(h => h.HolidayDate == unselectedDate, cancellationToken);
+        if (other is not null)
+            other.IsDeleted = true;
+
+        var existingSelected = await _context.Holidays
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(h => h.HolidayDate == selectedDate, cancellationToken);
+
+        string name = chooseBefore
+            ? "Nghỉ liền kề trước Quốc khánh (01/09)"
+            : "Nghỉ liền kề sau Quốc khánh (03/09)";
+        string legalRef = $"Điều 112.1.đ BLLĐ 2019 (HR đã xác nhận ngày liền kề {(chooseBefore ? "01/09 trước Lễ" : "03/09 sau Lễ")})";
+
+        if (existingSelected is not null)
+        {
+            existingSelected.IsDeleted = false;
+            existingSelected.Year = request.Year;
+            existingSelected.HolidayName = name;
+            existingSelected.IsPaidHoliday = true;
+            existingSelected.OvertimeMultiplier = 3.0m;
+            existingSelected.LegalReference = legalRef;
+            existingSelected.NeedsHrVerification = false;
+        }
+        else
+        {
+            await _context.Holidays.AddAsync(new Holiday
+            {
+                HolidayDate = selectedDate,
+                HolidayName = name,
+                Year = request.Year,
+                IsPaidHoliday = true,
+                OvertimeMultiplier = 3.0m,
+                LegalReference = legalRef,
+                NeedsHrVerification = false
+            }, cancellationToken);
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        return selectedDate;
     }
 }
 

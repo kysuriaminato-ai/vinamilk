@@ -31,7 +31,8 @@ public class PayrollStatutoryParameter : BaseAuditableEntity
     public decimal EmployeeSiRate { get; set; } = 0.08m;
     public decimal EmployeeHiRate { get; set; } = 0.015m;
     public decimal EmployeeUiRate { get; set; } = 0.01m;
-    public decimal CompanySiRate { get; set; } = 0.175m;
+    /// <summary>BHXH doanh nghiệp đóng: 14% Hưu trí-Tử tuất + 3% Ốm đau-Thai sản = 17% (tách riêng 0.5% TNLĐ-BNN ở <see cref="CompanyOccupationalAccidentRate"/> để tổng BHXH DN = 17.5%).</summary>
+    public decimal CompanySiRate { get; set; } = 0.17m;
     public decimal CompanyHiRate { get; set; } = 0.03m;
     public decimal CompanyUiRate { get; set; } = 0.01m;
     public decimal CompanyUnionFeeRate { get; set; } = 0.02m;

@@ -295,6 +295,23 @@
 
     <!-- TAB 3: NGÀY LỄ TẾT VIỆT NAM -->
     <div class="tab-pane fade" id="tab-holidays">
+        <div class="vnm-card p-3 mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2 border-start border-4 border-warning">
+            <div>
+                <div class="fw-bold text-primary"><i class="ti ti-flag me-1"></i>Lễ Quốc khánh 2/9 gồm 2 ngày (Điều 112.1.đ BLLĐ 2019)</div>
+                <div class="small text-muted">Chọn 1 ngày liền kề trước (01/09) hoặc sau (03/09) ngày 02/09 theo Quyết định của Thủ tướng Chính phủ và xác nhận cho kỳ tính công/lương.</div>
+            </div>
+            <form asp-action="SelectNationalDayAdjacentHoliday" method="post" class="d-flex align-items-center gap-2">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="year" value="@(Model.Holidays.FirstOrDefault()?.Year ?? 2026)" />
+                <select name="choice" class="form-select form-select-sm" style="width: auto;">
+                    <option value="Before">Ngày liền trước: 01/09</option>
+                    <option value="After" selected>Ngày liền sau: 03/09</option>
+                </select>
+                <button type="submit" class="btn btn-sm vnm-btn-primary text-nowrap">
+                    <i class="ti ti-check me-1"></i>Xác nhận ngày liền kề 2/9
+                </button>
+            </form>
+        </div>
         <div class="vnm-card overflow-hidden">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">

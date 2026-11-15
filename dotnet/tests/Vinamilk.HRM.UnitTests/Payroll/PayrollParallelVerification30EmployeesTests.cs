@@ -179,17 +179,17 @@ public class PayrollParallelVerification30EmployeesTests
             new WorkShift { Id = 3, ShiftCode = "CA_CHIEU", ShiftName = "Nhà máy Ca 2 Chiều (14:00-22:00)", ShiftType = "Fixed", StartTime = new TimeOnly(14, 0), EndTime = new TimeOnly(22, 0), StandardHours = 8m, WorkdayValue = 1m, GraceLateMinutes = 5, MaxEarlyCheckInMinutes = 120, MaxLateCheckOutMinutes = 240 },
             new WorkShift { Id = 4, ShiftCode = "CA_DEM", ShiftName = "Nhà máy Ca 3 Đêm (22:00-06:00)", ShiftType = "Overnight", StartTime = new TimeOnly(22, 0), EndTime = new TimeOnly(6, 0), IsOvernight = true, StandardHours = 8m, WorkdayValue = 1m, NightShiftAllowanceRate = 0.30m, GraceLateMinutes = 5, MaxEarlyCheckInMinutes = 120, MaxLateCheckOutMinutes = 240 });
 
-        db.Holidays.Add(new Holiday
-        {
-            Id = 1,
-            HolidayDate = new DateOnly(2026, 9, 2),
-            HolidayName = "Quốc khánh Nước CHXHCN Việt Nam",
-            Year = 2026,
-            IsPaidHoliday = true,
-            OvertimeMultiplier = 3.0m,
-            LegalReference = "Điều 112 BLLĐ 2019",
-            NeedsHrVerification = false
-        });
+        // Seed đủ 2 ngày Lễ Quốc khánh 2026 (02/09 + ngày liền kề 03/09 mặc định chờ HR xác nhận)
+        db.Holidays.AddRange(ApplicationDbContextInitializer.BuildDefaultHolidays2026()
+            .Where(h => h.HolidayDate.Month == 9));
+        await db.SaveChangesAsync();
+
+        // Kiểm chứng tính năng cho HR chuyển chọn ngày liền kề 01/09 (Trước) <-> 03/09 (Sau) rồi chốt về 03/09
+        var selectHolidayHandler = new SelectNationalDayAdjacentHolidayCommandHandler(db);
+        (await selectHolidayHandler.Handle(new SelectNationalDayAdjacentHolidayCommand(2026, "Before"), CancellationToken.None))
+            .Should().Be(new DateOnly(2026, 9, 1));
+        (await selectHolidayHandler.Handle(new SelectNationalDayAdjacentHolidayCommand(2026, "After"), CancellationToken.None))
+            .Should().Be(new DateOnly(2026, 9, 3));
 
         await db.SaveChangesAsync();
         await WorkflowSeederHelper.EnsureDefaultWorkflowsAsync(db, CancellationToken.None);
@@ -393,7 +393,7 @@ public class PayrollParallelVerification30EmployeesTests
         for (var d = sepStart; d <= sepEnd; d = d.AddDays(1))
         {
             bool isWeekend = d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
-            bool isHoliday = d == new DateOnly(2026, 9, 2);
+            bool isHoliday = d == new DateOnly(2026, 9, 2) || d == new DateOnly(2026, 9, 3);
 
             foreach (var s in specs)
             {
@@ -422,7 +422,9 @@ public class PayrollParallelVerification30EmployeesTests
                     continue;
                 }
 
-                if (isHoliday && s.Id != 14 && s.Id != 18)
+                // Ngày lễ 02/09 & 03/09 nghỉ hưởng nguyên lương; chỉ E14 & E18 trực OT ngày 02/09
+                bool hasApprovedHolidayOt = d == new DateOnly(2026, 9, 2) && (s.Id == 14 || s.Id == 18);
+                if (isHoliday && !hasApprovedHolidayOt)
                     continue;
 
                 DateTime inTime = d.ToDateTime(shift.StartTime);
@@ -627,6 +629,7 @@ public class PayrollParallelVerification30EmployeesTests
         rProbWith08.PersonalIncomeTax.Should().Be(0m);
         rNonRes.TaxResidencyMode.Should().Be("NonResident");
         rNonRes.PersonalIncomeTax.Should().Be(Math.Round(rNonRes.AssessableIncome * 0.20m, 0, MidpointRounding.AwayFromZero));
+        dailies.Count(x => x.AttendanceSymbol == "L").Should().Be(58); // 29 NV hiện hữu x 2 ngày Quốc khánh (02/09 & 03/09)
 
         // =========================================================================
         // BƯỚC 5: XUẤT FILE EXCEL ĐỐI CHIẾU CHO KẾ TOÁN KIỂM TRA TAY
@@ -661,7 +664,9 @@ public class PayrollParallelVerification30EmployeesTests
             dir = dir.Parent;
 
         string root = dir?.FullName ?? Directory.GetCurrentDirectory();
-        return Path.Combine(root, "DoiChieu_Luong_30NV_T09_2026.xlsx");
+        string targetDir = Path.Combine(root, "docs", "testdata");
+        Directory.CreateDirectory(targetDir);
+        return Path.Combine(targetDir, "DoiChieu_Luong_30NV_T09_2026.xlsx");
     }
 
     private static void ExportAccountantVerificationWorkbook(
@@ -942,12 +947,12 @@ public class PayrollParallelVerification30EmployeesTests
         var pStat = statutory.Parameter;
         (string Group, string Assumption, string Value)[] assumptions =
         [
-            ("Chế độ công chuẩn", "Tuần làm việc Thứ 2 – Thứ 6 (Mon..Fri), tháng 09/2026 gồm 22 ngày làm việc chuẩn (tính cả 02/09).", "StandardWorkdays = 22"),
-            ("Ngày Lễ & Làm thêm Lễ", "Ngày 02/09/2026 là Lễ Quốc khánh (nghỉ hưởng nguyên lương). E14 (ca chiều) & E18 (ca đêm) trực Lễ có OvertimeRequest Approved.", "Hệ số OT300 = 300%; Đêm Lễ có thêm phần phụ cấp đêm theo engine"),
-            ("Ca 3 kíp & Phụ cấp đêm", "Nhà máy chia CA_SANG (06-14h), CA_CHIEU (14-22h), CA_DEM (22-06h qua đêm, IsOvernight = true).", $"NightShiftAllowanceRate = {0.30m:P0}"),
+            ("Chế độ công chuẩn", "Tuần làm việc Thứ 2 – Thứ 6 (Mon..Fri), tháng 09/2026 gồm 22 ngày công chuẩn (20 ngày làm việc thường + 2 ngày Lễ Quốc khánh 02/09 & 03/09 hưởng nguyên lương).", "StandardWorkdays = 22 (gồm 2 ngày L)"),
+            ("Ngày Lễ & Làm thêm Lễ", "Quốc khánh 2026 gồm 2 ngày: 02/09 + 1 ngày liền kề (mặc định 03/09, HR có thể chọn 01/09 hoặc 03/09 theo QĐ Thủ tướng). E14 & E18 trực Lễ 02/09 có OvertimeRequest Approved.", "Hệ số OT300 = 300%; Đêm Lễ có phụ trội đêm"),
+            ("Ca 3 kíp & Phụ cấp đêm", "Nhà máy chia CA_SANG (06-14h), CA_CHIEU (14-22h), CA_DEM (22-06h qua đêm, IsOvernight = true). Đêm nghỉ Lễ 03/09 không quẹt thẻ -> 20 ca đêm thường (160h).", $"NightShiftAllowanceRate = {0.30m:P0}"),
             ("Xử lý lỗi chấm công", "Đi muộn vượt Grace 5 phút bị ghi nhận LateMinutes; Quên chấm vào/ra (chỉ 1 punch, không giải trình) đánh TC = 0 công ngày đó.", "E05, E10, E19 đi muộn; E06, E15, E29 quên chấm TC"),
             ("Mức lương cơ sở & Vùng BHTN", "HO_ADMIN & SALES_VN thuộc Vùng I; Nhà máy NM_BS thuộc Vùng II.", $"LCS = {pStat.StatutoryBaseSalary:N0} đ; Vùng 1 = {pStat.MinWageRegion1:N0} đ; Vùng 2 = {pStat.MinWageRegion2:N0} đ"),
-            ("Tỷ lệ BHXH-BHYT-BHTN & CĐ", "Áp dụng đồng nhất trên Quỹ BH có giới hạn trần 20 x LCS (BHXH/BHYT) và 20 x LTT Vùng (BHTN).", $"NLĐ: {pStat.EmployeeSiRate + pStat.EmployeeHiRate + pStat.EmployeeUiRate:P1}; DN: {pStat.CompanySiRate + pStat.CompanyHiRate + pStat.CompanyUiRate + pStat.CompanyOccupationalAccidentRate:P1}; KPCĐ DN: {pStat.CompanyUnionFeeRate:P1}"),
+            ("Tỷ lệ BHXH-BHYT-BHTN & CĐ", "Áp dụng đồng nhất trên Quỹ BH có trần 20 x LCS (BHXH/BHYT) & 20 x LTT Vùng (BHTN). DN BHXH = 17% (HT-TT 14% + ÔĐ-TS 3%) + 0.5% TNLĐ-BNN = 17.5%; KPCĐ 2% tách riêng.", $"NLĐ: {pStat.EmployeeSiRate + pStat.EmployeeHiRate + pStat.EmployeeUiRate:P1}; DN: {pStat.CompanySiRate + pStat.CompanyOccupationalAccidentRate + pStat.CompanyHiRate + pStat.CompanyUiRate:P1} (BHXH {pStat.CompanySiRate + pStat.CompanyOccupationalAccidentRate:P1}); KPCĐ DN: {pStat.CompanyUnionFeeRate:P1}"),
             ("Thuế TNCN 2026 & Giảm trừ", "Áp dụng tham số hiệu lực 30/09/2026 trong bảng PayrollStatutoryParameters & PitBrackets.", $"Bản thân = {pStat.SelfDeduction:N0} đ; NPT = {pStat.DependentDeduction:N0} đ; Không cư trú = {pStat.PitNonResidentRate:P0}; HĐ<3T = {pStat.PitShortTermRate:P0}"),
             ("Nhóm Thử việc (E25, E26)", "Lương thử việc bằng 85% lương cơ bản, không đóng BHXH bắt buộc (InsuranceSalary = 0), thuế ResidentShortTerm 10% (E26 miễn do có Cam kết 08).", "E25: Khấu trừ 10%; E26: HasPitCommitment08 = true => 0 đ"),
             ("Chuyên gia nước ngoài (E27, E28)", "E27 không cư trú (TaxResidencyMode = NonResident, không công đoàn); E28 cư trú dài hạn (ResidentStandard).", "E27 chịu thuế 20% toàn phần; E28 tính biểu lũy tiến"),

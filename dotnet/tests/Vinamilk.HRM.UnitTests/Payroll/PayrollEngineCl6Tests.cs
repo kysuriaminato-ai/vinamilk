@@ -51,8 +51,8 @@ public class PayrollEngineCl6Tests
         // - LCB = 26.000.000 đ, Phụ cấp CV = 2.000.000 đ -> Gross = 28.000.000 đ
         // - Nền BHXH/BHYT/BHTN = 28.000.000 đ (< trần 50.600.000 & 106.200.000)
         //   + NLĐ: BHXH (8%) = 2.240.000; BHYT (1.5%) = 420.000; BHTN (1%) = 280.000 -> Tổng BH NLĐ = 2.940.000 đ
-        //   + DN: BHXH (17.5%) = 4.900.000; BHYT (3%) = 840.000; BHTN (1%) = 280.000; BHTNLĐ-BNN (0.5%) = 140.000; KPCĐ (2%) = 560.000
-        //     -> Tổng chi phí DN = 28.000.000 + 6.720.000 = 34.720.000 đ
+        //   + DN: BHXH (17% HT/ÔĐ = 4.760.000 + BHTNLĐ-BNN 0.5% = 140.000 => 17.5% = 4.900.000); BHYT (3%) = 840.000; BHTN (1%) = 280.000; KPCĐ (2%) = 560.000
+        //     -> Tổng chi phí DN = 28.000.000 + 6.020.000 + 560.000 = 34.580.000 đ
         // - Thu nhập chịu thuế = 28.000.000 - 2.940.000 = 25.060.000 đ
         // - Thu nhập tính thuế = 25.060.000 - 15.500.000 = 9.560.000 đ (Bậc 1: 5%)
         // - Thuế TNCN = Round(9.560.000 * 0.05, 0) = 478.000 đ
@@ -75,9 +75,10 @@ public class PayrollEngineCl6Tests
 
         res.GrossIncome.Should().Be(28_000_000m);
         res.TotalEmployeeInsurance.Should().Be(2_940_000m);
+        res.CompanySocialInsurance.Should().Be(4_760_000m);
         res.CompanyOccupationalAccidentInsurance.Should().Be(140_000m);
         res.CompanyUnionFee.Should().Be(560_000m);
-        res.TotalCompanyCost.Should().Be(34_720_000m);
+        res.TotalCompanyCost.Should().Be(34_580_000m);
         res.AssessableIncome.Should().Be(9_560_000m);
         res.PersonalIncomeTax.Should().Be(478_000m);
         res.NetSalary.Should().Be(24_582_000m);
@@ -692,7 +693,7 @@ public class PayrollEngineCl6Tests
         rec.CompanyOccupationalAccidentInsurance.Should().Be(150_000m);
         rec.PersonalIncomeTax.Should().Be(1_635_000m);
         rec.NetSalary.Should().Be(34_962_000m);
-        rec.TotalCompanyCost.Should().Be(47_200_000m);
+        rec.TotalCompanyCost.Should().Be(47_050_000m);
     }
 
     // =========================================================================

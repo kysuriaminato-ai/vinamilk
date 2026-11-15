@@ -399,7 +399,7 @@ public class PayrollCalculationTests
             EmployeeSiRate: 0.08m,
             EmployeeHiRate: 0.015m,
             EmployeeUiRate: 0.01m,
-            CompanySiRate: 0.175m,
+            CompanySiRate: 0.17m,
             CompanyHiRate: 0.03m,
             CompanyUiRate: 0.01m,
             CompanyUnionFeeRate: 0.02m,
@@ -424,7 +424,7 @@ public class PayrollCalculationTests
             EmployeeSiRate: 0.08m,
             EmployeeHiRate: 0.015m,
             EmployeeUiRate: 0.01m,
-            CompanySiRate: 0.175m,
+            CompanySiRate: 0.17m,
             CompanyHiRate: 0.03m,
             CompanyUiRate: 0.01m,
             CompanyUnionFeeRate: 0.02m,
@@ -457,5 +457,46 @@ public class PayrollCalculationTests
             .Handle(new GetPayrollManagementOverviewQuery(), CancellationToken.None);
         overview.StatutoryParameters.Should().Contain(p => p.StatutoryBaseSalary == 2_850_000m);
         overview.PitBracketGroups.Should().Contain(g => g.EffectiveFrom == new DateOnly(2027, 1, 1));
+    }
+
+    [Fact]
+    public async Task EmployerContributions_On10MillionSalaryBase_ShouldMatchStatutory21_5PercentPlus2PercentUnion()
+    {
+        // Kiểm tra tính tay theo đúng yêu cầu đối chiếu:
+        // Lương đóng BH = 10.000.000 đ:
+        // - DN BHXH = 17% (1.700.000) + TNLĐ-BNN 0.5% (50.000) = 1.750.000 đ (17.5%)
+        // - DN BHYT = 3% = 300.000 đ
+        // - DN BHTN = 1% = 100.000 đ
+        // -> Tổng bảo hiểm DN đóng = 2.150.000 đ (21.5%)
+        // -> KPCĐ DN tách riêng = 2% = 200.000 đ
+        // -> Tổng chi phí DN = 10.000.000 + 2.150.000 + 200.000 = 12.350.000 đ
+        await using var db = await CreateSeededDbContextAsync();
+        var ctx = await VietnamPayrollEngine.ResolveStatutoryContextAsync(db, new DateOnly(2026, 9, 30));
+
+        var res = VietnamPayrollEngine.Calculate(new PayrollCalculationInput(
+            ContractBaseSalary: 10_000_000m,
+            PositionAllowance: 0m,
+            OtherAllowance: 0m,
+            StandardWorkdays: 22m,
+            PayableWorkdays: 22m,
+            OtHours150: 0m,
+            OtHours200: 0m,
+            OtHours300: 0m,
+            KpiBonus: 0m,
+            DisciplineDeduction: 0m,
+            DependentCount: 0,
+            IsUnionMember: true,
+            WageRegion: 1), ctx);
+
+        res.SocialInsuranceBase.Should().Be(10_000_000m);
+        res.CompanySocialInsurance.Should().Be(1_700_000m);
+        res.CompanyOccupationalAccidentInsurance.Should().Be(50_000m);
+        (res.CompanySocialInsurance + res.CompanyOccupationalAccidentInsurance).Should().Be(1_750_000m);
+        res.CompanyHealthInsurance.Should().Be(300_000m);
+        res.CompanyUnemploymentInsurance.Should().Be(100_000m);
+        (res.CompanySocialInsurance + res.CompanyOccupationalAccidentInsurance + res.CompanyHealthInsurance + res.CompanyUnemploymentInsurance)
+            .Should().Be(2_150_000m);
+        res.CompanyUnionFee.Should().Be(200_000m);
+        res.TotalCompanyCost.Should().Be(12_350_000m);
     }
 }

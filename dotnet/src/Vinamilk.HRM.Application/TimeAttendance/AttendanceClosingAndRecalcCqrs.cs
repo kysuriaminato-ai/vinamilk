@@ -318,16 +318,19 @@ public sealed class AttendanceRecalculationService : IAttendanceRecalculationJob
                             approvedExplain = new AttendanceApprovedExplanationInput(pIn, pOut, existingDaily.EditReason);
                         }
 
+                        bool outsideEmployment = date < emp.HireDate
+                            || (emp.TerminationDate.HasValue && date >= emp.TerminationDate.Value);
+
                         var calc = AttendanceCalculationEngine.CalculateDaily(new AttendanceDailyCalculationInput(
                             date,
                             shift,
-                            sched?.IsDayOff == true,
-                            isWeeklyOff,
-                            holidays.GetValueOrDefault(date),
-                            dayPunches,
-                            dayLeaves,
-                            dayOts,
-                            approvedExplain,
+                            sched?.IsDayOff == true || outsideEmployment,
+                            isWeeklyOff || outsideEmployment,
+                            outsideEmployment ? null : holidays.GetValueOrDefault(date),
+                            outsideEmployment ? Array.Empty<AttendancePunchInput>() : dayPunches,
+                            outsideEmployment ? Array.Empty<AttendanceApprovedLeaveInput>() : dayLeaves,
+                            outsideEmployment ? Array.Empty<AttendanceApprovedOvertimeInput>() : dayOts,
+                            outsideEmployment ? null : approvedExplain,
                             resolvedPolicy.Policy,
                             statutory,
                             symbolCatalog));
