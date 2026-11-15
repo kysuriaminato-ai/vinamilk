@@ -90,6 +90,10 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<PayrollRecordDetail> PayrollRecordDetails => Set<PayrollRecordDetail>();
     public DbSet<PayrollCalculationRevision> PayrollCalculationRevisions => Set<PayrollCalculationRevision>();
     public DbSet<PayslipDispatchLog> PayslipDispatchLogs => Set<PayslipDispatchLog>();
+    public DbSet<SalaryAdvance> SalaryAdvances => Set<SalaryAdvance>();
+    public DbSet<EmployeeLoan> EmployeeLoans => Set<EmployeeLoan>();
+    public DbSet<EmployeeLoanInstallment> EmployeeLoanInstallments => Set<EmployeeLoanInstallment>();
+    public DbSet<PayrollAdjustment> PayrollAdjustments => Set<PayrollAdjustment>();
 
     // Talent Schema
     public DbSet<RecruitmentRequest> RecruitmentRequests => Set<RecruitmentRequest>();

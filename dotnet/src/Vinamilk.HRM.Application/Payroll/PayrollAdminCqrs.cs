@@ -24,7 +24,11 @@ public sealed record PayrollPeriodRowDto(
     int EmployeeCount,
     decimal TotalGrossIncome,
     decimal TotalPersonalIncomeTax,
-    decimal TotalNetSalary);
+    decimal TotalNetSalary,
+    string PeriodType = "Monthly",
+    bool HasAttendanceLockWarning = false,
+    string? AttendanceWarningMessage = null,
+    decimal TotalCompanyCost = 0m);
 
 public sealed record PayrollRecordRowDto(
     long Id,
@@ -49,7 +53,14 @@ public sealed record PayrollRecordRowDto(
     decimal? PreviousPeriodNetSalary,
     decimal? VariancePercentVsPreviousPeriod,
     bool HasHighVarianceWarning,
-    string PaymentStatus);
+    string PaymentStatus,
+    decimal CompanyOccupationalAccidentInsurance = 0m,
+    decimal TotalCompanyCost = 0m,
+    decimal EmployeeUnionFee = 0m,
+    decimal OtNightExtraPay = 0m,
+    decimal OtTaxExemptAmount = 0m,
+    string TaxResidencyMode = "ResidentStandard",
+    bool IsNetToGross = false);
 
 public sealed record PayrollCalculationRevisionDto(
     long Id,
@@ -88,7 +99,21 @@ public sealed record PayrollStatutoryParameterDto(
     decimal CompanyUnionFeeRate,
     decimal SelfDeduction,
     decimal DependentDeduction,
-    bool HasLockedPayrollPeriod);
+    bool HasLockedPayrollPeriod,
+    decimal CompanyOccupationalAccidentRate = 0.005m,
+    decimal EmployeeUnionFeeRate = 0m,
+    decimal EmployeeUnionFeeCapMultiplier = 0.10m,
+    decimal PitNonResidentRate = 0.20m,
+    decimal PitShortTermRate = 0.10m,
+    decimal PitShortTermThreshold = 2_000_000m,
+    decimal OtMultiplier150 = 1.50m,
+    decimal OtMultiplier200 = 2.00m,
+    decimal OtMultiplier300 = 3.00m,
+    decimal OtNightShiftBonusRate = 0.30m,
+    decimal OtNightOvertimeExtraRate = 0.20m,
+    decimal OtTaxableBaseRate = 1.00m,
+    bool IsOtExcessTaxExempt = true,
+    bool NeedsHrVerification = true);
 
 public sealed record PitBracketGroupDto(
     DateOnly EffectiveFrom,
@@ -152,7 +177,11 @@ public sealed class GetPayrollManagementOverviewQueryHandler
                 p.PayrollRecords.Count,
                 p.PayrollRecords.Sum(r => r.GrossIncome),
                 p.PayrollRecords.Sum(r => r.PersonalIncomeTax),
-                p.PayrollRecords.Sum(r => r.NetSalary));
+                p.PayrollRecords.Sum(r => r.NetSalary),
+                p.PeriodType,
+                p.HasAttendanceLockWarning,
+                p.AttendanceWarningMessage,
+                p.PayrollRecords.Sum(r => r.TotalCompanyCost));
         }).ToList();
 
         var selectedPeriod = request.PeriodId.HasValue
@@ -197,7 +226,14 @@ public sealed class GetPayrollManagementOverviewQueryHandler
                 r.PreviousPeriodNetSalary,
                 r.VariancePercentVsPreviousPeriod,
                 r.HasHighVarianceWarning,
-                r.PaymentStatus)).ToList();
+                r.PaymentStatus,
+                r.CompanyOccupationalAccidentInsurance,
+                r.TotalCompanyCost,
+                r.EmployeeUnionFee,
+                r.OtNightExtraPay,
+                r.OtTaxExemptAmount,
+                r.TaxResidencyMode,
+                r.IsNetToGross)).ToList();
 
             deptSummaryRows = rawRecs
                 .GroupBy(r => new { r.OrganizationUnit.UnitCode, r.OrganizationUnit.UnitName })
@@ -296,7 +332,21 @@ public sealed class GetPayrollManagementOverviewQueryHandler
             p.CompanyUnionFeeRate,
             p.SelfDeduction,
             p.DependentDeduction,
-            HasOverlappingLockedPeriod(p.EffectiveFrom, p.EffectiveTo, lockedPeriods))).ToList();
+            HasOverlappingLockedPeriod(p.EffectiveFrom, p.EffectiveTo, lockedPeriods),
+            p.CompanyOccupationalAccidentRate,
+            p.EmployeeUnionFeeRate,
+            p.EmployeeUnionFeeCapMultiplier,
+            p.PitNonResidentRate,
+            p.PitShortTermRate,
+            p.PitShortTermThreshold,
+            p.OtMultiplier150,
+            p.OtMultiplier200,
+            p.OtMultiplier300,
+            p.OtNightShiftBonusRate,
+            p.OtNightOvertimeExtraRate,
+            p.OtTaxableBaseRate,
+            p.IsOtExcessTaxExempt,
+            p.NeedsHrVerification)).ToList();
 
         var bracketsRaw = await _context.PitBrackets
             .AsNoTracking()
@@ -341,7 +391,11 @@ public sealed class GetPayrollManagementOverviewQueryHandler
     }
 }
 
-public sealed record CreatePayrollPeriodCommand(int Year, int Month, decimal StandardWorkdays = 26m)
+public sealed record CreatePayrollPeriodCommand(
+    int Year,
+    int Month,
+    decimal StandardWorkdays = 26m,
+    string PeriodType = "Monthly")
     : IRequest<int>;
 
 public sealed class CreatePayrollPeriodCommandHandler : IRequestHandler<CreatePayrollPeriodCommand, int>
@@ -355,20 +409,36 @@ public sealed class CreatePayrollPeriodCommandHandler : IRequestHandler<CreatePa
         if (request.Month is < 1 or > 12 || request.Year < 2000)
             throw new ArgumentOutOfRangeException(nameof(request), "Tháng hoặc năm kỳ lương không hợp lệ.");
 
+        var periodType = string.IsNullOrWhiteSpace(request.PeriodType) ? "Monthly" : request.PeriodType.Trim();
+
         var existing = await _context.PayrollPeriods
-            .FirstOrDefaultAsync(p => p.Year == request.Year && p.Month == request.Month, cancellationToken);
+            .FirstOrDefaultAsync(p => p.Year == request.Year && p.Month == request.Month && p.PeriodType == periodType, cancellationToken);
         if (existing is not null)
             return existing.Id;
 
         var startDate = new DateOnly(request.Year, request.Month, 1);
         var endDate = new DateOnly(request.Year, request.Month, DateTime.DaysInMonth(request.Year, request.Month));
 
+        var prefix = periodType switch
+        {
+            "Bonus13" => "PAY-B13",
+            "HolidayBonus" => "PAY-HOL",
+            _ => "PAY"
+        };
+        var titlePrefix = periodType switch
+        {
+            "Bonus13" => "Kỳ chi Thưởng Tháng 13",
+            "HolidayBonus" => "Kỳ chi Thưởng Lễ/Tết",
+            _ => "Kỳ lương"
+        };
+
         var period = new PayrollPeriod
         {
-            PeriodCode = $"PAY-{request.Year}-{request.Month:D2}",
+            PeriodCode = $"{prefix}-{request.Year}-{request.Month:D2}",
+            PeriodType = periodType,
             Year = request.Year,
             Month = request.Month,
-            PeriodTitle = $"Kỳ lương Tháng {request.Month:D2}/{request.Year}",
+            PeriodTitle = $"{titlePrefix} Tháng {request.Month:D2}/{request.Year}",
             StartDate = startDate,
             EndDate = endDate,
             StandardWorkdays = request.StandardWorkdays > 0m ? request.StandardWorkdays : 26m,
@@ -403,7 +473,18 @@ public sealed record SavePayrollStatutoryParameterCommand(
     decimal CompanyUiRate,
     decimal CompanyUnionFeeRate,
     decimal SelfDeduction,
-    decimal DependentDeduction) : IRequest<int>;
+    decimal DependentDeduction,
+    decimal? CompanyOccupationalAccidentRate = null,
+    decimal? EmployeeUnionFeeRate = null,
+    decimal? PitNonResidentRate = null,
+    decimal? PitShortTermRate = null,
+    decimal? PitShortTermThreshold = null,
+    decimal? OtMultiplier150 = null,
+    decimal? OtMultiplier200 = null,
+    decimal? OtMultiplier300 = null,
+    decimal? OtNightShiftBonusRate = null,
+    decimal? OtNightOvertimeExtraRate = null,
+    bool? IsOtExcessTaxExempt = null) : IRequest<int>;
 
 public sealed class SavePayrollStatutoryParameterCommandHandler
     : IRequestHandler<SavePayrollStatutoryParameterCommand, int>
@@ -502,6 +583,28 @@ public sealed class SavePayrollStatutoryParameterCommandHandler
         entity.CompanyUnionFeeRate = request.CompanyUnionFeeRate;
         entity.SelfDeduction = request.SelfDeduction;
         entity.DependentDeduction = request.DependentDeduction;
+        if (request.CompanyOccupationalAccidentRate.HasValue)
+            entity.CompanyOccupationalAccidentRate = request.CompanyOccupationalAccidentRate.Value;
+        if (request.EmployeeUnionFeeRate.HasValue)
+            entity.EmployeeUnionFeeRate = request.EmployeeUnionFeeRate.Value;
+        if (request.PitNonResidentRate.HasValue)
+            entity.PitNonResidentRate = request.PitNonResidentRate.Value;
+        if (request.PitShortTermRate.HasValue)
+            entity.PitShortTermRate = request.PitShortTermRate.Value;
+        if (request.PitShortTermThreshold.HasValue)
+            entity.PitShortTermThreshold = request.PitShortTermThreshold.Value;
+        if (request.OtMultiplier150.HasValue)
+            entity.OtMultiplier150 = request.OtMultiplier150.Value;
+        if (request.OtMultiplier200.HasValue)
+            entity.OtMultiplier200 = request.OtMultiplier200.Value;
+        if (request.OtMultiplier300.HasValue)
+            entity.OtMultiplier300 = request.OtMultiplier300.Value;
+        if (request.OtNightShiftBonusRate.HasValue)
+            entity.OtNightShiftBonusRate = request.OtNightShiftBonusRate.Value;
+        if (request.OtNightOvertimeExtraRate.HasValue)
+            entity.OtNightOvertimeExtraRate = request.OtNightOvertimeExtraRate.Value;
+        if (request.IsOtExcessTaxExempt.HasValue)
+            entity.IsOtExcessTaxExempt = request.IsOtExcessTaxExempt.Value;
 
         await _context.SaveChangesAsync(cancellationToken);
 

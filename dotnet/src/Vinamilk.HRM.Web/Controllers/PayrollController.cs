@@ -27,18 +27,29 @@ public class PayrollController : Controller
         ViewData["BreadcrumbParent"] = "Chấm công & Tiền lương (C&B)";
 
         var model = await _mediator.Send(new GetPayrollManagementOverviewQuery(periodId), cancellationToken);
+        if (model.SelectedPeriod != null)
+        {
+            ViewBag.AttendanceLockStatus = await _mediator.Send(
+                new CheckPayrollAttendanceLockStatusQuery(model.SelectedPeriod.Year, model.SelectedPeriod.Month),
+                cancellationToken);
+        }
         return View(model);
     }
 
     [HttpPost("CreatePeriod")]
     [Authorize(Policy = "Payroll.Calculate")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreatePeriod(int year, int month, decimal standardWorkdays = 26m, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> CreatePeriod(
+        int year,
+        int month,
+        decimal standardWorkdays = 26m,
+        string periodType = "Monthly",
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            var id = await _mediator.Send(new CreatePayrollPeriodCommand(year, month, standardWorkdays), cancellationToken);
-            TempData["PayrollSuccess"] = $"Đã tạo / mở kỳ lương tháng {month:D2}/{year}.";
+            var id = await _mediator.Send(new CreatePayrollPeriodCommand(year, month, standardWorkdays, periodType), cancellationToken);
+            TempData["PayrollSuccess"] = $"Đã tạo / mở kỳ lương ({periodType}) tháng {month:D2}/{year}.";
             return RedirectToAction(nameof(Index), new { periodId = id });
         }
         catch (Exception ex)
@@ -55,11 +66,14 @@ public class PayrollController : Controller
         int payrollPeriodId,
         int? employeeId = null,
         string? notes = null,
+        bool allowUnlockedAttendance = false,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var count = await _mediator.Send(new CalculateMonthlyPayrollCommand(payrollPeriodId, employeeId, notes), cancellationToken);
+            var count = await _mediator.Send(
+                new CalculateMonthlyPayrollCommand(payrollPeriodId, employeeId, notes, RequireLockedAttendance: !allowUnlockedAttendance),
+                cancellationToken);
             TempData["PayrollSuccess"] = employeeId.HasValue
                 ? $"Đã tính lại lương cho nhân sự #{employeeId.Value} và lưu lịch sử phiên bản."
                 : $"Đã tính toán bảng lương theo tham số hiệu lực cuối kỳ cho {count} nhân sự.";
@@ -282,6 +296,17 @@ public class PayrollController : Controller
         decimal companyUnionFeeRatePercent,
         decimal selfDeduction,
         decimal dependentDeduction,
+        decimal? companyOccupationalAccidentRatePercent = null,
+        decimal? employeeUnionFeeRatePercent = null,
+        decimal? pitNonResidentRatePercent = null,
+        decimal? pitShortTermRatePercent = null,
+        decimal? pitShortTermThreshold = null,
+        decimal? otMultiplier150 = null,
+        decimal? otMultiplier200 = null,
+        decimal? otMultiplier300 = null,
+        decimal? otNightShiftBonusRatePercent = null,
+        decimal? otNightOvertimeExtraRatePercent = null,
+        bool isOtExcessTaxExempt = true,
         CancellationToken cancellationToken = default)
     {
         try
@@ -307,7 +332,18 @@ public class PayrollController : Controller
                 companyUiRatePercent / 100m,
                 companyUnionFeeRatePercent / 100m,
                 selfDeduction,
-                dependentDeduction), cancellationToken);
+                dependentDeduction,
+                companyOccupationalAccidentRatePercent / 100m,
+                employeeUnionFeeRatePercent / 100m,
+                pitNonResidentRatePercent / 100m,
+                pitShortTermRatePercent / 100m,
+                pitShortTermThreshold,
+                otMultiplier150,
+                otMultiplier200,
+                otMultiplier300,
+                otNightShiftBonusRatePercent / 100m,
+                otNightOvertimeExtraRatePercent / 100m,
+                isOtExcessTaxExempt), cancellationToken);
 
             TempData["PayrollSuccess"] = $"Đã lưu bộ tham số lương hiệu lực từ {effectiveFrom:dd/MM/yyyy} và ghi AuditLog.";
         }
@@ -533,6 +569,11 @@ public class PayrollController : Controller
         string? reason,
         int[]? allowanceComponentIds,
         decimal[]? allowanceAmounts,
+        string taxResidencyMode = "ResidentStandard",
+        bool hasPitCommitment08 = false,
+        string? commitment08Number = null,
+        bool isNetContract = false,
+        decimal? targetNetSalary = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -563,7 +604,12 @@ public class PayrollController : Controller
                 isUnionMember,
                 decisionNumber,
                 reason,
-                fixedAllowances), cancellationToken);
+                fixedAllowances,
+                taxResidencyMode,
+                hasPitCommitment08,
+                commitment08Number,
+                isNetContract,
+                targetNetSalary), cancellationToken);
 
             TempData["PayrollSuccess"] = $"Đã lưu hồ sơ lương hiệu lực từ {effectiveFrom:dd/MM/yyyy} cho nhân viên #{employeeId}.";
         }
@@ -573,6 +619,124 @@ public class PayrollController : Controller
         }
 
         return RedirectToAction(nameof(SalaryStructures), new { employeeId });
+    }
+
+    // =========================================================================
+    // CL6: GIẢ LẬP CHẠY LƯƠNG, DRILL-DOWN TRUY VẾT, NET->GROSS & TẠM ỨNG/VAY/TRUY LĨNH
+    // =========================================================================
+
+    [HttpGet("Simulation")]
+    [Authorize(Policy = "Payroll.Calculate")]
+    public async Task<IActionResult> Simulation(int periodId, int? employeeId = null, CancellationToken cancellationToken = default)
+    {
+        ViewData["Title"] = "Giả lập chạy lương (Simulation) & So sánh kỳ trước";
+        ViewData["BreadcrumbParent"] = "Chấm công & Tiền lương (C&B)";
+
+        var model = await _mediator.Send(new SimulatePayrollPeriodQuery(periodId, employeeId), cancellationToken);
+        return View(model);
+    }
+
+    [HttpGet("RecordTrace")]
+    public async Task<IActionResult> RecordTrace(long recordId, CancellationToken cancellationToken = default)
+    {
+        var trace = await _mediator.Send(new GetPayrollRecordTraceQuery(recordId), cancellationToken);
+        return Json(trace);
+    }
+
+    [HttpGet("Operations")]
+    [Authorize(Policy = "Payroll.Calculate")]
+    public async Task<IActionResult> Operations(CancellationToken cancellationToken = default)
+    {
+        ViewData["Title"] = "Tạm ứng, Khoản vay, Truy lĩnh/Truy thu & Quy đổi Net → Gross";
+        ViewData["BreadcrumbParent"] = "Chấm công & Tiền lương (C&B)";
+
+        var model = await _mediator.Send(new GetPayrollOperationsOverviewQuery(), cancellationToken);
+        return View(model);
+    }
+
+    [HttpPost("SolveNetToGross")]
+    [Authorize(Policy = "Payroll.Calculate")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SolveNetToGross(
+        [FromBody] NetToGrossInput input,
+        CancellationToken cancellationToken = default)
+    {
+        var solution = await _mediator.Send(new SolveNetToGrossQuery(input), cancellationToken);
+        return Json(solution);
+    }
+
+    [HttpPost("CreateAdvance")]
+    [Authorize(Policy = "Payroll.Calculate")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateAdvance(
+        int employeeId,
+        DateOnly advanceDate,
+        int targetYear,
+        int targetMonth,
+        decimal amount,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _mediator.Send(new CreateSalaryAdvanceCommand(employeeId, advanceDate, targetYear, targetMonth, amount, reason), cancellationToken);
+            TempData["PayrollSuccess"] = $"Đã tạo phiếu tạm ứng lương {amount:N0} đ cho kỳ {targetMonth:D2}/{targetYear}.";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Operations));
+    }
+
+    [HttpPost("CreateLoan")]
+    [Authorize(Policy = "Payroll.Calculate")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateLoan(
+        int employeeId,
+        DateOnly disbursementDate,
+        decimal principalAmount,
+        int termMonths,
+        int startYear,
+        int startMonth,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _mediator.Send(new CreateEmployeeLoanCommand(employeeId, disbursementDate, principalAmount, termMonths, startYear, startMonth, reason), cancellationToken);
+            TempData["PayrollSuccess"] = $"Đã tạo khoản vay {principalAmount:N0} đ trả góp {termMonths} tháng.";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Operations));
+    }
+
+    [HttpPost("CreateAdjustment")]
+    [Authorize(Policy = "Payroll.Calculate")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateAdjustment(
+        int employeeId,
+        string adjustmentType,
+        int targetYear,
+        int targetMonth,
+        decimal amount,
+        string reason,
+        int? sourceLockedPeriodId = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _mediator.Send(new CreatePayrollAdjustmentCommand(employeeId, adjustmentType, targetYear, targetMonth, amount, reason, sourceLockedPeriodId), cancellationToken);
+            TempData["PayrollSuccess"] = $"Đã tạo phiếu điều chỉnh ({adjustmentType}) {amount:N0} đ vào kỳ {targetMonth:D2}/{targetYear}.";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Operations));
     }
 }
 

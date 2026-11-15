@@ -1,0 +1,164 @@
+@model Vinamilk.HRM.Application.Payroll.PayrollSimulationResultDto
+@{
+    ViewData["Title"] = $"Giả lập chạy lương {Model.PeriodCode}";
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Payroll?periodId=@Model.PayrollPeriodId" class="btn btn-outline-primary">
+            <i class="ti ti-arrow-left me-1"></i>Quay lại Bảng lương
+        </a>
+        <a href="/Payroll/Operations" class="btn btn-outline-primary">
+            <i class="ti ti-wallet me-1"></i>Tạm ứng / Vay / Truy lĩnh
+        </a>
+    </div>
+    <span class="badge bg-warning text-dark fs-6 px-3 py-2">
+        <i class="ti ti-flask me-1"></i>CHẾ ĐỘ GIẢ LẬP (SIMULATION) — KHÔNG GHI DỮ LIỆU VÀO CSDL
+    </span>
+</div>
+
+@if (!Model.AttendanceLockStatus.IsAllLocked && Model.PeriodType == "Monthly")
+{
+    <div class="alert alert-warning border-0 shadow-sm mb-3">
+        <i class="ti ti-alert-triangle me-2"></i>@Model.AttendanceLockStatus.WarningMessage
+    </div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="vnm-card p-3 h-100">
+            <div class="small text-muted">Tổng Gross Giả lập (@Model.EmployeeCount NV)</div>
+            <div class="fs-4 fw-bold text-primary">@Model.TotalSimulatedGross.ToString("N0") đ</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="vnm-card p-3 h-100">
+            <div class="small text-muted">Tổng Thực lĩnh (Net) &amp; Chênh lệch kỳ trước</div>
+            <div class="fs-4 fw-bold text-success">@Model.TotalSimulatedNet.ToString("N0") đ</div>
+            <div class="small @(Model.TotalNetDeltaVsPreviousPeriod >= 0 ? "text-success" : "text-danger")">
+                vs Kỳ trước: @(Model.TotalNetDeltaVsPreviousPeriod >= 0 ? "+" : "")@Model.TotalNetDeltaVsPreviousPeriod.ToString("N0") đ
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="vnm-card p-3 h-100">
+            <div class="small text-muted">Tổng Chi phí Doanh nghiệp (gồm BH + BHTNLĐ + KPCĐ)</div>
+            <div class="fs-4 fw-bold text-dark">@Model.TotalSimulatedCompanyCost.ToString("N0") đ</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="vnm-card p-3 h-100">
+            <div class="small text-muted">Thuế TNCN dự kiến / Cảnh báo biến động &gt;20%</div>
+            <div class="fs-5 fw-bold text-danger">@Model.TotalSimulatedPit.ToString("N0") đ</div>
+            <div class="small">
+                @if (Model.HighVarianceCount > 0)
+                {
+                    <span class="badge bg-warning text-dark">@Model.HighVarianceCount nhân sự biến động cao</span>
+                }
+                else
+                {
+                    <span class="badge bg-success-subtle text-success">Ổn định</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="vnm-card p-3">
+    <h5 class="fw-bold mb-3"><i class="ti ti-table me-2 text-primary"></i>Chi tiết Giả lập theo Nhân viên — @Model.PeriodTitle</h5>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Mã NV</th>
+                    <th>Họ tên / Phòng ban</th>
+                    <th class="text-end">Công</th>
+                    <th class="text-end">Lương công</th>
+                    <th class="text-end">OT &amp; Ca đêm</th>
+                    <th class="text-end">Miễn thuế OT</th>
+                    <th class="text-end">Gross</th>
+                    <th class="text-end">BH NLĐ</th>
+                    <th class="text-end">Thuế TNCN</th>
+                    <th class="text-end">Khấu trừ khác</th>
+                    <th class="text-end">Thực lĩnh (Net)</th>
+                    <th class="text-end">Chênh lệch kỳ trước</th>
+                    <th class="text-end">Tổng CP DN</th>
+                    <th class="text-center">Truy vết</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var emp in Model.Employees)
+                {
+                    var collapseId = $"simTrace_{emp.EmployeeId}";
+                    <tr>
+                        <td class="fw-semibold">
+                            @emp.EmployeeCode
+                            @if (emp.IsNetToGross)
+                            {
+                                <span class="badge bg-info-subtle text-info-emphasis d-block">Net→Gross</span>
+                            }
+                        </td>
+                        <td>
+                            <div class="fw-medium">@emp.FullName</div>
+                            <div class="small text-muted">@emp.DepartmentName • @emp.TaxResidencyMode</div>
+                        </td>
+                        <td class="text-end">@emp.PayableWorkdays.ToString("0.#")/@emp.StandardWorkdays.ToString("0.#")</td>
+                        <td class="text-end">@emp.ActualBaseSalary.ToString("N0")</td>
+                        <td class="text-end">@emp.OvertimePay.ToString("N0")</td>
+                        <td class="text-end text-success">@emp.OtTaxExemptAmount.ToString("N0")</td>
+                        <td class="text-end fw-semibold">@emp.GrossIncome.ToString("N0")</td>
+                        <td class="text-end text-danger">-@emp.TotalEmployeeInsurance.ToString("N0")</td>
+                        <td class="text-end text-danger">-@emp.PersonalIncomeTax.ToString("N0")</td>
+                        <td class="text-end text-danger">-@emp.OtherDeductionsTotal.ToString("N0")</td>
+                        <td class="text-end fw-bold text-primary">@emp.NetSalary.ToString("N0")</td>
+                        <td class="text-end small">
+                            @if (emp.VariancePercentVsPreviousPeriod.HasValue)
+                            {
+                                <span class="badge @(emp.HasHighVarianceWarning ? "bg-warning text-dark" : "bg-light text-muted")">
+                                    @(emp.NetDeltaVsPreviousPeriod >= 0 ? "+" : "")@emp.NetDeltaVsPreviousPeriod.ToString("N0") (@emp.VariancePercentVsPreviousPeriod.Value.ToString("0.##")%)
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                        </td>
+                        <td class="text-end">@emp.TotalCompanyCost.ToString("N0")</td>
+                        <td class="text-center">
+                            <button class="btn btn-xs btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#@collapseId">
+                                <i class="ti ti-chevron-down"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    <tr class="collapse bg-light" id="@collapseId">
+                        <td colspan="14" class="p-3">
+                            <table class="table table-sm table-bordered bg-white mb-0 small">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Bước</th>
+                                        <th>Khoản mục</th>
+                                        <th>Công thức</th>
+                                        <th>Giá trị biến &amp; Căn cứ</th>
+                                        <th class="text-end">Kết quả</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var step in emp.TraceSteps)
+                                    {
+                                        <tr>
+                                            <td><span class="badge bg-secondary-subtle text-dark">@step.StepOrder. @step.Category</span></td>
+                                            <td class="fw-semibold">@step.ItemName</td>
+                                            <td><code>@step.Formula</code></td>
+                                            <td class="text-muted">@step.VariablesSummary @(step.LegalReference != null ? $"[{step.LegalReference}]" : "")</td>
+                                            <td class="text-end fw-bold">@step.ResultAmount.ToString("N0") đ</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

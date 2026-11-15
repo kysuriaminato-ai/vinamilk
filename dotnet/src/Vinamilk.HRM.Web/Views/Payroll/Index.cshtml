@@ -14,11 +14,45 @@
         <a href="/Payroll/SalaryStructures" class="btn btn-outline-primary">
             <i class="ti ti-calculator me-1"></i>3. Cấu trúc lương & Công thức NCalc
         </a>
+        <a href="/Payroll/Operations" class="btn btn-outline-primary">
+            <i class="ti ti-wallet me-1"></i>4. Tạm ứng / Vay / Truy lĩnh / Net→Gross
+        </a>
+        @if (Model.SelectedPeriod is not null)
+        {
+            <a href="/Payroll/Simulation?periodId=@Model.SelectedPeriod.Id" class="btn btn-outline-warning text-dark fw-semibold">
+                <i class="ti ti-flask me-1"></i>Chạy Giả lập (Simulation)
+            </a>
+        }
     </div>
     <span class="vnm-badge vnm-badge-info">
         <span class="vnm-badge-dot"></span>Áp dụng tham số theo NGÀY CUỐI KỲ LƯƠNG & Vùng BHTN nhân viên
     </span>
 </div>
+
+@{
+    var lockStatus = ViewBag.AttendanceLockStatus as Vinamilk.HRM.Application.Payroll.AttendanceLockStatusDto;
+}
+@if (Model.SelectedPeriod is not null && lockStatus != null && Model.SelectedPeriod.PeriodType == "Monthly")
+{
+    if (lockStatus.IsAllLocked)
+    {
+        <div class="alert alert-success border-0 shadow-sm d-flex align-items-center justify-content-between gap-2 mb-3">
+            <div><i class="ti ti-shield-check me-2 fs-5"></i><strong>@lockStatus.WarningMessage</strong></div>
+            <span class="badge bg-success">Sẵn sàng tính lương chính thức</span>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-warning border-0 shadow-sm d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <div>
+                <i class="ti ti-alert-triangle me-2 fs-5"></i><strong>Cảnh báo Bảng công chưa chốt khóa:</strong> @lockStatus.WarningMessage
+            </div>
+            <a href="/Payroll/Simulation?periodId=@Model.SelectedPeriod.Id" class="btn btn-sm btn-warning">
+                <i class="ti ti-flask me-1"></i>Chạy Giả lập trước
+            </a>
+        </div>
+    }
+}
 
 @if (TempData["PayrollSuccess"] != null)
 {
@@ -53,6 +87,14 @@
                     <label class="form-label fs-7 fw-semibold">Công chuẩn</label>
                     <input type="number" name="standardWorkdays" step="0.5" value="26" class="form-control form-control-sm" required />
                 </div>
+                <div class="col-12">
+                    <label class="form-label fs-7 fw-semibold">Loại kỳ chi trả</label>
+                    <select name="periodType" class="form-select form-select-sm">
+                        <option value="Monthly">Lương tháng chính thức (Monthly)</option>
+                        <option value="Bonus13">Đợt chi Thưởng Tháng 13 riêng (Bonus13)</option>
+                        <option value="HolidayBonus">Đợt chi Thưởng Lễ / Tết riêng (HolidayBonus)</option>
+                    </select>
+                </div>
                 <div class="col-12 mt-2">
                     <button type="submit" class="btn btn-sm vnm-btn-primary w-100">
                         <i class="ti ti-plus me-1"></i>Tạo / Mở Kỳ lương
@@ -72,9 +114,20 @@
                     <div class="d-flex flex-wrap gap-2">
                         @if (st == "Draft" || st == "Calculated")
                         {
-                            <form asp-controller="Payroll" asp-action="Calculate" method="post">
+                            <form asp-controller="Payroll" asp-action="Calculate" method="post" class="d-flex align-items-center gap-2">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="payrollPeriodId" value="@Model.SelectedPeriod.Id" />
+                                @if (lockStatus != null && !lockStatus.IsAllLocked && Model.SelectedPeriod.PeriodType == "Monthly")
+                                {
+                                    <label class="form-check form-check-inline mb-0 small text-warning-emphasis">
+                                        <input class="form-check-input" type="checkbox" name="allowUnlockedAttendance" value="true" />
+                                        <span>Bỏ qua khóa công</span>
+                                    </label>
+                                }
+                                else
+                                {
+                                    <input type="hidden" name="allowUnlockedAttendance" value="true" />
+                                }
                                 <button type="submit" class="btn btn-sm btn-primary">
                                     <i class="ti ti-calculator me-1"></i>@(st == "Calculated" ? "Tính lại cả kỳ" : $"Tính lương {Model.SelectedPeriod.PeriodCode}")
                                 </button>
@@ -311,6 +364,9 @@
                                 }
                             </td>
                             <td class="text-end text-nowrap">
+                                <button type="button" class="btn btn-xs btn-outline-info" title="Xem chi tiết công thức & diễn giải từng bước" onclick="openTraceModal(@r.Id)">
+                                    <i class="ti ti-list-search"></i>
+                                </button>
                                 <a href="/Payroll/DownloadPayslip/@r.Id" class="btn btn-xs btn-outline-danger" title="Tải Phiếu lương PDF có mật khẩu">
                                     <i class="ti ti-file-type-pdf"></i>
                                 </a>
@@ -320,6 +376,7 @@
                                         @Html.AntiForgeryToken()
                                         <input type="hidden" name="payrollPeriodId" value="@sp.Id" />
                                         <input type="hidden" name="employeeId" value="@r.EmployeeId" />
+                                        <input type="hidden" name="allowUnlockedAttendance" value="true" />
                                         <input type="hidden" name="notes" value="Tính lại cá nhân @r.EmployeeCode" />
                                         <button type="submit" class="btn btn-xs btn-outline-primary" title="Tính lại cho @r.EmployeeCode">
                                             <i class="ti ti-refresh"></i>
@@ -469,5 +526,70 @@
             </div>
         </div>
     </div>
+}
+
+<!-- MODAL DRILL-DOWN TRUY VẾT TÍNH LƯƠNG -->
+<div class="modal fade" id="payrollTraceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="traceModalTitle">Diễn giải chi tiết công thức tính lương</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="traceModalBody">
+                <div class="text-center py-4 text-muted">Đang tải diễn giải công thức...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    async function openTraceModal(recordId) {
+        const modalEl = document.getElementById('payrollTraceModal');
+        const body = document.getElementById('traceModalBody');
+        const title = document.getElementById('traceModalTitle');
+        body.innerHTML = '<div class="text-center py-4 text-muted">Đang tải...</div>';
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+        try {
+            const res = await fetch('/Payroll/RecordTrace?recordId=' + recordId);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const d = await res.json();
+            title.innerText = `Truy vết công thức: ${d.employeeCode} - ${d.employeeName} (${d.periodCode})`;
+            let rows = (d.steps || []).map(s => `
+                <tr>
+                    <td><span class="badge bg-secondary-subtle text-dark">${s.stepOrder}. ${s.category}</span></td>
+                    <td class="fw-semibold">${s.itemName}</td>
+                    <td><code class="small">${s.formula}</code></td>
+                    <td class="small text-muted">${s.variablesSummary}${s.legalReference ? `<div class="text-primary">${s.legalReference}</div>` : ''}</td>
+                    <td class="text-end fw-bold">${Number(s.resultAmount).toLocaleString('vi-VN')} đ</td>
+                </tr>`).join('');
+            body.innerHTML = `
+                <div class="row g-2 mb-3 small">
+                    <div class="col-md-3"><div class="p-2 border rounded"><strong>Gross:</strong> ${Number(d.grossIncome).toLocaleString('vi-VN')} đ</div></div>
+                    <div class="col-md-3"><div class="p-2 border rounded"><strong>BH NLĐ:</strong> -${Number(d.totalEmployeeInsurance).toLocaleString('vi-VN')} đ</div></div>
+                    <div class="col-md-3"><div class="p-2 border rounded"><strong>Thuế TNCN (${d.taxResidencyMode}):</strong> -${Number(d.personalIncomeTax).toLocaleString('vi-VN')} đ</div></div>
+                    <div class="col-md-3"><div class="p-2 border rounded bg-primary-subtle"><strong>Thực nhận / Tổng CP DN:</strong> ${Number(d.netSalary).toLocaleString('vi-VN')} / ${Number(d.totalCompanyCost).toLocaleString('vi-VN')} đ</div></div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Bước</th>
+                                <th>Khoản mục</th>
+                                <th>Công thức</th>
+                                <th>Biến đầu vào & Căn cứ</th>
+                                <th class="text-end">Kết quả</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows || '<tr><td colspan="5" class="text-center text-muted">Không có dữ liệu truy vết.</td></tr>'}</tbody>
+                    </table>
+                </div>`;
+        } catch (err) {
+            body.innerHTML = `<div class="alert alert-danger mb-0">Không tải được chi tiết: ${err}</div>`;
+        }
+    }
+</script>
 }
 

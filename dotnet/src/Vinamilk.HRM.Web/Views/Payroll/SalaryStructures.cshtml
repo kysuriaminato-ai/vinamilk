@@ -243,6 +243,31 @@
                                     <input type="checkbox" class="form-check-input" name="isUnionMember" value="true" id="chkUnion" checked="@selectedEmployee.IsUnionMember" />
                                     <label class="form-check-label small" for="chkUnion">Đoàn viên công đoàn</label>
                                 </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Chế độ tính thuế TNCN</label>
+                                    <select name="taxResidencyMode" class="form-select form-select-sm">
+                                        <option value="ResidentStandard">Cư trú ≥ 3 tháng (Lũy tiến)</option>
+                                        <option value="ResidentShortTerm">Hợp đồng &lt; 3 tháng (10% hoặc CK 08)</option>
+                                        <option value="NonResident">Không cư trú (Nước ngoài 20%)</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Số cam kết mẫu 08/CK-TNCN</label>
+                                    <div class="input-group input-group-sm">
+                                        <div class="input-group-text">
+                                            <input type="checkbox" name="hasPitCommitment08" value="true" title="Có bản cam kết 08/CK-TNCN" />
+                                        </div>
+                                        <input type="text" name="commitment08Number" class="form-control" placeholder="08/CK-TNCN-..." />
+                                    </div>
+                                </div>
+                                <div class="col-6 form-check ms-2 mt-2">
+                                    <input type="checkbox" class="form-check-input" name="isNetContract" value="true" id="chkNetContract" />
+                                    <label class="form-check-label small fw-semibold text-primary" for="chkNetContract">Hợp đồng lương Net (tự quy đổi Gross)</label>
+                                </div>
+                                <div class="col-5">
+                                    <label class="form-label small fw-semibold">Lương Net mục tiêu (đ)</label>
+                                    <input type="number" step="10000" min="0" name="targetNetSalary" class="form-control form-control-sm" placeholder="VD: 30000000" />
+                                </div>
                                 <div class="col-12">
                                     <label class="form-label small fw-semibold">Số quyết định & Lý do điều chỉnh</label>
                                     <div class="input-group input-group-sm">

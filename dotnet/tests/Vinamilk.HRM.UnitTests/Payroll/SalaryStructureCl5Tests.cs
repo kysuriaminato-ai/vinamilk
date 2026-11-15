@@ -171,11 +171,13 @@ public class SalaryStructureCl5Tests
         // Bảo hiểm dựa trên Lương đóng BHXH tách riêng = 15.000.000 đ (vùng I):
         //   - BHXH NLĐ (8%) = 1.200.000 đ; BHYT (1.5%) = 225.000 đ; BHTN (1%) = 150.000 đ -> Tổng = 1.575.000 đ
         //   - Kinh phí Công đoàn (2%) = 300.000 đ
-        // Thuế TNCN (Luật 2026, 0 NPT):
-        //   - Thu nhập chịu thuế = 25.038.462 - 1.575.000 = 23.463.462 đ
-        //   - Thu nhập tính thuế = 23.463.462 - 15.500.000 = 7.963.462 đ (Bậc 1: 5%)
-        //   - Thuế TNCN = Round(7.963.462 * 0.05, 0) = 398.173 đ
-        // Thực lĩnh = 25.038.462 - 1.575.000 - 398.173 = 23.065.289 đ
+        // Thuế TNCN (Luật 2026, 0 NPT, miễn thuế phần trả trội OT >100% theo TT 111/2013):
+        //   - Phần OT miễn thuế đoạn 1 = 288.462 - Round(96.153,8462 * 2, 0) = 288.462 - 192.308 = 96.154 đ
+        //   - Phần OT miễn thuế đoạn 2 = 750.000 - (125.000 * 4) = 250.000 đ -> Tổng miễn OT = 346.154 đ
+        //   - Thu nhập chịu thuế = 25.038.462 - 1.575.000 - 346.154 = 23.117.308 đ
+        //   - Thu nhập tính thuế = 23.117.308 - 15.500.000 = 7.617.308 đ (Bậc 1: 5%)
+        //   - Thuế TNCN = Round(7.617.308 * 0.05, 0) = 380.865 đ
+        // Thực lĩnh = 25.038.462 - 1.575.000 - 380.865 = 23.082.597 đ
         await using var db = await CreateSeededDbContextAsync();
         var user = new FakeCurrentUserService();
 
@@ -274,8 +276,8 @@ public class SalaryStructureCl5Tests
         rec.InsuranceSalaryBase.Should().Be(15_000_000m);
         rec.TotalEmployeeInsurance.Should().Be(1_575_000m);
         rec.CompanyUnionFee.Should().Be(300_000m);
-        rec.PersonalIncomeTax.Should().Be(398_173m);
-        rec.NetSalary.Should().Be(23_065_289m);
+        rec.PersonalIncomeTax.Should().Be(380_865m);
+        rec.NetSalary.Should().Be(23_082_597m);
         rec.Notes.Should().Contain("Tách lương theo hiệu lực");
         rec.Details.Should().Contain(d => d.ComponentCode == "BASIC_PAY" && d.Amount == 23_000_000m);
         rec.Details.Should().NotContain(d => d.ComponentCode == "INFO_HOURLY_RATE");

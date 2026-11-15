@@ -26,8 +26,22 @@ public class PayrollStatutoryParameterConfiguration : IEntityTypeConfiguration<P
         builder.Property(x => x.CompanyHiRate).HasColumnType("decimal(7,4)");
         builder.Property(x => x.CompanyUiRate).HasColumnType("decimal(7,4)");
         builder.Property(x => x.CompanyUnionFeeRate).HasColumnType("decimal(7,4)");
+        builder.Property(x => x.CompanyOccupationalAccidentRate).HasColumnType("decimal(7,4)").HasDefaultValue(0.005m);
+        builder.Property(x => x.EmployeeUnionFeeRate).HasColumnType("decimal(7,4)").HasDefaultValue(0m);
+        builder.Property(x => x.EmployeeUnionFeeCapMultiplier).HasColumnType("decimal(7,4)").HasDefaultValue(0.10m);
         builder.Property(x => x.SelfDeduction).HasColumnType("decimal(18,2)");
         builder.Property(x => x.DependentDeduction).HasColumnType("decimal(18,2)");
+        builder.Property(x => x.PitNonResidentRate).HasColumnType("decimal(7,4)").HasDefaultValue(0.20m);
+        builder.Property(x => x.PitShortTermRate).HasColumnType("decimal(7,4)").HasDefaultValue(0.10m);
+        builder.Property(x => x.PitShortTermThreshold).HasColumnType("decimal(18,0)").HasDefaultValue(2_000_000m);
+        builder.Property(x => x.OtMultiplier150).HasColumnType("decimal(6,2)").HasDefaultValue(1.50m);
+        builder.Property(x => x.OtMultiplier200).HasColumnType("decimal(6,2)").HasDefaultValue(2.00m);
+        builder.Property(x => x.OtMultiplier300).HasColumnType("decimal(6,2)").HasDefaultValue(3.00m);
+        builder.Property(x => x.OtNightShiftBonusRate).HasColumnType("decimal(7,4)").HasDefaultValue(0.30m);
+        builder.Property(x => x.OtNightOvertimeExtraRate).HasColumnType("decimal(7,4)").HasDefaultValue(0.20m);
+        builder.Property(x => x.OtTaxableBaseRate).HasColumnType("decimal(7,4)").HasDefaultValue(1.00m);
+        builder.Property(x => x.IsOtExcessTaxExempt).HasDefaultValue(true);
+        builder.Property(x => x.PayrollVarianceWarningThresholdPercent).HasColumnType("decimal(5,2)").HasDefaultValue(20.00m);
         builder.Property(x => x.MinProbationSalaryRatePercent).HasColumnType("decimal(5,2)").HasDefaultValue(85.00m);
         builder.Property(x => x.NeedsHrVerification).HasDefaultValue(true);
 
@@ -177,6 +191,9 @@ public class EmployeeSalaryProfileConfiguration : IEntityTypeConfiguration<Emplo
         builder.Property(x => x.ProbationRatePercent).HasColumnType("decimal(5,2)").HasDefaultValue(100.00m);
         builder.Property(x => x.PositionAllowance).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
         builder.Property(x => x.OtherAllowance).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
+        builder.Property(x => x.TaxResidencyMode).HasColumnType("varchar(30)").HasDefaultValue("ResidentStandard");
+        builder.Property(x => x.Commitment08Number).HasMaxLength(80);
+        builder.Property(x => x.TargetNetSalary).HasColumnType("decimal(18,0)");
         builder.Property(x => x.DecisionNumber).HasMaxLength(80);
         builder.Property(x => x.Reason).HasMaxLength(500);
 
@@ -239,9 +256,11 @@ public class PayrollPeriodConfiguration : IEntityTypeConfiguration<PayrollPeriod
         builder.ConfigureBaseAuditable<PayrollPeriod, int>("PayrollPeriods", "payroll");
 
         builder.Property(x => x.PeriodCode).HasColumnType("varchar(30)").IsRequired();
+        builder.Property(x => x.PeriodType).HasColumnType("varchar(30)").HasDefaultValue("Monthly");
         builder.Property(x => x.PeriodTitle).HasMaxLength(200).IsRequired();
         builder.Property(x => x.StandardWorkdays).HasColumnType("decimal(5,2)");
         builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("Draft");
+        builder.Property(x => x.AttendanceWarningMessage).HasMaxLength(1000);
         builder.Property(x => x.LastUnlockReason).HasMaxLength(500);
 
         builder.HasIndex(x => x.PeriodCode)
@@ -249,9 +268,9 @@ public class PayrollPeriodConfiguration : IEntityTypeConfiguration<PayrollPeriod
             .HasDatabaseName("UQ_PayrollPeriods_PeriodCode")
             .HasFilter("[IsDeleted] = 0");
 
-        builder.HasIndex(x => new { x.Year, x.Month })
+        builder.HasIndex(x => new { x.Year, x.Month, x.PeriodType })
             .IsUnique()
-            .HasDatabaseName("UQ_PayrollPeriods_Year_Month")
+            .HasDatabaseName("UQ_PayrollPeriods_Year_Month_Type")
             .HasFilter("[IsDeleted] = 0");
     }
 }
@@ -273,7 +292,12 @@ public class PayrollRecordConfiguration : IEntityTypeConfiguration<PayrollRecord
         builder.Property(x => x.PositionAllowance).HasColumnType("decimal(18,2)");
         builder.Property(x => x.OtherAllowance).HasColumnType("decimal(18,2)");
         builder.Property(x => x.OvertimePay).HasColumnType("decimal(18,2)");
+        builder.Property(x => x.OtNightExtraPay).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
+        builder.Property(x => x.OtTaxExemptAmount).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
         builder.Property(x => x.KpiBonus).HasColumnType("decimal(18,2)");
+        builder.Property(x => x.CommissionBonus).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
+        builder.Property(x => x.ThirteenthMonthBonus).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
+        builder.Property(x => x.RetroEarningAmount).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
         builder.Property(x => x.UnusedLeavePayout).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
         builder.Property(x => x.GrossIncome).HasColumnType("decimal(18,2)");
         builder.Property(x => x.InsuranceSalaryBase).HasColumnType("decimal(18,2)");
@@ -282,10 +306,15 @@ public class PayrollRecordConfiguration : IEntityTypeConfiguration<PayrollRecord
         builder.Property(x => x.EmployeeHealthInsurance).HasColumnType("decimal(18,2)");
         builder.Property(x => x.EmployeeUnemploymentInsurance).HasColumnType("decimal(18,2)");
         builder.Property(x => x.TotalEmployeeInsurance).HasColumnType("decimal(18,2)");
+        builder.Property(x => x.EmployeeUnionFee).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
         builder.Property(x => x.CompanySocialInsurance).HasColumnType("decimal(18,2)");
         builder.Property(x => x.CompanyHealthInsurance).HasColumnType("decimal(18,2)");
         builder.Property(x => x.CompanyUnemploymentInsurance).HasColumnType("decimal(18,2)");
+        builder.Property(x => x.CompanyOccupationalAccidentInsurance).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
         builder.Property(x => x.CompanyUnionFee).HasColumnType("decimal(18,2)");
+        builder.Property(x => x.TotalCompanyCost).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
+        builder.Property(x => x.TaxResidencyMode).HasColumnType("varchar(30)").HasDefaultValue("ResidentStandard");
+        builder.Property(x => x.TargetNetSalary).HasColumnType("decimal(18,0)");
         builder.Property(x => x.SelfDeductionAmount).HasColumnType("decimal(18,2)");
         builder.Property(x => x.DependentDeductionAmount).HasColumnType("decimal(18,2)");
         builder.Property(x => x.TaxableIncome).HasColumnType("decimal(18,2)");
@@ -293,12 +322,16 @@ public class PayrollRecordConfiguration : IEntityTypeConfiguration<PayrollRecord
         builder.Property(x => x.PersonalIncomeTax).HasColumnType("decimal(18,2)");
         builder.Property(x => x.PitBracketsJson).HasMaxLength(2000);
         builder.Property(x => x.DisciplineDeduction).HasColumnType("decimal(18,2)");
+        builder.Property(x => x.SalaryAdvanceDeduction).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
+        builder.Property(x => x.LoanInstallmentDeduction).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
+        builder.Property(x => x.RetroDeductionAmount).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
         builder.Property(x => x.NetSalary).HasColumnType("decimal(18,2)");
         builder.Property(x => x.PreviousRevisionNetSalary).HasColumnType("decimal(18,2)");
         builder.Property(x => x.PreviousPeriodNetSalary).HasColumnType("decimal(18,2)");
         builder.Property(x => x.VariancePercentVsPreviousPeriod).HasColumnType("decimal(7,2)");
         builder.Property(x => x.PaymentStatus).HasColumnType("varchar(30)").HasDefaultValue("Paid");
         builder.Property(x => x.Notes).HasMaxLength(500);
+        builder.Property(x => x.CalculationTraceJson).HasColumnType("nvarchar(max)");
 
         builder.HasIndex(x => new { x.PayrollPeriodId, x.EmployeeId })
             .IsUnique()
@@ -403,6 +436,97 @@ public class PayslipDispatchLogConfiguration : IEntityTypeConfiguration<PayslipD
         builder.HasOne(x => x.PayrollPeriod)
             .WithMany(p => p.PayslipDispatchLogs)
             .HasForeignKey(x => x.PayrollPeriodId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class SalaryAdvanceConfiguration : IEntityTypeConfiguration<SalaryAdvance>
+{
+    public void Configure(EntityTypeBuilder<SalaryAdvance> builder)
+    {
+        builder.ConfigureBaseAuditable<SalaryAdvance, int>("SalaryAdvances", "payroll");
+
+        builder.Property(x => x.AdvanceNumber).HasColumnType("varchar(50)").IsRequired();
+        builder.Property(x => x.Amount).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+        builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("Approved");
+
+        builder.HasIndex(x => new { x.EmployeeId, x.TargetYear, x.TargetMonth })
+            .HasDatabaseName("IX_SalaryAdvances_Emp_Period");
+
+        builder.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class EmployeeLoanConfiguration : IEntityTypeConfiguration<EmployeeLoan>
+{
+    public void Configure(EntityTypeBuilder<EmployeeLoan> builder)
+    {
+        builder.ConfigureBaseAuditable<EmployeeLoan, int>("EmployeeLoans", "payroll");
+
+        builder.Property(x => x.LoanCode).HasColumnType("varchar(50)").IsRequired();
+        builder.Property(x => x.LoanType).HasColumnType("varchar(30)").HasDefaultValue("Loan");
+        builder.Property(x => x.PrincipalAmount).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.MonthlyInstallmentAmount).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+        builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("Active");
+
+        builder.HasIndex(x => x.LoanCode)
+            .IsUnique()
+            .HasDatabaseName("UQ_EmployeeLoans_LoanCode")
+            .HasFilter("[IsDeleted] = 0");
+
+        builder.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class EmployeeLoanInstallmentConfiguration : IEntityTypeConfiguration<EmployeeLoanInstallment>
+{
+    public void Configure(EntityTypeBuilder<EmployeeLoanInstallment> builder)
+    {
+        builder.ConfigureBaseAuditable<EmployeeLoanInstallment, int>("EmployeeLoanInstallments", "payroll");
+
+        builder.Property(x => x.Amount).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("Scheduled");
+
+        builder.HasIndex(x => new { x.EmployeeId, x.TargetYear, x.TargetMonth })
+            .HasDatabaseName("IX_EmployeeLoanInstallments_Emp_Period");
+
+        builder.HasOne(x => x.EmployeeLoan)
+            .WithMany(l => l.Installments)
+            .HasForeignKey(x => x.EmployeeLoanId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class PayrollAdjustmentConfiguration : IEntityTypeConfiguration<PayrollAdjustment>
+{
+    public void Configure(EntityTypeBuilder<PayrollAdjustment> builder)
+    {
+        builder.ConfigureBaseAuditable<PayrollAdjustment, int>("PayrollAdjustments", "payroll");
+
+        builder.Property(x => x.AdjustmentType).HasColumnType("varchar(30)").IsRequired();
+        builder.Property(x => x.Amount).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+        builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("Approved");
+
+        builder.HasIndex(x => new { x.EmployeeId, x.TargetYear, x.TargetMonth })
+            .HasDatabaseName("IX_PayrollAdjustments_Emp_Period");
+
+        builder.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

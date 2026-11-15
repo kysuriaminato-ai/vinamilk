@@ -35,8 +35,32 @@ public class PayrollStatutoryParameter : BaseAuditableEntity
     public decimal CompanyHiRate { get; set; } = 0.03m;
     public decimal CompanyUiRate { get; set; } = 0.01m;
     public decimal CompanyUnionFeeRate { get; set; } = 0.02m;
+    /// <summary>BHTNLĐ-BNN doanh nghiệp đóng (mặc định 0.5% theo NĐ 58/2020 & NĐ 88/2020).</summary>
+    public decimal CompanyOccupationalAccidentRate { get; set; } = 0.005m;
+    /// <summary>Đoàn phí công đoàn phần NLĐ (cấu hình VD 0.01 = 1% theo QĐ 1908/QĐ-TLĐ; mặc định 0 nếu chưa kích hoạt thu qua lương).</summary>
+    public decimal EmployeeUnionFeeRate { get; set; } = 0m;
+    /// <summary>Trần đoàn phí NLĐ tối đa tính theo bội số Lương cơ sở Nhà nước (mặc định 0.10 = 10% LCS theo QĐ 1908/QĐ-TLĐ).</summary>
+    public decimal EmployeeUnionFeeCapMultiplier { get; set; } = 0.10m;
     public decimal SelfDeduction { get; set; }
     public decimal DependentDeduction { get; set; }
+    /// <summary>Thuế suất TNCN cá nhân không cư trú (mặc định 20% theo Luật Thuế TNCN).</summary>
+    public decimal PitNonResidentRate { get; set; } = 0.20m;
+    /// <summary>Thuế suất khấu trừ nguồn HĐ &lt; 3 tháng / không HĐ (mặc định 10% theo TT 111/2013/TT-BTC Điều 25).</summary>
+    public decimal PitShortTermRate { get; set; } = 0.10m;
+    /// <summary>Ngưỡng chi trả bắt đầu khấu trừ 10% (mặc định 2.000.000 đ/lần theo TT 111/2013/TT-BTC Điều 25).</summary>
+    public decimal PitShortTermThreshold { get; set; } = 2_000_000m;
+    /// <summary>Hệ số OT ngày thường (1.50), ngày nghỉ tuần (2.00), ngày Lễ/Tết (3.00).</summary>
+    public decimal OtMultiplier150 { get; set; } = 1.50m;
+    public decimal OtMultiplier200 { get; set; } = 2.00m;
+    public decimal OtMultiplier300 { get; set; } = 3.00m;
+    /// <summary>Phụ cấp làm đêm (+30% Điều 98.2 BLLĐ 2019) và phụ trội OT ban đêm (+20% Điều 98.3 BLLĐ 2019).</summary>
+    public decimal OtNightShiftBonusRate { get; set; } = 0.30m;
+    public decimal OtNightOvertimeExtraRate { get; set; } = 0.20m;
+    /// <summary>Phần đơn giá chịu thuế TNCN của giờ OT (mặc định 1.00 = giờ công bình thường; phần trả vượt được miễn thuế theo TT 111/2013 Điều 3.1.i).</summary>
+    public decimal OtTaxableBaseRate { get; set; } = 1.00m;
+    public bool IsOtExcessTaxExempt { get; set; } = true;
+    /// <summary>Ngưỡng cảnh báo biến động thu nhập ròng so với kỳ trước (%).</summary>
+    public decimal PayrollVarianceWarningThresholdPercent { get; set; } = 20.00m;
     /// <summary>Tỷ lệ lương thử việc tối thiểu (% - mặc định 85% theo Điều 26 BLLĐ 2019).</summary>
     public decimal MinProbationSalaryRatePercent { get; set; } = 85.00m;
     public bool NeedsHrVerification { get; set; } = true;
@@ -149,6 +173,14 @@ public class EmployeeSalaryProfile : BaseAuditableEntity
     public decimal PositionAllowance { get; set; } = 0m;
     public decimal OtherAllowance { get; set; } = 0m;
     public bool IsUnionMember { get; set; } = true;
+    /// <summary>ResidentStandard (Cư trú >= 3T) | ResidentShortTerm (HĐ < 3T / không HĐ) | NonResident (Không cư trú 20%)</summary>
+    public string TaxResidencyMode { get; set; } = "ResidentStandard";
+    /// <summary>Cam kết thu nhập chưa đến mức chịu thuế mẫu 08/CK-TNCN (dành cho HĐ < 3 tháng).</summary>
+    public bool HasPitCommitment08 { get; set; } = false;
+    public string? Commitment08Number { get; set; }
+    /// <summary>Hợp đồng cam kết lương Net (dùng binary search giải ngược ra Gross).</summary>
+    public bool IsNetContract { get; set; } = false;
+    public decimal? TargetNetSalary { get; set; }
     public string? DecisionNumber { get; set; }
     public string? Reason { get; set; }
     public bool IsActive { get; set; } = true;
@@ -187,12 +219,16 @@ public class PayrollPeriod : BaseAuditableEntity
     public string PeriodCode { get; set; } = string.Empty;
     public int Month { get; set; }
     public int Year { get; set; }
+    /// <summary>Monthly (Lương tháng) | Bonus13 (Kỳ chi Thưởng tháng 13) | HolidayBonus (Kỳ chi Thưởng Lễ/Tết)</summary>
+    public string PeriodType { get; set; } = "Monthly";
     public string PeriodTitle { get; set; } = string.Empty;
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
     public decimal StandardWorkdays { get; set; } = 26m;
     public string Status { get; set; } = PayrollPeriodStatuses.Draft;
     public int CalculationVersion { get; set; } = 0;
+    public bool HasAttendanceLockWarning { get; set; } = false;
+    public string? AttendanceWarningMessage { get; set; }
     public int? CalculatedByUserId { get; set; }
     public DateTime? CalculatedAt { get; set; }
     public int? SubmittedByUserId { get; set; }
@@ -233,7 +269,12 @@ public class PayrollRecord : BaseLongAuditableEntity
     public decimal PositionAllowance { get; set; }
     public decimal OtherAllowance { get; set; }
     public decimal OvertimePay { get; set; }
+    public decimal OtNightExtraPay { get; set; } = 0m;
+    public decimal OtTaxExemptAmount { get; set; } = 0m;
     public decimal KpiBonus { get; set; }
+    public decimal CommissionBonus { get; set; } = 0m;
+    public decimal ThirteenthMonthBonus { get; set; } = 0m;
+    public decimal RetroEarningAmount { get; set; } = 0m;
     public decimal UnusedLeavePayout { get; set; } = 0m;
     public decimal GrossIncome { get; set; }
     public decimal InsuranceSalaryBase { get; set; }
@@ -242,10 +283,17 @@ public class PayrollRecord : BaseLongAuditableEntity
     public decimal EmployeeHealthInsurance { get; set; }
     public decimal EmployeeUnemploymentInsurance { get; set; }
     public decimal TotalEmployeeInsurance { get; set; }
+    public decimal EmployeeUnionFee { get; set; } = 0m;
     public decimal CompanySocialInsurance { get; set; }
     public decimal CompanyHealthInsurance { get; set; }
     public decimal CompanyUnemploymentInsurance { get; set; }
+    public decimal CompanyOccupationalAccidentInsurance { get; set; } = 0m;
     public decimal CompanyUnionFee { get; set; }
+    public decimal TotalCompanyCost { get; set; } = 0m;
+    public string TaxResidencyMode { get; set; } = "ResidentStandard";
+    public bool UsedCommitment08 { get; set; } = false;
+    public bool IsNetToGross { get; set; } = false;
+    public decimal? TargetNetSalary { get; set; }
     public int DependentCount { get; set; }
     public decimal SelfDeductionAmount { get; set; }
     public decimal DependentDeductionAmount { get; set; }
@@ -254,6 +302,9 @@ public class PayrollRecord : BaseLongAuditableEntity
     public decimal PersonalIncomeTax { get; set; }
     public string? PitBracketsJson { get; set; }
     public decimal DisciplineDeduction { get; set; }
+    public decimal SalaryAdvanceDeduction { get; set; } = 0m;
+    public decimal LoanInstallmentDeduction { get; set; } = 0m;
+    public decimal RetroDeductionAmount { get; set; } = 0m;
     public decimal NetSalary { get; set; }
     public decimal? PreviousRevisionNetSalary { get; set; }
     public decimal? PreviousPeriodNetSalary { get; set; }
@@ -262,6 +313,7 @@ public class PayrollRecord : BaseLongAuditableEntity
     public string PaymentStatus { get; set; } = "Paid";
     public DateTime? PaidAt { get; set; }
     public string? Notes { get; set; }
+    public string? CalculationTraceJson { get; set; }
 
     public PayrollPeriod PayrollPeriod { get; set; } = null!;
     public Employee Employee { get; set; } = null!;
@@ -320,5 +372,75 @@ public class PayrollRecordDetail : BaseLongAuditableEntity
 
     public PayrollRecord PayrollRecord { get; set; } = null!;
     public SalaryComponent SalaryComponent { get; set; } = null!;
+}
+
+public class SalaryAdvance : BaseAuditableEntity
+{
+    public int EmployeeId { get; set; }
+    public string AdvanceNumber { get; set; } = string.Empty;
+    public DateOnly RequestDate { get; set; }
+    public int TargetYear { get; set; }
+    public int TargetMonth { get; set; }
+    public decimal Amount { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    /// <summary>Approved | Deducted | Cancelled</summary>
+    public string Status { get; set; } = "Approved";
+    public int? DeductedPayrollPeriodId { get; set; }
+
+    public Employee Employee { get; set; } = null!;
+}
+
+public class EmployeeLoan : BaseAuditableEntity
+{
+    public int EmployeeId { get; set; }
+    public string LoanCode { get; set; } = string.Empty;
+    /// <summary>Loan (Khoản vay) | Installment (Khấu trừ trả góp đồng phục/đền bù)</summary>
+    public string LoanType { get; set; } = "Loan";
+    public decimal PrincipalAmount { get; set; }
+    public decimal MonthlyInstallmentAmount { get; set; }
+    public int TotalInstallments { get; set; }
+    public int StartYear { get; set; }
+    public int StartMonth { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    /// <summary>Active | PaidOff | Paused | Cancelled</summary>
+    public string Status { get; set; } = "Active";
+
+    public Employee Employee { get; set; } = null!;
+    public ICollection<EmployeeLoanInstallment> Installments { get; set; } = new List<EmployeeLoanInstallment>();
+}
+
+public class EmployeeLoanInstallment : BaseAuditableEntity
+{
+    public int EmployeeLoanId { get; set; }
+    public int EmployeeId { get; set; }
+    public int InstallmentNumber { get; set; }
+    public int TargetYear { get; set; }
+    public int TargetMonth { get; set; }
+    public decimal Amount { get; set; }
+    /// <summary>Scheduled | Deducted | Waived</summary>
+    public string Status { get; set; } = "Scheduled";
+    public int? DeductedPayrollPeriodId { get; set; }
+
+    public EmployeeLoan EmployeeLoan { get; set; } = null!;
+    public Employee Employee { get; set; } = null!;
+}
+
+public class PayrollAdjustment : BaseAuditableEntity
+{
+    public int EmployeeId { get; set; }
+    public int TargetYear { get; set; }
+    public int TargetMonth { get; set; }
+    public int? SourceLockedPeriodId { get; set; }
+    /// <summary>RetroEarning (Truy lĩnh) | RetroDeduction (Truy thu) | Commission (Hoa hồng) | Bonus13 (Thưởng T13) | HolidayBonus (Thưởng Lễ/Tết)</summary>
+    public string AdjustmentType { get; set; } = "RetroEarning";
+    public bool IsTaxable { get; set; } = true;
+    public bool IsSocialInsuranceBase { get; set; } = false;
+    public decimal Amount { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    /// <summary>Approved | Applied | Cancelled</summary>
+    public string Status { get; set; } = "Approved";
+    public int? AppliedPayrollPeriodId { get; set; }
+
+    public Employee Employee { get; set; } = null!;
 }
 

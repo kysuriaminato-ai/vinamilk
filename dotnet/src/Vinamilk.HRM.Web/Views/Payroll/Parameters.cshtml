@@ -183,6 +183,39 @@
                     <input type="number" id="paramCompUnion" name="companyUnionFeeRatePercent" class="form-control" value="2" step="0.1" required />
                 </div>
             </div>
+            <div class="col-md-2">
+                <label class="form-label fs-7 fw-semibold">BHTNLĐ-BNN DN (%)</label>
+                <input type="number" id="paramCompOa" name="companyOccupationalAccidentRatePercent" class="form-control form-control-sm" value="0.5" step="0.1" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fs-7 fw-semibold">Đoàn phí NLĐ (%)</label>
+                <input type="number" id="paramEmpUnion" name="employeeUnionFeeRatePercent" class="form-control form-control-sm" value="0" step="0.1" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fs-7 fw-semibold">TNCN Non-Res (%)</label>
+                <input type="number" id="paramPitNonRes" name="pitNonResidentRatePercent" class="form-control form-control-sm" value="20" step="0.5" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fs-7 fw-semibold">TNCN &lt;3th (%) / Ngưỡng</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" id="paramPitShortRate" name="pitShortTermRatePercent" class="form-control" value="10" step="0.5" />
+                    <input type="number" id="paramPitShortThresh" name="pitShortTermThreshold" class="form-control" value="2000000" step="100000" />
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fs-7 fw-semibold">Hệ số OT 150 / 200 / 300 | Đêm (+%) | OT Đêm (+%)</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" id="paramOt150" name="otMultiplier150" class="form-control" value="1.5" step="0.1" />
+                    <input type="number" id="paramOt200" name="otMultiplier200" class="form-control" value="2.0" step="0.1" />
+                    <input type="number" id="paramOt300" name="otMultiplier300" class="form-control" value="3.0" step="0.1" />
+                    <input type="number" id="paramNightPct" name="otNightShiftBonusRatePercent" class="form-control" value="30" step="1" />
+                    <input type="number" id="paramNightOtPct" name="otNightOvertimeExtraRatePercent" class="form-control" value="20" step="1" />
+                </div>
+            </div>
+            <div class="col-md-4 form-check ms-2 mt-2">
+                <input type="checkbox" class="form-check-input" id="paramOtExempt" name="isOtExcessTaxExempt" value="true" checked />
+                <label class="form-check-label small" for="paramOtExempt">Miễn thuế phần trả trội OT & làm đêm (&gt;100% theo TT 111/2013)</label>
+            </div>
             <div class="col-12 mt-2 d-flex justify-content-end gap-2">
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetParamForm()">Xóa trắng</button>
                 <button type="submit" class="btn btn-sm vnm-btn-primary">
@@ -337,6 +370,17 @@
         document.getElementById('paramCompHi').value = (p.CompanyHiRate * 100).toFixed(2);
         document.getElementById('paramCompUi').value = (p.CompanyUiRate * 100).toFixed(2);
         document.getElementById('paramCompUnion').value = (p.CompanyUnionFeeRate * 100).toFixed(2);
+        document.getElementById('paramCompOa').value = ((p.CompanyOccupationalAccidentRate ?? 0.005) * 100).toFixed(2);
+        document.getElementById('paramEmpUnion').value = ((p.EmployeeUnionFeeRate ?? 0) * 100).toFixed(2);
+        document.getElementById('paramPitNonRes').value = ((p.PitNonResidentRate ?? 0.20) * 100).toFixed(1);
+        document.getElementById('paramPitShortRate').value = ((p.PitShortTermRate ?? 0.10) * 100).toFixed(1);
+        document.getElementById('paramPitShortThresh').value = p.PitShortTermThreshold ?? 2000000;
+        document.getElementById('paramOt150').value = p.OtMultiplier150 ?? 1.5;
+        document.getElementById('paramOt200').value = p.OtMultiplier200 ?? 2.0;
+        document.getElementById('paramOt300').value = p.OtMultiplier300 ?? 3.0;
+        document.getElementById('paramNightPct').value = ((p.OtNightShiftBonusRate ?? 0.30) * 100).toFixed(0);
+        document.getElementById('paramNightOtPct').value = ((p.OtNightOvertimeExtraRate ?? 0.20) * 100).toFixed(0);
+        document.getElementById('paramOtExempt').checked = p.IsOtExcessTaxExempt ?? true;
     }
 
     function resetParamForm() {

@@ -590,10 +590,17 @@ public static class MidMonthSalarySplitter
         decimal totalNightHours,
         IReadOnlyList<EmployeeSalaryProfile> orderedProfiles,
         IReadOnlyDictionary<int, IReadOnlyList<FormulaComponentSpec>> templateComponentMap,
-        IReadOnlyList<DailyAttendance>? dailyAttendances = null)
+        IReadOnlyList<DailyAttendance>? dailyAttendances = null,
+        DateOnly? activeStart = null,
+        DateOnly? activeEnd = null)
     {
+        var effPeriodStart = activeStart.HasValue && activeStart.Value > periodStart ? activeStart.Value : periodStart;
+        var effPeriodEnd = activeEnd.HasValue && activeEnd.Value < periodEnd ? activeEnd.Value : periodEnd;
+        if (effPeriodEnd < effPeriodStart)
+            return Array.Empty<PayrollPeriodProfileSliceInput>();
+
         var activeInPeriod = orderedProfiles
-            .Where(p => p.IsActive && p.EffectiveFrom <= periodEnd && (!p.EffectiveTo.HasValue || p.EffectiveTo.Value >= periodStart))
+            .Where(p => p.IsActive && p.EffectiveFrom <= effPeriodEnd && (!p.EffectiveTo.HasValue || p.EffectiveTo.Value >= effPeriodStart))
             .OrderBy(p => p.EffectiveFrom)
             .ToList();
 
@@ -604,18 +611,18 @@ public static class MidMonthSalarySplitter
         for (int i = 0; i < activeInPeriod.Count; i++)
         {
             var prof = activeInPeriod[i];
-            var segStart = prof.EffectiveFrom > periodStart ? prof.EffectiveFrom : periodStart;
+            var segStart = prof.EffectiveFrom > effPeriodStart ? prof.EffectiveFrom : effPeriodStart;
             var nextStartMinus1 = i + 1 < activeInPeriod.Count
                 ? activeInPeriod[i + 1].EffectiveFrom.AddDays(-1)
-                : periodEnd;
-            var profEnd = prof.EffectiveTo.HasValue && prof.EffectiveTo.Value < periodEnd
+                : effPeriodEnd;
+            var profEnd = prof.EffectiveTo.HasValue && prof.EffectiveTo.Value < effPeriodEnd
                 ? prof.EffectiveTo.Value
-                : periodEnd;
+                : effPeriodEnd;
             var segEnd = nextStartMinus1 < profEnd ? nextStartMinus1 : profEnd;
 
             // If employee started the period before the first profile's EffectiveFrom, attach gap to earliest active profile
-            if (i == 0 && segStart > periodStart)
-                segStart = periodStart;
+            if (i == 0 && segStart > effPeriodStart)
+                segStart = effPeriodStart;
 
             if (segEnd >= segStart)
                 rawIntervals.Add((segStart, segEnd, prof));
@@ -717,7 +724,8 @@ public static class MidMonthSalarySplitter
         decimal standardWorkdays,
         string roundingRule,
         IReadOnlyDictionary<string, decimal>? taxExemptParamValues = null,
-        decimal extraCommissionOrKpi = 0m)
+        decimal extraCommissionOrKpi = 0m,
+        decimal kpiMultiplier = 1.0m)
     {
         var p = slice.Profile;
         decimal probationFactor = p.IsProbation ? Math.Clamp(p.ProbationRatePercent, 0m, 200m) / 100m : 1.0m;
@@ -779,6 +787,7 @@ public static class MidMonthSalarySplitter
                 ["DON_GIA_GIO"] = p.PayMode == "Hourly" ? p.UnitRate : hourlyRate,
                 ["DON_GIA_SP"] = p.PayMode == "PieceRate" ? p.UnitRate : 0m,
                 ["HOA_HONG_DOANH_SO"] = extraCommissionOrKpi,
+                ["DIEM_KPI"] = kpiMultiplier,
                 ["DOAN_VIEN_CD"] = p.IsUnionMember ? 1m : 0m
             };
 
@@ -925,7 +934,12 @@ public sealed record EmployeeSalaryProfileDto(
     bool IsUnionMember,
     string? DecisionNumber,
     string? Reason,
-    IReadOnlyList<EmployeeSalaryAllowanceDto> FixedAllowances);
+    IReadOnlyList<EmployeeSalaryAllowanceDto> FixedAllowances,
+    string TaxResidencyMode = "ResidentStandard",
+    bool HasPitCommitment08 = false,
+    string? Commitment08Number = null,
+    bool IsNetContract = false,
+    decimal? TargetNetSalary = null);
 
 public sealed record SalaryStructuresOverviewDto(
     IReadOnlyList<SalaryComponentDto> Components,
@@ -1059,7 +1073,12 @@ public sealed class GetSalaryStructuresOverviewQueryHandler : IRequestHandler<Ge
                 a.ComponentCode,
                 a.SalaryComponent.ComponentName,
                 a.Amount,
-                a.Notes)).ToList())).ToList();
+                a.Notes)).ToList(),
+            p.TaxResidencyMode,
+            p.HasPitCommitment08,
+            p.Commitment08Number,
+            p.IsNetContract,
+            p.TargetNetSalary)).ToList();
 
         var steps = await _context.SalarySteps
             .AsNoTracking()
@@ -1400,7 +1419,12 @@ public sealed record SaveEmployeeSalaryProfileCommand(
     bool IsUnionMember,
     string? DecisionNumber = null,
     string? Reason = null,
-    IReadOnlyList<EmployeeSalaryAllowanceInput>? FixedAllowances = null) : IRequest<int>;
+    IReadOnlyList<EmployeeSalaryAllowanceInput>? FixedAllowances = null,
+    string TaxResidencyMode = "ResidentStandard",
+    bool HasPitCommitment08 = false,
+    string? Commitment08Number = null,
+    bool IsNetContract = false,
+    decimal? TargetNetSalary = null) : IRequest<int>;
 
 public sealed class SaveEmployeeSalaryProfileCommandHandler : IRequestHandler<SaveEmployeeSalaryProfileCommand, int>
 {
@@ -1500,6 +1524,13 @@ public sealed class SaveEmployeeSalaryProfileCommandHandler : IRequestHandler<Sa
             IsUnionMember = request.IsUnionMember,
             DecisionNumber = request.DecisionNumber?.Trim(),
             Reason = request.Reason?.Trim(),
+            TaxResidencyMode = string.IsNullOrWhiteSpace(request.TaxResidencyMode) ? "ResidentStandard" : request.TaxResidencyMode.Trim(),
+            HasPitCommitment08 = request.HasPitCommitment08,
+            Commitment08Number = request.HasPitCommitment08 ? request.Commitment08Number?.Trim() : null,
+            IsNetContract = request.IsNetContract,
+            TargetNetSalary = request.IsNetContract && request.TargetNetSalary.HasValue
+                ? Math.Round(request.TargetNetSalary.Value, 0, MidpointRounding.AwayFromZero)
+                : null,
             IsActive = true
         };
 
