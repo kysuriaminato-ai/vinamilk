@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using PdfSharp.Pdf.IO;
+using QuestPDF.Infrastructure;
 using Vinamilk.HRM.Application.Common.Interfaces;
 using Vinamilk.HRM.Application.Payroll;
 using Vinamilk.HRM.Application.Workflows;
@@ -16,6 +17,7 @@ using Vinamilk.HRM.Domain.Entities.Identity;
 using Vinamilk.HRM.Domain.Entities.Payroll;
 using Vinamilk.HRM.Domain.Entities.SystemEntities;
 using Vinamilk.HRM.Domain.Entities.Time;
+using Vinamilk.HRM.Infrastructure;
 using Vinamilk.HRM.Infrastructure.Persistence;
 using Vinamilk.HRM.Infrastructure.Persistence.Seed;
 using Vinamilk.HRM.Infrastructure.Security;
@@ -35,6 +37,17 @@ public class PayrollLifecycleAndPayslipTests
             })
             .Build();
         return new PiiEncryptionService(config);
+    }
+
+    private static PayrollDocumentService CreateDocumentService(IPiiEncryptionService encryptionService)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["QuestPDF:LicenseType"] = "Community"
+            })
+            .Build();
+        return new PayrollDocumentService(encryptionService, config);
     }
 
     private static async Task<ApplicationDbContext> CreateSeededDbContextAsync(string? dbName = null)
@@ -253,6 +266,20 @@ public class PayrollLifecycleAndPayslipTests
             .Handle(new ApprovePayrollPeriodCommand(periodId, Approve: true), CancellationToken.None);
         await selfApprove.Should().ThrowAsync<InvalidOperationException>().WithMessage("*phân tách nhiệm vụ*");
 
+        // Người dùng KHÔNG có UserId (null hoặc <= 0) KHÔNG được phép phê duyệt kỳ lương
+        var nullUser = new StubCurrentUser { UserId = null, Username = "anonymous", EmployeeId = 999 };
+        Func<Task> approveWithNullUser = () => new ApprovePayrollPeriodCommandHandler(db, nullUser, wfSender)
+            .Handle(new ApprovePayrollPeriodCommand(periodId, Approve: true), CancellationToken.None);
+        await approveWithNullUser.Should().ThrowAsync<InvalidOperationException>().WithMessage("*UserId trống*");
+
+        Func<Task> wfApproveWithNullUser = () => new ProcessWorkflowActionCommandHandler(
+                db,
+                nullUser,
+                new NoOpRealtimeDispatcher(),
+                new CapturingEmailNotificationService())
+            .Handle(new ProcessWorkflowActionCommand(wfId, "Approved", "Thử duyệt không UserId"), CancellationToken.None);
+        await wfApproveWithNullUser.Should().ThrowAsync<InvalidOperationException>().WithMessage("*UserId trống*");
+
         // Trả lại (Reject) -> quay về Calculated
         activeActor = approverUser;
         await new ApprovePayrollPeriodCommandHandler(db, approverUser, wfSender)
@@ -425,7 +452,7 @@ public class PayrollLifecycleAndPayslipTests
         slices.Should().NotBeNull();
         slices!.Count.Should().BeGreaterThanOrEqualTo(3, "Thu nhập cao áp nhiều bậc thuế TNCN 2026");
 
-        var docService = new PayrollDocumentService(enc);
+        var docService = CreateDocumentService(enc);
         var ownerUser = new StubCurrentUser { UserId = 2, Username = "huong.ntl", EmployeeId = 1 };
         var handler = new GetPayrollRecordPdfQueryHandler(db, ownerUser, docService);
 
@@ -448,6 +475,20 @@ public class PayrollLifecycleAndPayslipTests
             using var _ = PdfReader.Open(msWrong, "000000", PdfDocumentOpenMode.Import);
         };
         openWrongPassword.Should().Throw<PdfReaderException>();
+
+        // Mở bằng OwnerPassword cũ dễ đoán (<userPassword>_VNM_OWNER) -> phải lỗi PdfReaderException
+        Action openPredictableOwnerPass = () =>
+        {
+            using var msOldOwner = new MemoryStream(pdfResult.PdfBytes);
+            using var _ = PdfReader.Open(msOldOwner, "654321_VNM_OWNER", PdfDocumentOpenMode.Import);
+        };
+        openPredictableOwnerPass.Should().Throw<PdfReaderException>();
+
+        // OwnerPassword được sinh CSPRNG ngẫu nhiên mỗi lần gọi
+        var ownerPass1 = PayrollDocumentService.GenerateRandomOwnerPassword();
+        var ownerPass2 = PayrollDocumentService.GenerateRandomOwnerPassword();
+        ownerPass1.Length.Should().BeGreaterThanOrEqualTo(32);
+        ownerPass1.Should().NotBe(ownerPass2);
 
         // Mở ĐÚNG mật khẩu (6 số cuối CCCD = "654321") -> mở thành công
         using (var msValid = new MemoryStream(pdfResult.PdfBytes))
@@ -560,7 +601,7 @@ public class PayrollLifecycleAndPayslipTests
         deptReport.Rows.Should().HaveCount(2);
         deptReport.GrandTotalNet.Should().Be(totalNetSalary);
 
-        var docService = new PayrollDocumentService(enc);
+        var docService = CreateDocumentService(enc);
         var deptExcelBytes = docService.ExportDepartmentSummaryExcel(deptReport);
         using (var deptWb = new XLWorkbook(new MemoryStream(deptExcelBytes)))
         {
@@ -595,5 +636,30 @@ public class PayrollLifecycleAndPayslipTests
         emailStub.SentEmails[0].To.Should().Be("an.nv@vinamilk.com");
         emailStub.SentEmails[0].FileName.Should().EndWith(".pdf");
         emailStub.SentEmails[0].PdfLength.Should().BeGreaterThan(1000);
+    }
+
+    [Fact]
+    public void ResolveQuestPdfLicense_ShouldReadFromConfiguration_AndRejectInvalidValues()
+    {
+        var communityCfg = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["QuestPDF:LicenseType"] = "Community" })
+            .Build();
+        DependencyInjection.ResolveQuestPdfLicense(communityCfg).Should().Be(LicenseType.Community);
+
+        var professionalCfg = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["QuestPDF:LicenseType"] = "Professional" })
+            .Build();
+        DependencyInjection.ResolveQuestPdfLicense(professionalCfg).Should().Be(LicenseType.Professional);
+
+        var enterpriseCfg = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["QuestPDF:LicenseType"] = "Enterprise" })
+            .Build();
+        DependencyInjection.ResolveQuestPdfLicense(enterpriseCfg).Should().Be(LicenseType.Enterprise);
+
+        var invalidCfg = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["QuestPDF:LicenseType"] = "UnknownTier" })
+            .Build();
+        Action parseInvalid = () => DependencyInjection.ResolveQuestPdfLicense(invalidCfg);
+        parseInvalid.Should().Throw<InvalidOperationException>().WithMessage("*QuestPDF:LicenseType*");
     }
 }

@@ -1,5 +1,7 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using ClosedXML.Excel;
+using Microsoft.Extensions.Configuration;
 using PdfSharp.Pdf.IO;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -14,17 +16,21 @@ namespace Vinamilk.HRM.Infrastructure.Services;
 
 public sealed class PayrollDocumentService : IPayrollDocumentService
 {
-    static PayrollDocumentService()
-    {
-        QuestPDF.Settings.License = LicenseType.Community;
-    }
-
     private readonly IPiiEncryptionService _encryptionService;
 
-    public PayrollDocumentService(IPiiEncryptionService encryptionService)
+    public PayrollDocumentService(
+        IPiiEncryptionService encryptionService,
+        IConfiguration? configuration = null)
     {
         _encryptionService = encryptionService;
+        if (configuration is not null)
+        {
+            QuestPDF.Settings.License = DependencyInjection.ResolveQuestPdfLicense(configuration);
+        }
     }
+
+    public static string GenerateRandomOwnerPassword() =>
+        Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
 
     public PayslipPdfResult GeneratePayslipPdf(
         PayrollRecord record,
@@ -268,7 +274,7 @@ public sealed class PayrollDocumentService : IPayrollDocumentService
         using var inStream = new MemoryStream(rawPdfBytes);
         using var pdfDocument = PdfReader.Open(inStream, PdfDocumentOpenMode.Modify);
         pdfDocument.SecuritySettings.UserPassword = userPassword;
-        pdfDocument.SecuritySettings.OwnerPassword = $"{userPassword}_VNM_OWNER";
+        pdfDocument.SecuritySettings.OwnerPassword = GenerateRandomOwnerPassword();
         pdfDocument.SecuritySettings.PermitPrint = true;
         pdfDocument.SecuritySettings.PermitExtractContent = false;
         pdfDocument.SecuritySettings.PermitModifyDocument = false;

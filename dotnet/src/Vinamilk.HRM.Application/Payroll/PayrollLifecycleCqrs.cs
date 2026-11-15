@@ -133,9 +133,14 @@ public sealed class ApprovePayrollPeriodCommandHandler : IRequestHandler<Approve
                 $"Chỉ có thể phê duyệt/từ chối khi kỳ lương ở trạng thái 'Submitted' (hiện tại: '{period.Status}').");
         }
 
-        var actorUserId = _currentUser.UserId ?? 0;
-        if (actorUserId > 0 &&
-            (period.CalculatedByUserId == actorUserId || period.SubmittedByUserId == actorUserId))
+        if (!_currentUser.UserId.HasValue || _currentUser.UserId.Value <= 0)
+        {
+            throw new InvalidOperationException(
+                "Không xác định được danh tính người phê duyệt (UserId trống). Vui lòng đăng nhập hợp lệ trước khi phê duyệt kỳ lương.");
+        }
+
+        var actorUserId = _currentUser.UserId.Value;
+        if (period.CalculatedByUserId == actorUserId || period.SubmittedByUserId == actorUserId)
         {
             throw new InvalidOperationException(
                 "Vi phạm phân tách nhiệm vụ: người tính hoặc trình bảng lương không được tự phê duyệt kỳ lương.");
@@ -162,7 +167,7 @@ public sealed class ApprovePayrollPeriodCommandHandler : IRequestHandler<Approve
         period.Status = nextStatus;
         if (request.Approve)
         {
-            period.ApprovedByUserId = actorUserId > 0 ? actorUserId : 1;
+            period.ApprovedByUserId = actorUserId;
             period.ApprovedAt = DateTime.UtcNow;
         }
 

@@ -17,11 +17,24 @@ namespace Vinamilk.HRM.Infrastructure;
 
 public static class DependencyInjection
 {
+    public static LicenseType ResolveQuestPdfLicense(IConfiguration configuration)
+    {
+        var configured = configuration["QuestPDF:LicenseType"];
+        if (string.IsNullOrWhiteSpace(configured))
+            return LicenseType.Community;
+
+        if (Enum.TryParse<LicenseType>(configured.Trim(), ignoreCase: true, out var licenseType))
+            return licenseType;
+
+        throw new InvalidOperationException(
+            $"Cấu hình 'QuestPDF:LicenseType' = '{configured}' không hợp lệ. Chỉ hỗ trợ: Community, Professional, Enterprise.");
+    }
+
     public static IServiceCollection AddInfrastructureServices(
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        QuestPDF.Settings.License = LicenseType.Community;
+        QuestPDF.Settings.License = ResolveQuestPdfLicense(configuration);
 
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("Chưa cấu hình chuỗi kết nối 'DefaultConnection' trong appsettings.json.");

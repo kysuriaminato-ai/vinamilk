@@ -879,9 +879,14 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
         }
 
         if (instance.EntityType == "PayrollPeriod" &&
-            !request.Action.Equals("Cancelled", StringComparison.OrdinalIgnoreCase) &&
-            _currentUser.UserId.HasValue)
+            !request.Action.Equals("Cancelled", StringComparison.OrdinalIgnoreCase))
         {
+            if (!_currentUser.UserId.HasValue || _currentUser.UserId.Value <= 0)
+            {
+                throw new InvalidOperationException(
+                    "Không xác định được danh tính người phê duyệt kỳ lương (UserId trống).");
+            }
+
             var payrollPeriodGuard = await _context.PayrollPeriods
                 .AsNoTracking()
                 .FirstOrDefaultAsync(p => p.Id == instance.EntityId, cancellationToken);
