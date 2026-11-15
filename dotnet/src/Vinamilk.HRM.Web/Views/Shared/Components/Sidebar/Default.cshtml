@@ -1,49 +1,84 @@
 @model IReadOnlyList<Vinamilk.HRM.Web.ViewComponents.SidebarMenuGroup>
 @{
-    var currentPath = (string)(ViewBag.CurrentPath ?? "/");
+    var activeUrl = ViewBag.ActiveUrl as string;
 }
 
 <aside id="vnmSidebar" class="vnm-sidebar" aria-label="Menu điều hướng chính">
-    <!-- Brand Header -->
     <a href="/" class="vnm-sidebar-brand">
-        <div class="vnm-brand-logo" title="Vinamilk Enterprise HRM">VNM</div>
+        <div class="vnm-brand-logo" title="Vinamilk HRM">VNM</div>
         <div class="vnm-brand-text">
-            <div class="fw-extrabold fs-4 lh-1" style="letter-spacing: -0.03em;">VINAMILK</div>
-            <div class="fs-7 text-white-50 fw-medium mt-1">Enterprise HRM .NET 8</div>
+            <div class="fw-bold fs-5 lh-1" style="letter-spacing:-0.02em;">VINAMILK</div>
+            <div class="small text-white-50 mt-1">Quản lý nhân sự</div>
         </div>
     </a>
 
-    <!-- Navigation Links -->
-    <div class="vnm-sidebar-nav">
+    <nav class="vnm-sidebar-nav">
         @foreach (var group in Model)
         {
-            <div class="vnm-nav-section-title">@group.GroupTitle</div>
-            @foreach (var item in group.Items)
-            {
-                var isActive = string.Equals(currentPath, item.Url, StringComparison.OrdinalIgnoreCase);
-                <a href="@item.Url"
-                   class="vnm-nav-item @(isActive ? "active" : "")"
-                   title="@item.Title"
-                   aria-current="@(isActive ? "page" : null)">
-                    <i class="ti @item.Icon vnm-nav-icon" aria-hidden="true"></i>
-                    <span class="vnm-nav-label flex-grow-1 text-truncate">@item.Title</span>
-                    @if (!string.IsNullOrWhiteSpace(item.BadgeText))
+            var groupActive = group.Items.Any(i => i.Url == activeUrl);
+            var groupId = "vnm-grp-" + group.Key;
+            <div class="vnm-nav-group @(groupActive ? "is-open has-active" : "")" data-group="@group.Key">
+                <button type="button" class="vnm-nav-group-toggle"
+                        aria-expanded="@(groupActive ? "true" : "false")" aria-controls="@groupId"
+                        title="@group.GroupTitle">
+                    <i class="ti @group.Icon vnm-nav-icon" aria-hidden="true"></i>
+                    <span class="vnm-nav-label">@group.GroupTitle</span>
+                    <i class="ti ti-chevron-down vnm-nav-chevron" aria-hidden="true"></i>
+                </button>
+                <div class="vnm-nav-group-items" id="@groupId">
+                    @foreach (var item in group.Items)
                     {
-                        <span class="badge rounded-pill @(item.BadgeClass ?? "bg-primary") vnm-nav-badge" style="font-size: 0.68rem;">
-                            @item.BadgeText
-                        </span>
+                        var isActive = item.Url == activeUrl;
+                        <a href="@item.Url"
+                           class="vnm-nav-link @(isActive ? "active" : "")"
+                           title="@item.Title"
+                           aria-current="@(isActive ? "page" : null)"
+                           target="@(item.OpenInNewTab ? "_blank" : null)"
+                           rel="@(item.OpenInNewTab ? "noopener" : null)">
+                            <i class="ti @item.Icon" aria-hidden="true"></i>
+                            <span class="vnm-nav-label">@item.Title</span>
+                            @if (!string.IsNullOrWhiteSpace(item.BadgeText))
+                            {
+                                <span class="badge rounded-pill @(item.BadgeClass ?? "bg-danger") vnm-nav-badge">@item.BadgeText</span>
+                            }
+                            @if (item.OpenInNewTab)
+                            {
+                                <i class="ti ti-external-link vnm-nav-ext" aria-hidden="true"></i>
+                            }
+                        </a>
                     }
-                </a>
-            }
+                </div>
+            </div>
         }
-    </div>
-
-    <!-- Footer Info -->
-    <div class="p-3 border-top border-white border-opacity-10 vnm-brand-text">
-        <div class="d-flex align-items-center justify-content-between text-white-50 fs-7">
-            <span><i class="ti ti-shield-check text-success me-1"></i>WCAG 2.1 AA</span>
-            <span class="font-monospace">v8.0.3-ENT</span>
-        </div>
-    </div>
+    </nav>
 </aside>
 
+<script>
+(function () {
+    var KEY = 'vnm.sidebar.open';
+    var saved = [];
+    try { saved = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { }
+    var groups = document.querySelectorAll('#vnmSidebar .vnm-nav-group');
+    groups.forEach(function (g) {
+        if (saved.indexOf(g.dataset.group) >= 0) setOpen(g, true);
+        g.querySelector('.vnm-nav-group-toggle').addEventListener('click', function () {
+            if (document.body.classList.contains('vnm-sidebar-collapsed')) {
+                document.body.classList.remove('vnm-sidebar-collapsed');
+                setOpen(g, true);
+            } else {
+                setOpen(g, !g.classList.contains('is-open'));
+            }
+            persist();
+        });
+    });
+    function setOpen(g, open) {
+        g.classList.toggle('is-open', open);
+        g.querySelector('.vnm-nav-group-toggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    function persist() {
+        var open = [];
+        groups.forEach(function (g) { if (g.classList.contains('is-open')) open.push(g.dataset.group); });
+        try { localStorage.setItem(KEY, JSON.stringify(open)); } catch (e) { }
+    }
+})();
+</script>

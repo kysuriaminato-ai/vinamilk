@@ -1,0 +1,62 @@
+/* ===== Sidebar menu (nhóm thu gọn) ===== */
+.vnm-sidebar-nav a,
+.vnm-sidebar-nav a:hover { text-decoration: none; }
+
+.vnm-sidebar-nav { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.25) transparent; }
+.vnm-sidebar-nav::-webkit-scrollbar { width: 6px; }
+.vnm-sidebar-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,.25); border-radius: 3px; }
+
+.vnm-nav-group { margin-bottom: 2px; }
+
+.vnm-nav-group-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .6rem .8rem;
+    border: 0;
+    border-radius: var(--vnm-radius-sm, 8px);
+    background: transparent;
+    color: var(--vnm-sidebar-text);
+    font-size: var(--vnm-text-sm, .875rem);
+    font-weight: 600;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color .18s ease, color .18s ease;
+}
+.vnm-nav-group-toggle:hover { background: rgba(255,255,255,.1); color: #fff; }
+.vnm-nav-group-toggle:focus-visible,
+.vnm-nav-link:focus-visible { outline: 2px solid #93C5FD; outline-offset: -2px; }
+.vnm-nav-group-toggle .vnm-nav-icon { font-size: 1.2rem; width: 24px; text-align: center; flex-shrink: 0; }
+.vnm-nav-group.has-active > .vnm-nav-group-toggle { color: #fff; }
+
+.vnm-nav-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+.vnm-nav-chevron { font-size: .95rem; opacity: .6; transition: transform .2s ease; }
+.vnm-nav-group.is-open .vnm-nav-chevron { transform: rotate(180deg); }
+
+.vnm-nav-group-items {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height .25s ease;
+}
+.vnm-nav-group.is-open > .vnm-nav-group-items { max-height: 600px; }
+
+.vnm-nav-group-items .vnm-nav-link {
+    padding: .5rem .8rem .5rem 2.6rem;
+    font-weight: 400;
+    font-size: .84rem;
+}
+.vnm-nav-group-items .vnm-nav-link i:first-child { font-size: 1.05rem; width: 20px; opacity: .85; }
+.vnm-nav-link .vnm-nav-badge { font-size: .65rem; font-weight: 600; }
+.vnm-nav-ext { font-size: .8rem !important; width: auto !important; opacity: .5; }
+
+/* Sidebar thu nhỏ: chỉ hiện icon nhóm */
+body.vnm-sidebar-collapsed .vnm-nav-chevron,
+body.vnm-sidebar-collapsed .vnm-nav-group-items { display: none; }
+body.vnm-sidebar-collapsed .vnm-nav-group-toggle { justify-content: center; padding: .7rem 0; }
+
+@media (prefers-reduced-motion: reduce) {
+    .vnm-nav-group-items, .vnm-nav-chevron { transition: none; }
+}

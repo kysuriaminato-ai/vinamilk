@@ -9,19 +9,24 @@ public record SidebarMenuItem(
     string Url,
     string? BadgeText = null,
     string? BadgeClass = null,
-    string? RequiredPermission = null);
+    string? RequiredPermission = null,
+    bool OpenInNewTab = false);
 
 public record SidebarMenuGroup(
+    string Key,
     string GroupTitle,
+    string Icon,
     IReadOnlyList<SidebarMenuItem> Items);
 
 public class SidebarViewComponent : ViewComponent
 {
     private readonly ICurrentUserService _currentUser;
+    private readonly IWebHostEnvironment _env;
 
-    public SidebarViewComponent(ICurrentUserService currentUser)
+    public SidebarViewComponent(ICurrentUserService currentUser, IWebHostEnvironment env)
     {
         _currentUser = currentUser;
+        _env = env;
     }
 
     public IViewComponentResult Invoke()
@@ -30,63 +35,88 @@ public class SidebarViewComponent : ViewComponent
 
         var groups = new List<SidebarMenuGroup>
         {
-            new("QUẢN TRỊ ĐIỀU HÀNH", new List<SidebarMenuItem>
+            new("overview", "Tổng quan", "ti-layout-dashboard", new List<SidebarMenuItem>
             {
-                new("Dashboard Tổng quan", "ti-layout-dashboard", "/", "Live", "bg-success", "Dashboard.View"),
-                new("Báo cáo BM01–BM04", "ti-file-spreadsheet", "/Reports", "Excel", "bg-primary"),
-                new("Cổng ESS / MSS Mobile", "ti-device-mobile", "/ESS", "PWA", "bg-info"),
-                new("AI HR Expert (RAG)", "ti-sparkles", "/AiExpert", "AI", "bg-warning text-dark"),
-                new("Design System & UI", "ti-palette", "/dev/styleguide", "Phiên 3", "bg-info"),
-                new("Mẫu In Quyết định A4", "ti-printer", "/dev/styleguide/print-preview")
+                new("Dashboard", "ti-layout-dashboard", "/", RequiredPermission: "Dashboard.View"),
+                new("Báo cáo BM01–BM04", "ti-file-spreadsheet", "/Reports"),
+                new("Trợ lý AI nhân sự", "ti-sparkles", "/AiExpert")
             }),
-            new("HỆ THỐNG, RBAC & BẢO MẬT", new List<SidebarMenuItem>
+            new("corehr", "Nhân sự", "ti-users", new List<SidebarMenuItem>
             {
-                new("Ma trận RBAC (62 Quyền)", "ti-shield-lock", "/Security/RbacMatrix", "Phiên 4", "bg-warning text-dark", "System.View"),
-                new("Nhật ký Audit & JSON Diff", "ti-history", "/Security/AuditLogs", "Live Diff", "bg-success", "System.View"),
-                new("Phiên Thiết bị & Mã hóa PII", "ti-devices", "/Security/Sessions", "AES-256", "bg-primary", "System.View"),
-                new("Cấu hình 2FA TOTP", "ti-device-mobile-lock", "/Auth/Setup2FA"),
-                new("Đăng nhập / Đổi mật khẩu", "ti-login", "/Auth/Login"),
-                new("OpenAPI / Swagger v1", "ti-api", "/swagger")
+                new("Cơ cấu tổ chức", "ti-sitemap", "/Organization", RequiredPermission: "Departments.View"),
+                new("Hồ sơ nhân viên", "ti-id-badge-2", "/Employees", RequiredPermission: "Employees.View"),
+                new("Hợp đồng lao động", "ti-file-certificate", "/Contracts", RequiredPermission: "Contracts.View"),
+                new("Điều chuyển & nghỉ hưu", "ti-arrows-exchange", "/Transfers", RequiredPermission: "Transfers.View")
             }),
-            new("HỒ SƠ & TỔ CHỨC (CORE HR)", new List<SidebarMenuItem>
+            new("time", "Chấm công", "ti-clock", new List<SidebarMenuItem>
             {
-                new("Cơ cấu Tổ chức & Sơ đồ", "ti-sitemap", "/Organization", "32 ĐV", "bg-primary", "Departments.View"),
-                new("Hồ sơ Nhân viên 360°", "ti-users", "/Employees", "55 NV", "bg-success", "Employees.View"),
-                new("Hợp đồng & Phụ lục", "ti-file-certificate", "/Contracts", "3 sắp hết", "bg-danger", "Contracts.View"),
-                new("Điều chuyển & Nghỉ hưu", "ti-arrows-transfer-up", "/Transfers", "Phiên 5", "bg-warning text-dark", "Transfers.View")
+                new("Ca làm việc & ngày lễ", "ti-calendar-clock", "/Shifts", RequiredPermission: "Attendance.View"),
+                new("Bảng chấm công", "ti-calendar-check", "/Attendance", RequiredPermission: "Attendance.View"),
+                new("Nghỉ phép", "ti-beach", "/Leaves", RequiredPermission: "Leave.View"),
+                new("Duyệt đơn", "ti-checklist", "/Workflows")
             }),
-            new("CHẤM CÔNG & TIỀN LƯƠNG (C&B)", new List<SidebarMenuItem>
+            new("payroll", "Tiền lương", "ti-cash", new List<SidebarMenuItem>
             {
-                new("Workflow Engine & Duyệt đơn", "ti-git-branch", "/Workflows", "SignalR", "bg-primary"),
-                new("Ca làm việc & Xếp ca Kéo-Thả", "ti-calendar-clock", "/Shifts", "3 Ca", "bg-success", "Attendance.View"),
-                new("Bảng công, GPS/QR & OT", "ti-calendar-time", "/Attendance", "Phiên 6", "bg-warning text-dark", "Attendance.View"),
-                new("Nghỉ phép, Thâm niên & Team", "ti-beach", "/Leaves", "+1/5 năm", "bg-info", "Leave.View"),
-                new("Bảng tính lương & Thuế TNCN", "ti-cash", "/Payroll", "3P Engine", "bg-primary", "Payroll.View"),
-                new("Tham số Luật 2026 & Biểu thuế", "ti-adjustments-horizontal", "/Payroll/Parameters", "2026", "bg-warning text-dark", "Payroll.View")
+                new("Bảng lương", "ti-cash", "/Payroll", RequiredPermission: "Payroll.View"),
+                new("Tham số lương & thuế", "ti-adjustments-horizontal", "/Payroll/Parameters", RequiredPermission: "Payroll.View")
             }),
-            new("PHÁT TRIỂN NHÂN TÀI (TALENT)", new List<SidebarMenuItem>
+            new("talent", "Phát triển nhân tài", "ti-star", new List<SidebarMenuItem>
             {
-                new("Tuyển dụng (ATS Kanban)", "ti-user-search", "/Recruitment", "Phiên 8", "bg-primary", "Recruitment.View"),
-                new("Trang Careers Công khai (SEO)", "ti-world-www", "/Careers", "Public", "bg-success"),
-                new("Onboarding & Tài sản", "ti-checklist", "/Onboarding", "Checklist", "bg-info", "Onboarding.View"),
-                new("Đào tạo (Vinamilk Academy)", "ti-school", "/Training", "Chứng chỉ", "bg-warning text-dark", "Training.View"),
-                new("Đánh giá KPI / OKR & 360°", "ti-chart-dots-3", "/Kpi", "Thưởng P3", "bg-primary", "Kpi.View"),
-                new("Khen thưởng, Kỷ luật & BM03", "ti-award", "/Rewards", "BM03", "bg-danger", "Rewards.View")
+                new("Tuyển dụng", "ti-user-search", "/Recruitment", RequiredPermission: "Recruitment.View"),
+                new("Onboarding & tài sản", "ti-clipboard-check", "/Onboarding", RequiredPermission: "Onboarding.View"),
+                new("Đào tạo", "ti-school", "/Training", RequiredPermission: "Training.View"),
+                new("Đánh giá KPI", "ti-chart-dots-3", "/Kpi", RequiredPermission: "Kpi.View"),
+                new("Khen thưởng & kỷ luật", "ti-award", "/Rewards", RequiredPermission: "Rewards.View"),
+                new("Trang tuyển dụng công khai", "ti-world-www", "/Careers", OpenInNewTab: true)
+            }),
+            new("me", "Cá nhân", "ti-user-circle", new List<SidebarMenuItem>
+            {
+                new("Cổng nhân viên (ESS)", "ti-device-mobile", "/ESS"),
+                new("Đổi mật khẩu", "ti-key", "/Auth/ChangePassword"),
+                new("Xác thực 2 lớp (2FA)", "ti-shield-lock", "/Auth/Setup2FA")
+            }),
+            new("system", "Hệ thống", "ti-settings", new List<SidebarMenuItem>
+            {
+                new("Phân quyền", "ti-lock-access", "/Security/RbacMatrix", RequiredPermission: "System.View"),
+                new("Nhật ký hệ thống", "ti-history", "/Security/AuditLogs", RequiredPermission: "System.View"),
+                new("Phiên đăng nhập", "ti-devices", "/Security/Sessions", RequiredPermission: "System.View")
             })
         };
 
-        // Nếu người dùng đã đăng nhập thực tế, lọc menu theo quyền RBAC (Permission Policy)
+        // Công cụ dành cho lập trình viên: chỉ hiển thị ở môi trường Development
+        if (_env.IsDevelopment())
+        {
+            groups.Add(new("dev", "Công cụ phát triển", "ti-code", new List<SidebarMenuItem>
+            {
+                new("Design System", "ti-palette", "/dev/styleguide"),
+                new("Mẫu in A4", "ti-printer", "/dev/styleguide/print-preview"),
+                new("API (Swagger)", "ti-api", "/swagger", OpenInNewTab: true)
+            }));
+        }
+
+        // Lọc menu theo quyền RBAC
         if (_currentUser.IsAuthenticated)
         {
             groups = groups
-                .Select(g => new SidebarMenuGroup(
-                    g.GroupTitle,
-                    g.Items.Where(i => string.IsNullOrEmpty(i.RequiredPermission) || _currentUser.HasPermission(i.RequiredPermission)).ToList()))
+                .Select(g => g with
+                {
+                    Items = g.Items.Where(i => string.IsNullOrEmpty(i.RequiredPermission) || _currentUser.HasPermission(i.RequiredPermission)).ToList()
+                })
                 .Where(g => g.Items.Count > 0)
                 .ToList();
         }
 
-        ViewBag.CurrentPath = currentPath;
+        // Mục đang active = URL khớp dài nhất (vd /Payroll/Parameters thắng /Payroll)
+        var activeUrl = groups.SelectMany(g => g.Items)
+            .Select(i => i.Url)
+            .Where(u => u == "/"
+                ? currentPath == "/"
+                : currentPath.Equals(u, StringComparison.OrdinalIgnoreCase)
+                  || currentPath.StartsWith(u + "/", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(u => u.Length)
+            .FirstOrDefault();
+
+        ViewBag.ActiveUrl = activeUrl;
         return View(groups);
     }
 }
