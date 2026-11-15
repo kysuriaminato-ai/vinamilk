@@ -1,8 +1,11 @@
+using Hangfire;
+using Hangfire.SqlServer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using QuestPDF.Infrastructure;
 using Vinamilk.HRM.Application.Common.Interfaces;
+using Vinamilk.HRM.Application.Payroll;
 using Vinamilk.HRM.Infrastructure.Persistence;
 using Vinamilk.HRM.Infrastructure.Persistence.Interceptors;
 using Vinamilk.HRM.Infrastructure.Persistence.Repositories;
@@ -53,10 +56,37 @@ public static class DependencyInjection
         services.AddScoped<TimeAttendanceDocumentService>();
         services.AddScoped<TalentDocumentService>();
         services.AddScoped<AnalyticsReportExcelService>();
+        services.AddScoped<IPayrollDocumentService, PayrollDocumentService>();
+        services.AddScoped<IBankTransferTemplateFormatter, CommonBankTransferTemplateFormatter>();
+        services.AddScoped<IBankTransferTemplateFormatter, VietcombankTransferTemplateFormatter>();
+        services.AddScoped<IPayslipEmailJob, PayslipEmailHangfireJob>();
         services.AddScoped<Vinamilk.HRM.Application.Analytics.IAiHrmExpertService, LocalRagAiHrmExpertService>();
         services.AddSingleton<IEmailNotificationService, EmailNotificationService>();
         services.AddScoped<DatabaseBackupService>();
         services.AddScoped<ContractExpirationAlertJob>();
+
+        var useHangfireSql = configuration.GetValue<bool>("Hangfire:UseSqlServerStorage");
+        if (useHangfireSql)
+        {
+            services.AddHangfire(cfg => cfg
+                .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+                .UseSimpleAssemblyNameTypeSerializer()
+                .UseRecommendedSerializerSettings()
+                .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
+                {
+                    CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+                    SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+                    QueuePollInterval = TimeSpan.Zero,
+                    UseRecommendedIsolationLevel = true,
+                    DisableGlobalLocks = true
+                }));
+            services.AddHangfireServer();
+            services.AddScoped<IPayslipBatchDispatcher, HangfirePayslipBatchDispatcher>();
+        }
+        else
+        {
+            services.AddScoped<IPayslipBatchDispatcher, InProcessPayslipBatchDispatcher>();
+        }
 
         return services;
     }

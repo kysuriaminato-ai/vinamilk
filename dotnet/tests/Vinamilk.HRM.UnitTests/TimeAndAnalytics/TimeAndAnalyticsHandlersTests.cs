@@ -37,6 +37,11 @@ public class TimeAndAnalyticsHandlersTests
             SentCount++;
             return Task.CompletedTask;
         }
+        public Task SendPayslipEmailWithAttachmentAsync(string toEmail, string recipientName, string subject, string periodTitle, string htmlSummary, byte[] pdfAttachment, string attachmentFileName, CancellationToken cancellationToken = default)
+        {
+            SentCount++;
+            return Task.CompletedTask;
+        }
         public IReadOnlyList<SentEmailRecordDto> GetRecentSentEmails() => Array.Empty<SentEmailRecordDto>();
     }
 
@@ -201,7 +206,8 @@ public class TimeAndAnalyticsHandlersTests
 
         var wfCenter = await new GetWorkflowCenterQueryHandler(context, new MockUser(1, emp.Id), email)
             .Handle(new GetWorkflowCenterQuery(), CancellationToken.None);
-        wfCenter.Definitions.Should().HaveCount(1);
+        wfCenter.Definitions.Should().Contain(d => d.WorkflowCode == "WF_OT");
+        wfCenter.Definitions.Should().Contain(d => d.WorkflowCode == "WF_PAYROLL");
 
         // Leave overview
         var leaveOverview = await new GetLeaveManagementOverviewQueryHandler(context)

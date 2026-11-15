@@ -92,7 +92,7 @@ public sealed class ApplicationDbContextInitializer
                 ("Contracts", "Hợp đồng Lao động", new[] { "View", "Create", "Edit", "Approve", "Export" }),
                 ("Attendance", "Chấm công & Ca làm việc", new[] { "View", "Create", "Edit", "Approve", "Lock", "Export" }),
                 ("Leave", "Nghỉ phép & Quỹ phép", new[] { "View", "Create", "Approve" }),
-                ("Payroll", "Tiền lương 3P, BHXH & Thuế", new[] { "View", "Calculate", "Approve", "Lock", "Export" }),
+                ("Payroll", "Tiền lương 3P, BHXH & Thuế", new[] { "View", "Calculate", "Approve", "Lock", "Unlock", "Export" }),
                 ("Recruitment", "Tuyển dụng (ATS)", new[] { "View", "Create", "Edit", "Approve" }),
                 ("Onboarding", "Onboarding & Tài sản", new[] { "View", "Create", "Edit" }),
                 ("Training", "Đào tạo & Phát triển", new[] { "View", "Create", "Edit" }),
@@ -136,7 +136,7 @@ public sealed class ApplicationDbContextInitializer
             {
                 rolePermissions.Add(new RolePermission { RoleId = superAdminRole.Id, PermissionId = perm.Id });
 
-                if (perm.ModuleName != "System")
+                if (perm.ModuleName != "System" && perm.PermissionCode != "Payroll.Unlock")
                     rolePermissions.Add(new RolePermission { RoleId = hrManagerRole.Id, PermissionId = perm.Id });
 
                 if (perm.ModuleName is "Dashboard" or "Employees" or "Departments" or "Contracts" or "Attendance" or "Leave" or "Recruitment" or "Onboarding" or "Training"
@@ -146,7 +146,8 @@ public sealed class ApplicationDbContextInitializer
                 if (perm.ActionName == "View" || (perm.ModuleName is "Attendance" or "Leave" or "Kpi" && perm.ActionName is "Approve" or "Evaluate"))
                     rolePermissions.Add(new RolePermission { RoleId = lineManagerRole.Id, PermissionId = perm.Id });
 
-                if (perm.ModuleName is "Dashboard" or "Payroll" or "Reports" || (perm.ModuleName is "Employees" or "Attendance" && perm.ActionName == "View"))
+                if ((perm.ModuleName is "Dashboard" or "Payroll" or "Reports" && perm.PermissionCode != "Payroll.Unlock")
+                    || (perm.ModuleName is "Employees" or "Attendance" && perm.ActionName == "View"))
                     rolePermissions.Add(new RolePermission { RoleId = accountantRole.Id, PermissionId = perm.Id });
 
                 if (perm.ModuleName is "Dashboard" or "Leave" || (perm.ModuleName is "Employees" or "Attendance" or "Payroll" or "Training" or "Kpi" && perm.ActionName == "View"))
@@ -619,6 +620,7 @@ public sealed class ApplicationDbContextInitializer
                     MonthlyAttendanceSummaryId = attSummary.Id,
                     StandardWorkdays = 22m,
                     PayableWorkdays = sp.Workdays + sp.LeaveDays,
+                    OtHours150 = sp.OtHours,
                     TotalOtHours = sp.OtHours,
                     ContractBaseSalary = sp.BasePay,
                     ActualBaseSalary = sp.BasePay,
@@ -628,6 +630,7 @@ public sealed class ApplicationDbContextInitializer
                     KpiBonus = sp.KpiBonus,
                     GrossIncome = breakdown.GrossIncome,
                     InsuranceSalaryBase = breakdown.SocialInsuranceBase,
+                    UnemploymentInsuranceBase = breakdown.UnemploymentInsuranceBase,
                     EmployeeSocialInsurance = breakdown.EmployeeSocialInsurance,
                     EmployeeHealthInsurance = breakdown.EmployeeHealthInsurance,
                     EmployeeUnemploymentInsurance = breakdown.EmployeeUnemploymentInsurance,

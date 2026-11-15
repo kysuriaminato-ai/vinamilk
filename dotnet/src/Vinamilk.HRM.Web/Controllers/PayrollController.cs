@@ -11,10 +11,12 @@ namespace Vinamilk.HRM.Web.Controllers;
 public class PayrollController : Controller
 {
     private readonly IMediator _mediator;
+    private readonly IPayrollDocumentService _documentService;
 
-    public PayrollController(IMediator mediator)
+    public PayrollController(IMediator mediator, IPayrollDocumentService documentService)
     {
         _mediator = mediator;
+        _documentService = documentService;
     }
 
     [HttpGet("")]
@@ -49,12 +51,60 @@ public class PayrollController : Controller
     [HttpPost("Calculate")]
     [Authorize(Policy = "Payroll.Calculate")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Calculate(int payrollPeriodId, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Calculate(
+        int payrollPeriodId,
+        int? employeeId = null,
+        string? notes = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            var count = await _mediator.Send(new CalculateMonthlyPayrollCommand(payrollPeriodId), cancellationToken);
-            TempData["PayrollSuccess"] = $"Đã tính toán bảng lương theo tham số hiệu lực cuối kỳ cho {count} nhân sự.";
+            var count = await _mediator.Send(new CalculateMonthlyPayrollCommand(payrollPeriodId, employeeId, notes), cancellationToken);
+            TempData["PayrollSuccess"] = employeeId.HasValue
+                ? $"Đã tính lại lương cho nhân sự #{employeeId.Value} và lưu lịch sử phiên bản."
+                : $"Đã tính toán bảng lương theo tham số hiệu lực cuối kỳ cho {count} nhân sự.";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index), new { periodId = payrollPeriodId });
+    }
+
+    [HttpPost("Submit")]
+    [Authorize(Policy = "Payroll.Calculate")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Submit(int payrollPeriodId, string? comment = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var wfId = await _mediator.Send(new SubmitPayrollPeriodCommand(payrollPeriodId, comment), cancellationToken);
+            TempData["PayrollSuccess"] = $"Đã trình duyệt kỳ lương lên luồng phê duyệt (Workflow #{wfId}). Người tính không thể tự duyệt kỳ này.";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index), new { periodId = payrollPeriodId });
+    }
+
+    [HttpPost("Approve")]
+    [Authorize(Policy = "Payroll.Approve")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Approve(
+        int payrollPeriodId,
+        bool approve = true,
+        string? comment = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var status = await _mediator.Send(new ApprovePayrollPeriodCommand(payrollPeriodId, approve, comment), cancellationToken);
+            TempData["PayrollSuccess"] = approve
+                ? $"Đã phê duyệt kỳ lương (trạng thái hiện tại: {status})."
+                : $"Đã từ chối / trả lại kỳ lương để hiệu chỉnh (trạng thái: {status}).";
         }
         catch (Exception ex)
         {
@@ -80,6 +130,121 @@ public class PayrollController : Controller
         }
 
         return RedirectToAction(nameof(Index), new { periodId = payrollPeriodId });
+    }
+
+    [HttpPost("Unlock")]
+    [Authorize(Roles = "SUPER_ADMIN,HR_DIRECTOR", Policy = "Payroll.Unlock")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Unlock(int payrollPeriodId, string reason, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _mediator.Send(new UnlockPayrollPeriodCommand(payrollPeriodId, reason), cancellationToken);
+            TempData["PayrollSuccess"] = "Đã mở khóa kỳ lương về trạng thái Calculated và ghi nhận AuditLog.";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index), new { periodId = payrollPeriodId });
+    }
+
+    [HttpPost("MarkPaid")]
+    [Authorize(Policy = "Payroll.Lock")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MarkPaid(int payrollPeriodId, string? paymentNote = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _mediator.Send(new MarkPayrollPeriodPaidCommand(payrollPeriodId, paymentNote), cancellationToken);
+            TempData["PayrollSuccess"] = "Đã xác nhận chi trả kỳ lương thành công (Paid).";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index), new { periodId = payrollPeriodId });
+    }
+
+    [HttpPost("SendPayslips")]
+    [Authorize(Policy = "Payroll.Approve")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SendPayslips(int payrollPeriodId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var report = await _mediator.Send(new SendPayslipsBatchCommand(payrollPeriodId), cancellationToken);
+            TempData["PayrollSuccess"] = $"Đã xử lý gửi {report.TotalCount} phiếu lương (Thành công: {report.SentCount}, Đang chờ: {report.QueuedCount}, Thất bại: {report.FailedCount}).";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index), new { periodId = payrollPeriodId });
+    }
+
+    [HttpGet("DownloadPayslip/{payrollRecordId:long}")]
+    [Authorize(Policy = "Payroll.View")]
+    public async Task<IActionResult> DownloadPayslip(long payrollRecordId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await _mediator.Send(new GetPayrollRecordPdfQuery(payrollRecordId, EnforceSelfOnly: false), cancellationToken);
+            return File(result.PdfBytes, "application/pdf", result.FileName);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+    }
+
+    [HttpGet("ExportBankTransfer")]
+    [Authorize(Policy = "Payroll.Export")]
+    public async Task<IActionResult> ExportBankTransfer(
+        int payrollPeriodId,
+        string format = "excel",
+        string templateCode = "COMMON",
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await _mediator.Send(new ExportBankTransferFileQuery(payrollPeriodId, format, templateCode), cancellationToken);
+            return File(result.FileBytes, result.ContentType, result.FileName);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+    }
+
+    [HttpGet("ExportDepartmentSummaryExcel")]
+    [Authorize(Policy = "Payroll.Export")]
+    public async Task<IActionResult> ExportDepartmentSummaryExcel(int payrollPeriodId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var report = await _mediator.Send(new GetPayrollDepartmentSummaryReportQuery(payrollPeriodId), cancellationToken);
+            var bytes = _documentService.ExportDepartmentSummaryExcel(report);
+            return File(
+                bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"TongHopLuongTheoPhongBan_{report.PeriodCode}.xlsx");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
     }
 
     [HttpGet("Parameters")]

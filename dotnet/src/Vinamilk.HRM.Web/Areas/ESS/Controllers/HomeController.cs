@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Vinamilk.HRM.Application.Analytics;
+using Vinamilk.HRM.Application.Payroll;
 using Vinamilk.HRM.Application.TimeAttendance;
 using Vinamilk.HRM.Application.Workflows;
 
@@ -72,6 +73,24 @@ public class HomeController : Controller
 
         TempData["EssMessage"] = result;
         return RedirectToAction(nameof(Index), new { employeeId, tab = "mss" });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> DownloadPayslip(long payrollRecordId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await _mediator.Send(new GetPayrollRecordPdfQuery(payrollRecordId, EnforceSelfOnly: true), cancellationToken);
+            return File(result.PdfBytes, "application/pdf", result.FileName);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
     }
 }
 

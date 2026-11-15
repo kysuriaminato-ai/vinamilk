@@ -53,34 +53,67 @@
             <h6 class="fw-bold mb-0"><i class="ti ti-wallet me-1 text-primary"></i>Phiếu lương gần nhất</h6>
             @if (Model.LatestPayslip is not null)
             {
-                <span class="badge bg-success-subtle text-success">@Model.LatestPayslip.PaymentStatus</span>
+                <span class="badge bg-success-subtle text-success">@Model.LatestPayslip.PeriodStatus</span>
             }
         </div>
         @if (Model.LatestPayslip is null)
         {
-            <div class="text-muted small">Chưa có dữ liệu kỳ lương.</div>
+            <div class="text-muted small">Chưa có dữ liệu kỳ lương đã duyệt/khóa/chi trả.</div>
         }
         else
         {
-            <div class="small text-muted mb-2">@Model.LatestPayslip.PeriodTitle</div>
+            <div class="small text-muted mb-2">@Model.LatestPayslip.PeriodTitle (@Model.LatestPayslip.PeriodCode)</div>
             <div class="d-flex justify-content-between py-1 border-bottom small">
                 <span>Thu nhập Gross</span>
                 <strong>@Model.LatestPayslip.GrossIncome.ToString("N0") đ</strong>
             </div>
             <div class="d-flex justify-content-between py-1 border-bottom small">
-                <span>BHXH/BHYT/BHTN (10.5%)</span>
+                <span>BHXH/BHYT/BHTN</span>
                 <span class="text-danger">-@Model.LatestPayslip.TotalEmployeeInsurance.ToString("N0") đ</span>
             </div>
             <div class="d-flex justify-content-between py-1 border-bottom small">
                 <span>Thuế TNCN</span>
                 <span class="text-danger">-@Model.LatestPayslip.PersonalIncomeTax.ToString("N0") đ</span>
             </div>
-            <div class="d-flex justify-content-between pt-2">
+            <div class="d-flex justify-content-between pt-2 pb-2">
                 <span class="fw-bold">Thực nhận (Net)</span>
                 <span class="fw-extrabold text-success fs-5">@Model.LatestPayslip.NetSalary.ToString("N0") đ</span>
             </div>
+            <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                <span class="text-muted" style="font-size: 0.78rem;">
+                    <i class="ti ti-lock me-1"></i>Mật khẩu PDF: 6 số cuối CCCD
+                </span>
+                <a href="/ESS/Home/DownloadPayslip?payrollRecordId=@Model.LatestPayslip.PayrollRecordId"
+                   class="btn btn-sm btn-outline-primary">
+                    <i class="ti ti-file-type-pdf me-1"></i>Tải PDF
+                </a>
+            </div>
         }
     </div>
+
+    @if (Model.Payslips.Count > 0)
+    {
+        <div class="ess-card p-3 mb-3">
+            <h6 class="fw-bold mb-2"><i class="ti ti-receipt me-1 text-primary"></i>Lịch sử Phiếu lương (@Model.Payslips.Count)</h6>
+            <div class="d-flex flex-column gap-2">
+                @foreach (var ps in Model.Payslips)
+                {
+                    <div class="d-flex justify-content-between align-items-center p-2 rounded border bg-light-subtle">
+                        <div>
+                            <div class="fw-semibold small">@ps.PeriodTitle</div>
+                            <div class="text-muted" style="font-size: 0.76rem;">
+                                @ps.PeriodCode • @ps.PeriodStatus • Thực nhận: <strong class="text-success">@ps.NetSalary.ToString("N0") đ</strong>
+                            </div>
+                        </div>
+                        <a href="/ESS/Home/DownloadPayslip?payrollRecordId=@ps.PayrollRecordId"
+                           class="btn btn-sm btn-outline-primary">
+                            <i class="ti ti-download me-1"></i>PDF
+                        </a>
+                    </div>
+                }
+            </div>
+        </div>
+    }
 }
 else if (activeTab == "requests")
 {

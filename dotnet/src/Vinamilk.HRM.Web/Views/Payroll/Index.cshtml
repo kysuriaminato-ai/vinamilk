@@ -61,20 +61,54 @@
 
     <div class="col-12 col-lg-7">
         <div class="vnm-card p-3 h-100">
-            <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
                 <h5 class="fw-bold mb-0"><i class="ti ti-list-details text-primary me-2"></i>Danh sách Kỳ lương (@Model.Periods.Count)</h5>
                 @if (Model.SelectedPeriod is not null)
                 {
-                    <div class="d-flex gap-2">
-                        @if (!Model.SelectedPeriod.IsLocked)
+                    var st = Model.SelectedPeriod.Status;
+                    <div class="d-flex flex-wrap gap-2">
+                        @if (st == "Draft" || st == "Calculated")
                         {
                             <form asp-controller="Payroll" asp-action="Calculate" method="post">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="payrollPeriodId" value="@Model.SelectedPeriod.Id" />
                                 <button type="submit" class="btn btn-sm btn-primary">
-                                    <i class="ti ti-calculator me-1"></i>Tính lương Kỳ @Model.SelectedPeriod.PeriodCode
+                                    <i class="ti ti-calculator me-1"></i>@(st == "Calculated" ? "Tính lại cả kỳ" : $"Tính lương {Model.SelectedPeriod.PeriodCode}")
                                 </button>
                             </form>
+                        }
+                        @if (st == "Calculated")
+                        {
+                            <form asp-controller="Payroll" asp-action="Submit" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="payrollPeriodId" value="@Model.SelectedPeriod.Id" />
+                                <button type="submit" class="btn btn-sm btn-info text-white">
+                                    <i class="ti ti-send me-1"></i>Trình duyệt
+                                </button>
+                            </form>
+                        }
+                        @if (st == "Submitted")
+                        {
+                            <form asp-controller="Payroll" asp-action="Approve" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="payrollPeriodId" value="@Model.SelectedPeriod.Id" />
+                                <input type="hidden" name="approve" value="true" />
+                                <button type="submit" class="btn btn-sm btn-success">
+                                    <i class="ti ti-check me-1"></i>Phê duyệt
+                                </button>
+                            </form>
+                            <form asp-controller="Payroll" asp-action="Approve" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="payrollPeriodId" value="@Model.SelectedPeriod.Id" />
+                                <input type="hidden" name="approve" value="false" />
+                                <input type="hidden" name="comment" value="Trả lại điều chỉnh bảng lương" />
+                                <button type="submit" class="btn btn-sm btn-outline-warning">
+                                    <i class="ti ti-arrow-back-up me-1"></i>Trả lại
+                                </button>
+                            </form>
+                        }
+                        @if (st == "Approved")
+                        {
                             <form asp-controller="Payroll" asp-action="Lock" method="post">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="payrollPeriodId" value="@Model.SelectedPeriod.Id" />
@@ -83,15 +117,59 @@
                                 </button>
                             </form>
                         }
-                        else
+                        @if (st == "Locked")
                         {
-                            <span class="badge bg-danger-subtle text-danger px-3 py-2">
-                                <i class="ti ti-lock me-1"></i>Kỳ @Model.SelectedPeriod.PeriodCode ĐÃ KHÓA
-                            </span>
+                            <form asp-controller="Payroll" asp-action="MarkPaid" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="payrollPeriodId" value="@Model.SelectedPeriod.Id" />
+                                <button type="submit" class="btn btn-sm btn-success">
+                                    <i class="ti ti-cash-banknote me-1"></i>Xác nhận Đã chi trả (Paid)
+                                </button>
+                            </form>
+                        }
+                        @if (st == "Approved" || st == "Locked" || st == "Paid")
+                        {
+                            <form asp-controller="Payroll" asp-action="SendPayslips" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="payrollPeriodId" value="@Model.SelectedPeriod.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                                    <i class="ti ti-mail-forward me-1"></i>Gửi Phiếu lương Email
+                                </button>
+                            </form>
                         }
                     </div>
                 }
             </div>
+            @if (Model.SelectedPeriod is not null)
+            {
+                var steps = new[] { "Draft", "Calculated", "Submitted", "Approved", "Locked", "Paid" };
+                var curIdx = Array.IndexOf(steps, Model.SelectedPeriod.Status);
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 p-2 mb-3 rounded bg-light border">
+                    <div class="d-flex flex-wrap align-items-center gap-1">
+                        @for (var i = 0; i < steps.Length; i++)
+                        {
+                            var cls = i < curIdx ? "bg-success text-white" : i == curIdx ? "bg-primary text-white" : "bg-secondary-subtle text-muted";
+                            <span class="badge @cls">@steps[i]</span>
+                            @if (i < steps.Length - 1)
+                            {
+                                <i class="ti ti-chevron-right text-muted small"></i>
+                            }
+                        }
+                        <span class="ms-2 badge bg-dark-subtle text-dark">Phiên bản v@(Model.SelectedPeriod.CalculationVersion)</span>
+                    </div>
+                    @if (Model.SelectedPeriod.Status == "Locked" && (User.IsInRole("SUPER_ADMIN") || User.IsInRole("HR_DIRECTOR")))
+                    {
+                        <form asp-controller="Payroll" asp-action="Unlock" method="post" class="d-flex gap-1 align-items-center">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="payrollPeriodId" value="@Model.SelectedPeriod.Id" />
+                            <input type="text" name="reason" class="form-control form-control-sm" style="width: 210px;" placeholder="Lý do mở khóa (bắt buộc)" required />
+                            <button type="submit" class="btn btn-sm btn-outline-danger text-nowrap">
+                                <i class="ti ti-lock-open me-1"></i>Mở khóa
+                            </button>
+                        </form>
+                    }
+                </div>
+            }
             <div class="table-responsive">
                 <table class="table table-sm table-hover align-middle mb-0">
                     <thead class="table-light">
@@ -112,6 +190,7 @@
                             <tr class="@(active ? "table-primary" : "")">
                                 <td>
                                     <a href="/Payroll?periodId=@p.Id" class="fw-bold text-decoration-none">@p.PeriodCode</a>
+                                    <span class="text-muted small">v@(p.CalculationVersion)</span>
                                 </td>
                                 <td>@p.EndDate.ToString("dd/MM/yyyy")</td>
                                 <td>@p.EmployeeCount</td>
@@ -121,7 +200,15 @@
                                 <td>
                                     @if (p.IsLocked)
                                     {
-                                        <span class="badge bg-danger">Locked</span>
+                                        <span class="badge bg-danger">@p.Status</span>
+                                    }
+                                    else if (p.Status == "Paid")
+                                    {
+                                        <span class="badge bg-success">@p.Status</span>
+                                    }
+                                    else if (p.Status == "Approved")
+                                    {
+                                        <span class="badge bg-primary">@p.Status</span>
                                     }
                                     else
                                     {
@@ -139,10 +226,33 @@
 
 @if (Model.SelectedPeriod is not null)
 {
-    <div class="vnm-card p-3">
-        <h5 class="fw-bold mb-3">
-            <i class="ti ti-table text-primary me-2"></i>Chi tiết Bảng lương Kỳ @Model.SelectedPeriod.PeriodCode (Ngày chốt hiệu lực: @Model.SelectedPeriod.EndDate.ToString("dd/MM/yyyy"))
-        </h5>
+    var sp = Model.SelectedPeriod;
+    var canExportBank = sp.Status == "Approved" || sp.Status == "Locked" || sp.Status == "Paid";
+    var canRecalcEmployee = !sp.IsLocked && (sp.Status == "Draft" || sp.Status == "Calculated");
+
+    <div class="vnm-card p-3 mb-4">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <h5 class="fw-bold mb-0">
+                <i class="ti ti-table text-primary me-2"></i>Chi tiết Bảng lương Kỳ @sp.PeriodCode (Ngày chốt hiệu lực: @sp.EndDate.ToString("dd/MM/yyyy"))
+            </h5>
+            <div class="d-flex flex-wrap gap-2">
+                <a href="/Payroll/ExportDepartmentSummaryExcel?payrollPeriodId=@sp.Id" class="btn btn-sm btn-outline-success">
+                    <i class="ti ti-file-spreadsheet me-1"></i>Tổng hợp Phòng ban (.xlsx)
+                </a>
+                @if (canExportBank)
+                {
+                    <a href="/Payroll/ExportBankTransfer?payrollPeriodId=@sp.Id&format=excel&templateCode=COMMON" class="btn btn-sm btn-success">
+                        <i class="ti ti-building-bank me-1"></i>Chuyển khoản Chung (.xlsx)
+                    </a>
+                    <a href="/Payroll/ExportBankTransfer?payrollPeriodId=@sp.Id&format=csv&templateCode=COMMON" class="btn btn-sm btn-outline-secondary">
+                        CSV Chung
+                    </a>
+                    <a href="/Payroll/ExportBankTransfer?payrollPeriodId=@sp.Id&format=excel&templateCode=VCB" class="btn btn-sm btn-outline-primary">
+                        Mẫu Vietcombank (.xlsx)
+                    </a>
+                }
+            </div>
+        </div>
         <div class="table-responsive">
             <table class="table table-sm table-striped align-middle mb-0">
                 <thead class="table-light">
@@ -159,6 +269,8 @@
                         <th class="text-end">TN Tính thuế</th>
                         <th class="text-end">Thuế TNCN</th>
                         <th class="text-end">Thực nhận (Net)</th>
+                        <th class="text-end">Chênh lệch</th>
+                        <th class="text-end">Thao tác</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -177,10 +289,181 @@
                             <td class="text-end">@r.AssessableIncome.ToString("N0")</td>
                             <td class="text-end text-danger">-@r.PersonalIncomeTax.ToString("N0")</td>
                             <td class="text-end fw-bold text-primary">@r.NetSalary.ToString("N0")</td>
+                            <td class="text-end small">
+                                @if (r.PreviousRevisionNetSalary.HasValue)
+                                {
+                                    var revDiff = r.NetSalary - r.PreviousRevisionNetSalary.Value;
+                                    <div class="text-muted">vs Lần trước: @(revDiff >= 0 ? "+" : "")@revDiff.ToString("N0")</div>
+                                }
+                                @if (r.VariancePercentVsPreviousPeriod.HasValue)
+                                {
+                                    var pct = r.VariancePercentVsPreviousPeriod.Value;
+                                    <span class="badge @(r.HasHighVarianceWarning ? "bg-warning text-dark" : "bg-light text-muted")">
+                                        @if (r.HasHighVarianceWarning)
+                                        {
+                                            <i class="ti ti-alert-triangle me-1"></i>
+                                        }
+                                        vs Kỳ trước: @(pct >= 0 ? "+" : "")@pct.ToString("0.##")%
+                                    </span>
+                                }
+                            </td>
+                            <td class="text-end text-nowrap">
+                                <a href="/Payroll/DownloadPayslip/@r.Id" class="btn btn-xs btn-outline-danger" title="Tải Phiếu lương PDF có mật khẩu">
+                                    <i class="ti ti-file-type-pdf"></i>
+                                </a>
+                                @if (canRecalcEmployee)
+                                {
+                                    <form asp-controller="Payroll" asp-action="Calculate" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="payrollPeriodId" value="@sp.Id" />
+                                        <input type="hidden" name="employeeId" value="@r.EmployeeId" />
+                                        <input type="hidden" name="notes" value="Tính lại cá nhân @r.EmployeeCode" />
+                                        <button type="submit" class="btn btn-xs btn-outline-primary" title="Tính lại cho @r.EmployeeCode">
+                                            <i class="ti ti-refresh"></i>
+                                        </button>
+                                    </form>
+                                }
+                            </td>
                         </tr>
                     }
                 </tbody>
             </table>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-xl-7">
+            <div class="vnm-card p-3 h-100">
+                <h6 class="fw-bold mb-2"><i class="ti ti-building text-primary me-1"></i>Tổng hợp Chi phí Lương theo Phòng ban (@Model.DepartmentSummaryRows.Count đơn vị)</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Đơn vị</th>
+                                <th class="text-center">Số NV</th>
+                                <th class="text-end">Tổng Gross</th>
+                                <th class="text-end">BH DN + KPCĐ</th>
+                                <th class="text-end">BH NLĐ</th>
+                                <th class="text-end">Thuế TNCN</th>
+                                <th class="text-end">Thực nhận</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var dept in Model.DepartmentSummaryRows)
+                            {
+                                <tr>
+                                    <td><span class="fw-semibold">@dept.UnitName</span> <span class="text-muted small">(@dept.UnitCode)</span></td>
+                                    <td class="text-center">@dept.Headcount</td>
+                                    <td class="text-end">@dept.TotalGross.ToString("N0")</td>
+                                    <td class="text-end">@((dept.TotalCompanyInsurance + dept.TotalCompanyUnionFee).ToString("N0"))</td>
+                                    <td class="text-end">@dept.TotalEmployeeInsurance.ToString("N0")</td>
+                                    <td class="text-end">@dept.TotalPit.ToString("N0")</td>
+                                    <td class="text-end fw-bold text-primary">@dept.TotalNet.ToString("N0")</td>
+                                </tr>
+                            }
+                        </tbody>
+                        @if (Model.DepartmentSummaryRows.Count > 0)
+                        {
+                            <tfoot class="table-light fw-bold">
+                                <tr>
+                                    <td>TỔNG CỘNG</td>
+                                    <td class="text-center">@Model.DepartmentSummaryRows.Sum(d => d.Headcount)</td>
+                                    <td class="text-end">@Model.DepartmentSummaryRows.Sum(d => d.TotalGross).ToString("N0")</td>
+                                    <td class="text-end">@Model.DepartmentSummaryRows.Sum(d => d.TotalCompanyInsurance + d.TotalCompanyUnionFee).ToString("N0")</td>
+                                    <td class="text-end">@Model.DepartmentSummaryRows.Sum(d => d.TotalEmployeeInsurance).ToString("N0")</td>
+                                    <td class="text-end">@Model.DepartmentSummaryRows.Sum(d => d.TotalPit).ToString("N0")</td>
+                                    <td class="text-end text-primary">@Model.DepartmentSummaryRows.Sum(d => d.TotalNet).ToString("N0")</td>
+                                </tr>
+                            </tfoot>
+                        }
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-xl-5">
+            <div class="vnm-card p-3 mb-3">
+                <h6 class="fw-bold mb-2"><i class="ti ti-history text-primary me-1"></i>Lịch sử Phiên bản Tính lương (@Model.Revisions.Count)</h6>
+                @if (Model.Revisions.Count == 0)
+                {
+                    <div class="text-muted small">Chưa có lịch sử phiên bản.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Ver</th>
+                                    <th>Phạm vi</th>
+                                    <th class="text-end">Chênh lệch Net</th>
+                                    <th>Cảnh báo &gt;20%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var rev in Model.Revisions)
+                                {
+                                    <tr>
+                                        <td><span class="badge bg-dark-subtle text-dark">v@(rev.RevisionNumber)</span></td>
+                                        <td class="small">
+                                            @rev.Scope @rev.Notes
+                                            <div class="text-muted">@rev.CalculatedAt.ToLocalTime().ToString("dd/MM HH:mm") • @rev.CalculatedByUsername</div>
+                                        </td>
+                                        <td class="text-end small @(rev.NetDeltaFromPreviousRevision >= 0 ? "text-success" : "text-danger")">
+                                            @(rev.NetDeltaFromPreviousRevision >= 0 ? "+" : "")@rev.NetDeltaFromPreviousRevision.ToString("N0")
+                                        </td>
+                                        <td class="small">
+                                            @if (rev.HighVarianceWarningCount > 0)
+                                            {
+                                                <span class="badge bg-warning text-dark">@rev.HighVarianceWarningCount NV</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+
+            <div class="vnm-card p-3">
+                <h6 class="fw-bold mb-2"><i class="ti ti-mail text-primary me-1"></i>Báo cáo Gửi Phiếu lương Email</h6>
+                @if (Model.LatestDispatchBatch is null)
+                {
+                    <div class="text-muted small">Chưa thực hiện đợt gửi email phiếu lương nào cho kỳ này.</div>
+                }
+                else
+                {
+                    var batch = Model.LatestDispatchBatch;
+                    <div class="d-flex flex-wrap gap-2 mb-2 small">
+                        <span class="badge bg-secondary">Tổng: @batch.TotalCount</span>
+                        <span class="badge bg-success">Thành công: @batch.SentCount</span>
+                        <span class="badge bg-info text-dark">Đang chờ: @batch.QueuedCount</span>
+                        <span class="badge bg-danger">Thất bại: @batch.FailedCount</span>
+                    </div>
+                    <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                        <table class="table table-sm mb-0">
+                            <tbody>
+                                @foreach (var item in batch.Items)
+                                {
+                                    <tr>
+                                        <td class="small fw-semibold">@item.EmployeeCode</td>
+                                        <td class="small text-muted">@item.RecipientEmail</td>
+                                        <td>
+                                            <span class="badge @(item.Status == "Sent" ? "bg-success" : item.Status == "Failed" ? "bg-danger" : "bg-info text-dark")">
+                                                @item.Status (@item.AttemptCount)
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
         </div>
     </div>
 }

@@ -127,6 +127,59 @@ public class EmailNotificationService : IEmailNotificationService
         }
     }
 
+    public async Task SendPayslipEmailWithAttachmentAsync(
+        string toEmail,
+        string recipientName,
+        string subject,
+        string periodTitle,
+        string htmlSummary,
+        byte[] pdfAttachment,
+        string attachmentFileName,
+        CancellationToken cancellationToken = default)
+    {
+        var smtpHost = _configuration["EmailSettings:SmtpHost"];
+        var smtpPortStr = _configuration["EmailSettings:SmtpPort"];
+        var smtpUser = _configuration["EmailSettings:SmtpUser"];
+        var smtpPass = _configuration["EmailSettings:SmtpPassword"];
+
+        if (!string.IsNullOrWhiteSpace(smtpHost) && int.TryParse(smtpPortStr, out var port))
+        {
+            using var client = new SmtpClient(smtpHost, port)
+            {
+                EnableSsl = true,
+                Credentials = !string.IsNullOrWhiteSpace(smtpUser) ? new NetworkCredential(smtpUser, smtpPass) : null,
+                Timeout = 5000
+            };
+            using var mail = new MailMessage("no-reply-hrm@vinamilk.com.vn", toEmail, subject, htmlSummary)
+            {
+                IsBodyHtml = true
+            };
+            using var ms = new MemoryStream(pdfAttachment);
+            mail.Attachments.Add(new Attachment(ms, attachmentFileName, "application/pdf"));
+            await client.SendMailAsync(mail, cancellationToken);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "[PAYSLIP EMAIL DISPATCHED] To={ToEmail}, Subject={Subject}, Attachment={File} ({Bytes} bytes)",
+                toEmail, subject, attachmentFileName, pdfAttachment.Length);
+        }
+
+        _recentEmails.Enqueue(new SentEmailRecordDto(
+            DateTime.UtcNow,
+            toEmail,
+            recipientName,
+            subject,
+            $"Phiếu lương {periodTitle} ({attachmentFileName})",
+            "Đã gửi kèm PDF bảo mật",
+            true));
+
+        while (_recentEmails.Count > 30)
+        {
+            _recentEmails.TryDequeue(out _);
+        }
+    }
+
     public IReadOnlyList<SentEmailRecordDto> GetRecentSentEmails()
     {
         return _recentEmails.Reverse().ToList();

@@ -67,6 +67,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<PayrollPeriod> PayrollPeriods => Set<PayrollPeriod>();
     public DbSet<PayrollRecord> PayrollRecords => Set<PayrollRecord>();
     public DbSet<PayrollRecordDetail> PayrollRecordDetails => Set<PayrollRecordDetail>();
+    public DbSet<PayrollCalculationRevision> PayrollCalculationRevisions => Set<PayrollCalculationRevision>();
+    public DbSet<PayslipDispatchLog> PayslipDispatchLogs => Set<PayslipDispatchLog>();
 
     // Talent Schema
     public DbSet<RecruitmentRequest> RecruitmentRequests => Set<RecruitmentRequest>();

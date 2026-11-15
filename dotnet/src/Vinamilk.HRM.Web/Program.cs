@@ -2,6 +2,8 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Text.Json;
 using System.Threading.RateLimiting;
+using Hangfire;
+using Hangfire.Dashboard;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -326,6 +328,14 @@ app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = r => r.
 
 app.MapHub<NotificationHub>("/hubs/notifications");
 
+if (app.Configuration.GetValue<bool>("Hangfire:UseSqlServerStorage"))
+{
+    app.UseHangfireDashboard("/hangfire", new DashboardOptions
+    {
+        Authorization = new[] { new HangfireSuperAdminAuthFilter() }
+    });
+}
+
 app.MapControllerRoute(
     name: "areas",
     pattern: "{area:exists}/{controller=Home}/{action=Index}/{id?}");
@@ -337,3 +347,13 @@ app.MapControllerRoute(
 app.Run();
 
 public partial class Program { }
+
+internal sealed class HangfireSuperAdminAuthFilter : IDashboardAuthorizationFilter
+{
+    public bool Authorize(DashboardContext context)
+    {
+        var httpContext = context.GetHttpContext();
+        return httpContext.User.Identity?.IsAuthenticated == true &&
+               httpContext.User.IsInRole("SUPER_ADMIN");
+    }
+}

@@ -42,6 +42,16 @@ public interface IEmailNotificationService
         string? comment = null,
         CancellationToken cancellationToken = default);
 
+    Task SendPayslipEmailWithAttachmentAsync(
+        string toEmail,
+        string recipientName,
+        string subject,
+        string periodTitle,
+        string htmlSummary,
+        byte[] pdfAttachment,
+        string attachmentFileName,
+        CancellationToken cancellationToken = default);
+
     IReadOnlyList<SentEmailRecordDto> GetRecentSentEmails();
 }
 

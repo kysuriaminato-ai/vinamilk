@@ -59,6 +59,8 @@ public interface IApplicationDbContext
     DbSet<PayrollPeriod> PayrollPeriods { get; }
     DbSet<PayrollRecord> PayrollRecords { get; }
     DbSet<PayrollRecordDetail> PayrollRecordDetails { get; }
+    DbSet<PayrollCalculationRevision> PayrollCalculationRevisions { get; }
+    DbSet<PayslipDispatchLog> PayslipDispatchLogs { get; }
 
     // Talent Schema
     DbSet<RecruitmentRequest> RecruitmentRequests { get; }

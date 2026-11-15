@@ -2024,6 +2024,97 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.ToTable("UserSessions", "identity");
                 });
 
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.PayrollCalculationRevision", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("AffectedEmployeeCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CalculatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CalculatedByUsername")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2(7)")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("SYSTEM");
+
+                    b.Property<int?>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("HighVarianceWarningCount")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<decimal>("NetDeltaFromPreviousRevision")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("PayrollPeriodId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RevisionNumber")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("SnapshotJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("TotalGrossIncome")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalNetSalary")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalPersonalIncomeTax")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollPeriodId", "RevisionNumber")
+                        .HasDatabaseName("IX_PayrollCalculationRevisions_Period_Rev");
+
+                    b.ToTable("PayrollCalculationRevisions", "payroll");
+                });
+
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.PayrollParameter", b =>
                 {
                     b.Property<int>("Id")
@@ -2118,6 +2209,9 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.Property<int?>("CalculatedByUserId")
                         .HasColumnType("int");
 
+                    b.Property<int>("CalculationVersion")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2(7)")
@@ -2141,7 +2235,23 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsLocked")
                         .HasColumnType("bit");
 
+                    b.Property<string>("LastUnlockReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("LockedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("LockedByUserId")
+                        .HasColumnType("int");
+
                     b.Property<int>("Month")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("PaidByUserId")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("PayslipSentAt")
@@ -2174,12 +2284,27 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .HasColumnType("varchar(30)")
                         .HasDefaultValue("Draft");
 
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("SubmittedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UnlockedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UnlockedByUserId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2(7)");
 
                     b.Property<string>("UpdatedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("WorkflowInstanceId")
+                        .HasColumnType("int");
 
                     b.Property<int>("Year")
                         .HasColumnType("int");
@@ -2264,6 +2389,9 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("GrossIncome")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<bool>("HasHighVarianceWarning")
+                        .HasColumnType("bit");
+
                     b.Property<decimal>("InsuranceSalaryBase")
                         .HasColumnType("decimal(18,2)");
 
@@ -2287,6 +2415,15 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("OrganizationUnitId")
                         .HasColumnType("int");
+
+                    b.Property<decimal>("OtHours150")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("OtHours200")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<decimal>("OtHours300")
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<decimal>("OtherAllowance")
                         .HasColumnType("decimal(18,2)");
@@ -2312,11 +2449,21 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("PersonalIncomeTax")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("PitBracketsJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<decimal>("PositionAllowance")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("PositionId")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("PreviousPeriodNetSalary")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("PreviousRevisionNetSalary")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -2339,12 +2486,18 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("TotalOtHours")
                         .HasColumnType("decimal(5,2)");
 
+                    b.Property<decimal>("UnemploymentInsuranceBase")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2(7)");
 
                     b.Property<string>("UpdatedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal?>("VariancePercentVsPreviousPeriod")
+                        .HasColumnType("decimal(7,2)");
 
                     b.HasKey("Id");
 
@@ -2541,6 +2694,97 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_PayrollStatutoryParameters_EffectivePeriod");
 
                     b.ToTable("PayrollStatutoryParameters", "payroll");
+                });
+
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.PayslipDispatchLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2(7)")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasDefaultValue("SYSTEM");
+
+                    b.Property<string>("EmployeeCode")
+                        .IsRequired()
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EmployeeName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("HangfireJobId")
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("PayrollPeriodId")
+                        .HasColumnType("int");
+
+                    b.Property<long>("PayrollRecordId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RecipientEmail")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("varchar(30)")
+                        .HasDefaultValue("Queued");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollPeriodId", "BatchId")
+                        .HasDatabaseName("IX_PayslipDispatchLogs_Period_Batch");
+
+                    b.ToTable("PayslipDispatchLogs", "payroll");
                 });
 
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.PitBracket", b =>
@@ -5859,6 +6103,17 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.PayrollCalculationRevision", b =>
+                {
+                    b.HasOne("Vinamilk.HRM.Domain.Entities.Payroll.PayrollPeriod", "PayrollPeriod")
+                        .WithMany("CalculationRevisions")
+                        .HasForeignKey("PayrollPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PayrollPeriod");
+                });
+
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.PayrollRecord", b =>
                 {
                     b.HasOne("Vinamilk.HRM.Domain.Entities.Core.Employee", "Employee")
@@ -5918,6 +6173,17 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
                     b.Navigation("PayrollRecord");
 
                     b.Navigation("SalaryComponent");
+                });
+
+            modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.PayslipDispatchLog", b =>
+                {
+                    b.HasOne("Vinamilk.HRM.Domain.Entities.Payroll.PayrollPeriod", "PayrollPeriod")
+                        .WithMany("PayslipDispatchLogs")
+                        .HasForeignKey("PayrollPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PayrollPeriod");
                 });
 
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.SystemEntities.AiRecommendation", b =>
@@ -6417,7 +6683,11 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.PayrollPeriod", b =>
                 {
+                    b.Navigation("CalculationRevisions");
+
                     b.Navigation("PayrollRecords");
+
+                    b.Navigation("PayslipDispatchLogs");
                 });
 
             modelBuilder.Entity("Vinamilk.HRM.Domain.Entities.Payroll.PayrollRecord", b =>

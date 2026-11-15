@@ -14,9 +14,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Vinamilk.HRM.Application.Common.Interfaces;
 using Vinamilk.HRM.Domain.Entities.Core;
+using Vinamilk.HRM.Domain.Entities.Payroll;
 using Vinamilk.HRM.Domain.Entities.Talent;
 using Vinamilk.HRM.Infrastructure.Persistence;
+using Vinamilk.HRM.Infrastructure.Persistence.Seed;
 using Xunit;
 
 namespace Vinamilk.HRM.UnitTests.Integration;
@@ -33,6 +36,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             cfg.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Database:AutoMigrateAndSeedOnStartup"] = "false",
+                ["Hangfire:UseSqlServerStorage"] = "false",
                 ["Security:PiiEncryptionKey"] = "IntegrationTest_SecretKey_Only_32Chars!"
             });
         });
@@ -89,6 +93,104 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             await db.SaveChangesAsync();
         }
     }
+
+    public async Task<(int CalculatedPeriodId, int ApprovedPeriodId, long Emp1RecordId, long Emp2RecordId)> SeedPayrollIntegrationDataAsync()
+    {
+        await SeedPublicJobAsync();
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var enc = scope.ServiceProvider.GetRequiredService<IPiiEncryptionService>();
+
+        if (!await db.PayrollStatutoryParameters.AnyAsync())
+        {
+            await db.PayrollStatutoryParameters.AddRangeAsync(ApplicationDbContextInitializer.BuildDefaultStatutoryParameters());
+            await db.PitBrackets.AddRangeAsync(ApplicationDbContextInitializer.BuildDefaultPitBrackets());
+        }
+
+        if (!await db.Employees.AnyAsync(e => e.Id == 2))
+        {
+            db.Employees.Add(new Employee
+            {
+                Id = 2,
+                EmployeeCode = "VNM-0002",
+                FullName = "Nguyễn Văn B",
+                OrganizationUnitId = 1,
+                PositionId = 1,
+                WorkStatus = "Official",
+                BaseSalary = 25_000_000m,
+                CitizenIdEncrypted = enc.Encrypt("079095002222"),
+                BankAccountEncrypted = enc.Encrypt("190022220002"),
+                BankName = "Vietcombank"
+            });
+        }
+
+        var existingCalc = await db.PayrollPeriods.FirstOrDefaultAsync(p => p.PeriodCode == "PAY-2026-09");
+        var existingApp = await db.PayrollPeriods.FirstOrDefaultAsync(p => p.PeriodCode == "PAY-2026-10");
+        if (existingCalc is not null && existingApp is not null)
+        {
+            var r1 = await db.PayrollRecords.FirstAsync(r => r.PayrollPeriodId == existingApp.Id && r.EmployeeId == 1);
+            var r2 = await db.PayrollRecords.FirstAsync(r => r.PayrollPeriodId == existingApp.Id && r.EmployeeId == 2);
+            return (existingCalc.Id, existingApp.Id, r1.Id, r2.Id);
+        }
+
+        var pCalc = new PayrollPeriod
+        {
+            PeriodCode = "PAY-2026-09",
+            Month = 9,
+            Year = 2026,
+            PeriodTitle = "Bảng lương T09/2026",
+            StartDate = new DateOnly(2026, 9, 1),
+            EndDate = new DateOnly(2026, 9, 30),
+            StandardWorkdays = 26m,
+            Status = PayrollPeriodStatuses.Calculated
+        };
+        var pApp = new PayrollPeriod
+        {
+            PeriodCode = "PAY-2026-10",
+            Month = 10,
+            Year = 2026,
+            PeriodTitle = "Bảng lương T10/2026",
+            StartDate = new DateOnly(2026, 10, 1),
+            EndDate = new DateOnly(2026, 10, 31),
+            StandardWorkdays = 26m,
+            Status = PayrollPeriodStatuses.Approved
+        };
+        db.PayrollPeriods.AddRange(pCalc, pApp);
+        await db.SaveChangesAsync();
+
+        var rec1 = new PayrollRecord
+        {
+            PayrollPeriodId = pApp.Id,
+            EmployeeId = 1,
+            OrganizationUnitId = 1,
+            PositionId = 1,
+            StandardWorkdays = 26m,
+            PayableWorkdays = 26m,
+            ContractBaseSalary = 20_000_000m,
+            GrossIncome = 20_000_000m,
+            NetSalary = 18_000_000m,
+            PersonalIncomeTax = 500_000m,
+            PaymentStatus = PayrollPeriodStatuses.Approved
+        };
+        var rec2 = new PayrollRecord
+        {
+            PayrollPeriodId = pApp.Id,
+            EmployeeId = 2,
+            OrganizationUnitId = 1,
+            PositionId = 1,
+            StandardWorkdays = 26m,
+            PayableWorkdays = 26m,
+            ContractBaseSalary = 25_000_000m,
+            GrossIncome = 25_000_000m,
+            NetSalary = 22_000_000m,
+            PersonalIncomeTax = 1_000_000m,
+            PaymentStatus = PayrollPeriodStatuses.Approved
+        };
+        db.PayrollRecords.AddRange(rec1, rec2);
+        await db.SaveChangesAsync();
+
+        return (pCalc.Id, pApp.Id, rec1.Id, rec2.Id);
+    }
 }
 
 public class TestHeaderAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
@@ -105,15 +207,24 @@ public class TestHeaderAuthHandler : AuthenticationHandler<AuthenticationSchemeO
             return Task.FromResult(AuthenticateResult.NoResult());
 
         var role = roleValues.ToString();
+        var userId = Request.Headers.TryGetValue("X-Test-UserId", out var uidVal) ? uidVal.ToString() : "1";
         var claims = new List<Claim>
         {
-            new(ClaimTypes.NameIdentifier, "1"),
-            new(ClaimTypes.Name, "test-user"),
+            new(ClaimTypes.NameIdentifier, userId),
+            new(ClaimTypes.Name, $"test-user-{userId}"),
             new(ClaimTypes.Role, role)
         };
 
+        if (Request.Headers.TryGetValue("X-Test-EmployeeId", out var empIdVal))
+            claims.Add(new Claim("EmployeeId", empIdVal.ToString()));
+
         if (Request.Headers.TryGetValue("X-Test-Permission", out var perm))
-            claims.Add(new Claim("Permission", perm.ToString()));
+        {
+            foreach (var p in perm.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                claims.Add(new Claim("Permission", p));
+            }
+        }
 
         var identity = new ClaimsIdentity(claims, "TestScheme");
         var principal = new ClaimsPrincipal(identity);
@@ -233,6 +344,62 @@ public class WebIntegrationTests : IClassFixture<CustomWebApplicationFactory>
 
         var backupResp = await client.PostAsync("/api/v1/system/backup", null);
         backupResp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task PayrollEndpoints_AndEssPayslipDownload_ShouldEnforceRbacOwnershipAndPeriodState()
+    {
+        var (calcPeriodId, approvedPeriodId, emp1RecordId, emp2RecordId) = await _factory.SeedPayrollIntegrationDataAsync();
+
+        // 1. Anonymous requests -> 302 redirect to /Auth/Login
+        var anonClient = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        (await anonClient.GetAsync("/Payroll")).StatusCode.Should().Be(HttpStatusCode.Redirect);
+        (await anonClient.GetAsync($"/Payroll/ExportBankTransfer?payrollPeriodId={approvedPeriodId}")).StatusCode.Should().Be(HttpStatusCode.Redirect);
+        (await anonClient.GetAsync($"/ESS/Home/DownloadPayslip?payrollRecordId={emp1RecordId}")).StatusCode.Should().Be(HttpStatusCode.Redirect);
+
+        // 2. EMPLOYEE role không có quyền Payroll -> Redirect /Error/403 trên Payroll & Unlock
+        var empOnlyClient = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        empOnlyClient.DefaultRequestHeaders.Add("X-Test-Role", "EMPLOYEE");
+        empOnlyClient.DefaultRequestHeaders.Add("X-Test-UserId", "101");
+        empOnlyClient.DefaultRequestHeaders.Add("X-Test-EmployeeId", "1");
+
+        var empPayrollResp = await empOnlyClient.GetAsync("/Payroll");
+        empPayrollResp.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        empPayrollResp.Headers.Location?.ToString().Should().Contain("/Error/403");
+
+        var empUnlockResp = await empOnlyClient.PostAsync("/Payroll/Unlock", null);
+        empUnlockResp.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        empUnlockResp.Headers.Location?.ToString().Should().Contain("/Error/403");
+
+        // Employee 1 tải phiếu lương CỦA MÌNH -> 200 OK PDF; tải của Employee 2 -> Redirect /Error/403
+        var ownPdfResp = await empOnlyClient.GetAsync($"/ESS/Home/DownloadPayslip?payrollRecordId={emp1RecordId}");
+        ownPdfResp.StatusCode.Should().Be(HttpStatusCode.OK);
+        ownPdfResp.Content.Headers.ContentType?.MediaType.Should().Be("application/pdf");
+
+        var otherPdfResp = await empOnlyClient.GetAsync($"/ESS/Home/DownloadPayslip?payrollRecordId={emp2RecordId}");
+        otherPdfResp.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        otherPdfResp.Headers.Location?.ToString().Should().Contain("/Error/403");
+
+        // 3. HR_MANAGER (kể cả gán claim Payroll.Unlock) KHÔNG nằm trong Role SUPER_ADMIN/HR_DIRECTOR -> Unlock bị từ chối (/Error/403)
+        var hrManagerClient = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        hrManagerClient.DefaultRequestHeaders.Add("X-Test-Role", "HR_MANAGER");
+        hrManagerClient.DefaultRequestHeaders.Add("X-Test-Permission", "Payroll.View,Payroll.Unlock,Payroll.Export");
+
+        var hrMgrUnlockResp = await hrManagerClient.PostAsync("/Payroll/Unlock", null);
+        hrMgrUnlockResp.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        hrMgrUnlockResp.Headers.Location?.ToString().Should().Contain("/Error/403");
+
+        // 4. Xuất file chuyển khoản ở trạng thái Calculated -> 400 BadRequest; ở trạng thái Approved -> 200 OK .xlsx
+        var calcExportResp = await hrManagerClient.GetAsync($"/Payroll/ExportBankTransfer?payrollPeriodId={calcPeriodId}&format=excel&templateCode=COMMON");
+        calcExportResp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var approvedExportResp = await hrManagerClient.GetAsync($"/Payroll/ExportBankTransfer?payrollPeriodId={approvedPeriodId}&format=excel&templateCode=COMMON");
+        approvedExportResp.StatusCode.Should().Be(HttpStatusCode.OK);
+        approvedExportResp.Content.Headers.ContentType?.MediaType.Should().Be("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+        var deptExcelResp = await hrManagerClient.GetAsync($"/Payroll/ExportDepartmentSummaryExcel?payrollPeriodId={approvedPeriodId}");
+        deptExcelResp.StatusCode.Should().Be(HttpStatusCode.OK);
+        deptExcelResp.Content.Headers.ContentType?.MediaType.Should().Be("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
 }
 

@@ -20,13 +20,16 @@ public sealed record EssProfileDto(
     string DirectManagerName);
 
 public sealed record EssPayslipDto(
+    long PayrollRecordId,
+    string PeriodCode,
     string PeriodTitle,
     decimal PayableWorkdays,
     decimal GrossIncome,
     decimal TotalEmployeeInsurance,
     decimal PersonalIncomeTax,
     decimal NetSalary,
-    string PaymentStatus);
+    string PaymentStatus,
+    string PeriodStatus);
 
 public sealed record EssAttendanceSummaryDto(
     int Month,
@@ -58,6 +61,7 @@ public sealed record EssLeaveTypeOptionDto(int Id, string LeaveName);
 public sealed record EssMssPortalDto(
     EssProfileDto Profile,
     EssPayslipDto? LatestPayslip,
+    List<EssPayslipDto> Payslips,
     EssAttendanceSummaryDto CurrentAttendance,
     List<EssRequestItemDto> MyRequests,
     List<MssPendingApprovalDto> PendingApprovals,
@@ -113,24 +117,31 @@ public class GetEssMssPortalQueryHandler : IRequestHandler<GetEssMssPortalQuery,
             targetEmp.HireDate,
             targetEmp.DirectManager?.FullName ?? "Ban Tổng Giám đốc");
 
-        var latestPayroll = await _context.PayrollRecords
+        var payrollList = await _context.PayrollRecords
             .AsNoTracking()
             .Include(r => r.PayrollPeriod)
-            .Where(r => r.EmployeeId == targetEmp.Id)
+            .Where(r => r.EmployeeId == targetEmp.Id &&
+                        (r.PayrollPeriod.Status == "Approved" ||
+                         r.PayrollPeriod.Status == "Locked" ||
+                         r.PayrollPeriod.Status == "Paid"))
             .OrderByDescending(r => r.PayrollPeriod.Year)
             .ThenByDescending(r => r.PayrollPeriod.Month)
-            .FirstOrDefaultAsync(cancellationToken);
+            .Take(12)
+            .ToListAsync(cancellationToken);
 
-        var latestPayslip = latestPayroll is null
-            ? null
-            : new EssPayslipDto(
-                latestPayroll.PayrollPeriod.PeriodTitle,
-                latestPayroll.PayableWorkdays,
-                latestPayroll.GrossIncome,
-                latestPayroll.TotalEmployeeInsurance,
-                latestPayroll.PersonalIncomeTax,
-                latestPayroll.NetSalary,
-                latestPayroll.PaymentStatus);
+        var payslips = payrollList.Select(p => new EssPayslipDto(
+            p.Id,
+            p.PayrollPeriod.PeriodCode,
+            p.PayrollPeriod.PeriodTitle,
+            p.PayableWorkdays,
+            p.GrossIncome,
+            p.TotalEmployeeInsurance,
+            p.PersonalIncomeTax,
+            p.NetSalary,
+            p.PaymentStatus,
+            p.PayrollPeriod.Status)).ToList();
+
+        var latestPayslip = payslips.FirstOrDefault();
 
         var now = DateTime.Today;
         var attendance = await _context.MonthlyAttendanceSummaries
@@ -222,6 +233,7 @@ public class GetEssMssPortalQueryHandler : IRequestHandler<GetEssMssPortalQuery,
         return new EssMssPortalDto(
             profile,
             latestPayslip,
+            payslips,
             currentAttendance,
             myRequests,
             pendingWorkflows,

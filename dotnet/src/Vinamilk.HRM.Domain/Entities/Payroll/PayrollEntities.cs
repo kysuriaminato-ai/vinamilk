@@ -84,6 +84,16 @@ public class SalaryComponent : BaseAuditableEntity
     public ICollection<PayrollRecordDetail> RecordDetails { get; set; } = new List<PayrollRecordDetail>();
 }
 
+public static class PayrollPeriodStatuses
+{
+    public const string Draft = "Draft";
+    public const string Calculated = "Calculated";
+    public const string Submitted = "Submitted";
+    public const string Approved = "Approved";
+    public const string Locked = "Locked";
+    public const string Paid = "Paid";
+}
+
 public class PayrollPeriod : BaseAuditableEntity
 {
     public string PeriodCode { get; set; } = string.Empty;
@@ -93,15 +103,28 @@ public class PayrollPeriod : BaseAuditableEntity
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
     public decimal StandardWorkdays { get; set; } = 26m;
-    public string Status { get; set; } = "Draft";
+    public string Status { get; set; } = PayrollPeriodStatuses.Draft;
+    public int CalculationVersion { get; set; } = 0;
     public int? CalculatedByUserId { get; set; }
     public DateTime? CalculatedAt { get; set; }
+    public int? SubmittedByUserId { get; set; }
+    public DateTime? SubmittedAt { get; set; }
     public int? ApprovedByUserId { get; set; }
     public DateTime? ApprovedAt { get; set; }
     public bool IsLocked { get; set; } = false;
+    public int? LockedByUserId { get; set; }
+    public DateTime? LockedAt { get; set; }
+    public int? UnlockedByUserId { get; set; }
+    public DateTime? UnlockedAt { get; set; }
+    public string? LastUnlockReason { get; set; }
+    public int? PaidByUserId { get; set; }
+    public DateTime? PaidAt { get; set; }
+    public int? WorkflowInstanceId { get; set; }
     public DateTime? PayslipSentAt { get; set; }
 
     public ICollection<PayrollRecord> PayrollRecords { get; set; } = new List<PayrollRecord>();
+    public ICollection<PayrollCalculationRevision> CalculationRevisions { get; set; } = new List<PayrollCalculationRevision>();
+    public ICollection<PayslipDispatchLog> PayslipDispatchLogs { get; set; } = new List<PayslipDispatchLog>();
 }
 
 public class PayrollRecord : BaseLongAuditableEntity
@@ -113,6 +136,9 @@ public class PayrollRecord : BaseLongAuditableEntity
     public int? MonthlyAttendanceSummaryId { get; set; }
     public decimal StandardWorkdays { get; set; } = 26m;
     public decimal PayableWorkdays { get; set; }
+    public decimal OtHours150 { get; set; }
+    public decimal OtHours200 { get; set; }
+    public decimal OtHours300 { get; set; }
     public decimal TotalOtHours { get; set; }
     public decimal ContractBaseSalary { get; set; }
     public decimal ActualBaseSalary { get; set; }
@@ -122,6 +148,7 @@ public class PayrollRecord : BaseLongAuditableEntity
     public decimal KpiBonus { get; set; }
     public decimal GrossIncome { get; set; }
     public decimal InsuranceSalaryBase { get; set; }
+    public decimal UnemploymentInsuranceBase { get; set; }
     public decimal EmployeeSocialInsurance { get; set; }
     public decimal EmployeeHealthInsurance { get; set; }
     public decimal EmployeeUnemploymentInsurance { get; set; }
@@ -136,8 +163,13 @@ public class PayrollRecord : BaseLongAuditableEntity
     public decimal TaxableIncome { get; set; }
     public decimal AssessableIncome { get; set; }
     public decimal PersonalIncomeTax { get; set; }
+    public string? PitBracketsJson { get; set; }
     public decimal DisciplineDeduction { get; set; }
     public decimal NetSalary { get; set; }
+    public decimal? PreviousRevisionNetSalary { get; set; }
+    public decimal? PreviousPeriodNetSalary { get; set; }
+    public decimal? VariancePercentVsPreviousPeriod { get; set; }
+    public bool HasHighVarianceWarning { get; set; } = false;
     public string PaymentStatus { get; set; } = "Paid";
     public DateTime? PaidAt { get; set; }
     public string? Notes { get; set; }
@@ -148,6 +180,44 @@ public class PayrollRecord : BaseLongAuditableEntity
     public Position Position { get; set; } = null!;
     public MonthlyAttendanceSummary? MonthlyAttendanceSummary { get; set; }
     public ICollection<PayrollRecordDetail> Details { get; set; } = new List<PayrollRecordDetail>();
+}
+
+public class PayrollCalculationRevision : BaseLongAuditableEntity
+{
+    public int PayrollPeriodId { get; set; }
+    public int? EmployeeId { get; set; }
+    public int RevisionNumber { get; set; }
+    public string Scope { get; set; } = "FullPeriod";
+    public int AffectedEmployeeCount { get; set; }
+    public decimal TotalGrossIncome { get; set; }
+    public decimal TotalPersonalIncomeTax { get; set; }
+    public decimal TotalNetSalary { get; set; }
+    public decimal NetDeltaFromPreviousRevision { get; set; }
+    public int HighVarianceWarningCount { get; set; }
+    public string? SnapshotJson { get; set; }
+    public string? CalculatedByUsername { get; set; }
+    public DateTime CalculatedAt { get; set; } = DateTime.UtcNow;
+    public string? Notes { get; set; }
+
+    public PayrollPeriod PayrollPeriod { get; set; } = null!;
+}
+
+public class PayslipDispatchLog : BaseLongAuditableEntity
+{
+    public Guid BatchId { get; set; }
+    public int PayrollPeriodId { get; set; }
+    public long PayrollRecordId { get; set; }
+    public int EmployeeId { get; set; }
+    public string EmployeeCode { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public string RecipientEmail { get; set; } = string.Empty;
+    public string Status { get; set; } = "Queued";
+    public int AttemptCount { get; set; } = 0;
+    public string? ErrorMessage { get; set; }
+    public string? HangfireJobId { get; set; }
+    public DateTime? SentAt { get; set; }
+
+    public PayrollPeriod PayrollPeriod { get; set; } = null!;
 }
 
 public class PayrollRecordDetail : BaseLongAuditableEntity

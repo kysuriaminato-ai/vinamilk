@@ -41,6 +41,9 @@ public class WorkflowAndLeaveAndScopeTests
         public Task SendWorkflowEmailAsync(string toEmail, string recipientName, string subject, string documentTitle, string initiatorName, string currentStepName, string statusBadge, string actionUrl, string? comment = null, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
+        public Task SendPayslipEmailWithAttachmentAsync(string toEmail, string recipientName, string subject, string periodTitle, string htmlSummary, byte[] pdfAttachment, string attachmentFileName, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
         public IReadOnlyList<SentEmailRecordDto> GetRecentSentEmails() => Array.Empty<SentEmailRecordDto>();
     }
 

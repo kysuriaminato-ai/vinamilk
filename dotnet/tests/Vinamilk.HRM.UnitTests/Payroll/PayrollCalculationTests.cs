@@ -316,12 +316,21 @@ public class PayrollCalculationTests
         rec.PersonalIncomeTax.Should().Be(343_750m);
         rec.NetSalary.Should().Be(22_031_250m);
 
+        // Chưa qua bước Approved -> không được phép khóa kỳ lương
+        Func<Task> lockBeforeApproved = () => new LockPayrollPeriodCommandHandler(db)
+            .Handle(new LockPayrollPeriodCommand(periodId), CancellationToken.None);
+        await lockBeforeApproved.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Approved*");
+
+        var periodToApprove = await db.PayrollPeriods.FirstAsync(p => p.Id == periodId);
+        periodToApprove.Status = PayrollPeriodStatuses.Approved;
+        await db.SaveChangesAsync();
+
         // Khóa kỳ lương 11/2026
         await new LockPayrollPeriodCommandHandler(db).Handle(new LockPayrollPeriodCommand(periodId), CancellationToken.None);
 
         Func<Task> recalcLocked = () => new CalculateMonthlyPayrollCommandHandler(db)
             .Handle(new CalculateMonthlyPayrollCommand(periodId), CancellationToken.None);
-        await recalcLocked.Should().ThrowAsync<InvalidOperationException>().WithMessage("*khóa*");
+        await recalcLocked.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Locked*");
 
         // Cố sửa tham số hoặc biểu thuế bao trùm kỳ lương 11/2026 đã khóa -> phải bị chặn
         var currentUser = new FakeCurrentUserService();

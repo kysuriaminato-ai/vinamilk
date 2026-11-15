@@ -18,6 +18,9 @@ public sealed record PayrollPeriodRowDto(
     decimal StandardWorkdays,
     string Status,
     bool IsLocked,
+    int CalculationVersion,
+    int? CalculatedByUserId,
+    int? WorkflowInstanceId,
     int EmployeeCount,
     decimal TotalGrossIncome,
     decimal TotalPersonalIncomeTax,
@@ -42,7 +45,26 @@ public sealed record PayrollRecordRowDto(
     decimal AssessableIncome,
     decimal PersonalIncomeTax,
     decimal NetSalary,
+    decimal? PreviousRevisionNetSalary,
+    decimal? PreviousPeriodNetSalary,
+    decimal? VariancePercentVsPreviousPeriod,
+    bool HasHighVarianceWarning,
     string PaymentStatus);
+
+public sealed record PayrollCalculationRevisionDto(
+    long Id,
+    int RevisionNumber,
+    string Scope,
+    int? EmployeeId,
+    int AffectedEmployeeCount,
+    decimal TotalGrossIncome,
+    decimal TotalPersonalIncomeTax,
+    decimal TotalNetSalary,
+    decimal NetDeltaFromPreviousRevision,
+    int HighVarianceWarningCount,
+    string? CalculatedByUsername,
+    DateTime CalculatedAt,
+    string? Notes);
 
 public sealed record PayrollStatutoryParameterDto(
     int Id,
@@ -81,7 +103,10 @@ public sealed record PayrollManagementOverviewDto(
     IReadOnlyList<PayrollRecordRowDto> Records,
     IReadOnlyList<PayrollStatutoryParameterDto> StatutoryParameters,
     IReadOnlyList<PitBracketGroupDto> PitBracketGroups,
-    IReadOnlyList<PayrollPeriodRowDto> LockedPeriods);
+    IReadOnlyList<PayrollPeriodRowDto> LockedPeriods,
+    IReadOnlyList<PayrollCalculationRevisionDto> Revisions,
+    IReadOnlyList<PayrollDepartmentSummaryRowDto> DepartmentSummaryRows,
+    PayslipDispatchBatchReportDto? LatestDispatchBatch);
 
 public sealed record GetPayrollManagementOverviewQuery(int? PeriodId = null)
     : IRequest<PayrollManagementOverviewDto>;
@@ -119,7 +144,11 @@ public sealed class GetPayrollManagementOverviewQueryHandler
                 end,
                 p.StandardWorkdays,
                 p.Status,
-                p.IsLocked || string.Equals(p.Status, "Locked", StringComparison.OrdinalIgnoreCase),
+                p.IsLocked || string.Equals(p.Status, PayrollPeriodStatuses.Locked, StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(p.Status, PayrollPeriodStatuses.Paid, StringComparison.OrdinalIgnoreCase),
+                p.CalculationVersion,
+                p.CalculatedByUserId,
+                p.WorkflowInstanceId,
                 p.PayrollRecords.Count,
                 p.PayrollRecords.Sum(r => r.GrossIncome),
                 p.PayrollRecords.Sum(r => r.PersonalIncomeTax),
@@ -131,6 +160,10 @@ public sealed class GetPayrollManagementOverviewQueryHandler
             : periods.FirstOrDefault();
 
         var records = new List<PayrollRecordRowDto>();
+        var revisions = new List<PayrollCalculationRevisionDto>();
+        var deptSummaryRows = new List<PayrollDepartmentSummaryRowDto>();
+        PayslipDispatchBatchReportDto? latestDispatchBatch = null;
+
         if (selectedPeriod is not null)
         {
             var rawRecs = await _context.PayrollRecords
@@ -160,7 +193,78 @@ public sealed class GetPayrollManagementOverviewQueryHandler
                 r.AssessableIncome,
                 r.PersonalIncomeTax,
                 r.NetSalary,
+                r.PreviousRevisionNetSalary,
+                r.PreviousPeriodNetSalary,
+                r.VariancePercentVsPreviousPeriod,
+                r.HasHighVarianceWarning,
                 r.PaymentStatus)).ToList();
+
+            deptSummaryRows = rawRecs
+                .GroupBy(r => new { r.OrganizationUnit.UnitCode, r.OrganizationUnit.UnitName })
+                .Select(g => new PayrollDepartmentSummaryRowDto(
+                    g.Key.UnitCode,
+                    g.Key.UnitName,
+                    g.Count(),
+                    g.Sum(x => x.ActualBaseSalary + x.PositionAllowance + x.OtherAllowance),
+                    g.Sum(x => x.OvertimePay + x.KpiBonus),
+                    g.Sum(x => x.GrossIncome),
+                    g.Sum(x => x.TotalEmployeeInsurance),
+                    g.Sum(x => x.CompanySocialInsurance + x.CompanyHealthInsurance + x.CompanyUnemploymentInsurance),
+                    g.Sum(x => x.CompanyUnionFee),
+                    g.Sum(x => x.PersonalIncomeTax),
+                    g.Sum(x => x.NetSalary)))
+                .OrderByDescending(x => x.TotalGross)
+                .ToList();
+
+            var rawRevisions = await _context.PayrollCalculationRevisions
+                .AsNoTracking()
+                .Where(rev => rev.PayrollPeriodId == selectedPeriod.Id)
+                .OrderByDescending(rev => rev.RevisionNumber)
+                .Take(15)
+                .ToListAsync(cancellationToken);
+
+            revisions = rawRevisions.Select(rev => new PayrollCalculationRevisionDto(
+                rev.Id,
+                rev.RevisionNumber,
+                rev.Scope,
+                rev.EmployeeId,
+                rev.AffectedEmployeeCount,
+                rev.TotalGrossIncome,
+                rev.TotalPersonalIncomeTax,
+                rev.TotalNetSalary,
+                rev.NetDeltaFromPreviousRevision,
+                rev.HighVarianceWarningCount,
+                rev.CalculatedByUsername,
+                rev.CalculatedAt,
+                rev.Notes)).ToList();
+
+            var latestLogs = await _context.PayslipDispatchLogs
+                .AsNoTracking()
+                .Where(l => l.PayrollPeriodId == selectedPeriod.Id)
+                .OrderByDescending(l => l.CreatedAt)
+                .Take(200)
+                .ToListAsync(cancellationToken);
+
+            if (latestLogs.Count > 0)
+            {
+                var latestBatchId = latestLogs[0].BatchId;
+                var batchLogs = latestLogs.Where(l => l.BatchId == latestBatchId).OrderBy(l => l.EmployeeCode).ToList();
+                latestDispatchBatch = new PayslipDispatchBatchReportDto(
+                    latestBatchId,
+                    batchLogs.Count,
+                    batchLogs.Count(x => x.Status == "Queued"),
+                    batchLogs.Count(x => x.Status == "Sent"),
+                    batchLogs.Count(x => x.Status == "Failed"),
+                    batchLogs.Select(x => new PayslipDispatchItemDto(
+                        x.Id,
+                        x.EmployeeCode,
+                        x.EmployeeName,
+                        x.RecipientEmail,
+                        x.Status,
+                        x.AttemptCount,
+                        x.ErrorMessage,
+                        x.SentAt)).ToList());
+            }
         }
 
         var lockedPeriods = periods.Where(p => p.IsLocked).ToList();
@@ -221,7 +325,10 @@ public sealed class GetPayrollManagementOverviewQueryHandler
             records,
             paramDtos,
             bracketGroups,
-            lockedPeriods);
+            lockedPeriods,
+            revisions,
+            deptSummaryRows,
+            latestDispatchBatch);
     }
 
     public static bool HasOverlappingLockedPeriod(
@@ -323,7 +430,7 @@ public sealed class SavePayrollStatutoryParameterCommandHandler
 
         var lockedPeriods = await _context.PayrollPeriods
             .AsNoTracking()
-            .Where(p => p.IsLocked || p.Status == "Locked")
+            .Where(p => p.IsLocked || p.Status == PayrollPeriodStatuses.Locked || p.Status == PayrollPeriodStatuses.Paid)
             .ToListAsync(cancellationToken);
 
         PayrollStatutoryParameter entity;
@@ -470,7 +577,7 @@ public sealed class SavePitBracketGroupCommandHandler : IRequestHandler<SavePitB
 
         var lockedPeriods = await _context.PayrollPeriods
             .AsNoTracking()
-            .Where(p => p.IsLocked || p.Status == "Locked")
+            .Where(p => p.IsLocked || p.Status == PayrollPeriodStatuses.Locked || p.Status == PayrollPeriodStatuses.Paid)
             .ToListAsync(cancellationToken);
 
         List<PitBracket> existing = new();

@@ -93,7 +93,9 @@ public static class WorkflowSeederHelper
         IApplicationDbContext context,
         CancellationToken cancellationToken)
     {
-        if (await context.WorkflowDefinitions.AnyAsync(cancellationToken))
+        var hasAny = await context.WorkflowDefinitions.AnyAsync(cancellationToken);
+        var hasPayrollWf = await context.WorkflowDefinitions.AnyAsync(d => d.EntityType == "PayrollPeriod", cancellationToken);
+        if (hasAny && hasPayrollWf)
             return;
 
         var roles = await context.Roles.AsNoTracking().ToDictionaryAsync(r => r.RoleCode, r => r.Id, cancellationToken);
@@ -103,6 +105,9 @@ public static class WorkflowSeederHelper
         int? hrStaffRoleId = roles.TryGetValue("HR_STAFF", out var rHrStaff) ? rHrStaff : null;
         int? lineManagerUserId = users.TryGetValue("hung.nv", out var uLm) ? uLm : null;
         int? chroUserId = users.TryGetValue("huyen.ntt", out var uChro) ? uChro : null;
+
+        if (!hasAny)
+        {
 
         var definitions = new List<WorkflowDefinition>
         {
@@ -229,6 +234,33 @@ public static class WorkflowSeederHelper
         };
 
         await context.WorkflowDefinitions.AddRangeAsync(definitions, cancellationToken);
+        }
+
+        if (!hasPayrollWf)
+        {
+            await context.WorkflowDefinitions.AddAsync(new WorkflowDefinition
+            {
+                WorkflowCode = "WF_PAYROLL",
+                WorkflowName = "Quy trình Phê duyệt Kỳ tính lương Hàng tháng",
+                EntityType = "PayrollPeriod",
+                Description = "Kiểm soát phân tách nhiệm vụ: Chuyên viên C&B/Kế toán tính và trình duyệt; Giám đốc Nhân sự (CHRO) / Ban Giám đốc phê duyệt trước khi Khóa và Chi trả.",
+                IsActive = true,
+                Steps = new List<WorkflowStep>
+                {
+                    new()
+                    {
+                        StepOrder = 1,
+                        StepName = "Bước 1: Giám đốc Nhân sự / Lãnh đạo phê duyệt Bảng lương",
+                        ApproverType = "SpecificRole",
+                        ApproverRoleId = hrManagerRoleId,
+                        ApproverUserId = chroUserId,
+                        ConditionExpression = "Always",
+                        SlaHours = 24
+                    }
+                }
+            }, cancellationToken);
+        }
+
         await context.SaveChangesAsync(cancellationToken);
     }
 
@@ -439,6 +471,10 @@ public class GetWorkflowCenterQueryHandler : IRequestHandler<GetWorkflowCenterQu
             .AsNoTracking()
             .ToDictionaryAsync(t => t.Id, cancellationToken);
 
+        var payrollPeriodDict = await _context.PayrollPeriods
+            .AsNoTracking()
+            .ToDictionaryAsync(p => p.Id, cancellationToken);
+
         var instanceDtos = new List<WorkflowInstanceItemDto>();
 
         foreach (var inst in instancesRaw)
@@ -491,6 +527,16 @@ public class GetWorkflowCenterQueryHandler : IRequestHandler<GetWorkflowCenterQu
                     {
                         docTitle = $"Quyết định {tr.DecisionNumber} ({tr.TransferType})";
                         docSummary = $"Hiệu lực {tr.EffectiveDate:dd/MM/yyyy} • Lý do: {tr.Reason ?? "Theo yêu cầu công tác"}";
+                    }
+                    break;
+
+                case "PayrollPeriod":
+                    entityLabel = "Phê duyệt Bảng lương";
+                    targetUrl = $"/Payroll?periodId={inst.EntityId}";
+                    if (payrollPeriodDict.TryGetValue(inst.EntityId, out var pp))
+                    {
+                        docTitle = $"{pp.PeriodTitle} ({pp.PeriodCode})";
+                        docSummary = $"Trạng thái: {pp.Status} • Phiên bản tính: v{pp.CalculationVersion} • Chốt kỳ {pp.EndDate:dd/MM/yyyy}";
                     }
                     break;
             }
@@ -832,6 +878,22 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
             throw new InvalidOperationException("Bạn không thể tự phê duyệt, từ chối hoặc ủy quyền đơn do chính mình khởi tạo.");
         }
 
+        if (instance.EntityType == "PayrollPeriod" &&
+            !request.Action.Equals("Cancelled", StringComparison.OrdinalIgnoreCase) &&
+            _currentUser.UserId.HasValue)
+        {
+            var payrollPeriodGuard = await _context.PayrollPeriods
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == instance.EntityId, cancellationToken);
+
+            if (payrollPeriodGuard is not null &&
+                (payrollPeriodGuard.CalculatedByUserId == _currentUser.UserId.Value ||
+                 payrollPeriodGuard.SubmittedByUserId == _currentUser.UserId.Value))
+            {
+                throw new InvalidOperationException("Vi phạm phân tách nhiệm vụ: người tính hoặc trình bảng lương không được tự phê duyệt kỳ lương.");
+            }
+        }
+
         var actorUserId = _currentUser.UserId ?? instance.CurrentApproverUserId ?? 1;
         var orderedSteps = instance.WorkflowDefinition.Steps.OrderBy(s => s.StepOrder).ToList();
         var currentStep = orderedSteps.FirstOrDefault(s => s.StepOrder == instance.CurrentStepOrder)
@@ -1163,6 +1225,33 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
                     transfer.AppliedAt = DateTime.UtcNow;
                 }
                 break;
+
+            case "PayrollPeriod":
+                var approvedPeriod = await _context.PayrollPeriods
+                    .FirstOrDefaultAsync(p => p.Id == instance.EntityId, cancellationToken);
+                if (approvedPeriod != null && approvedPeriod.Status == "Submitted")
+                {
+                    approvedPeriod.Status = "Approved";
+                    approvedPeriod.ApprovedByUserId = approverUserId;
+                    approvedPeriod.ApprovedAt = DateTime.UtcNow;
+                    await _context.AuditLogs.AddAsync(new AuditLog
+                    {
+                        UserId = _currentUser.UserId ?? approverUserId,
+                        Username = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username,
+                        ModuleName = "Payroll",
+                        ActionType = "PayrollPeriod_Approve",
+                        EntityName = nameof(Domain.Entities.Payroll.PayrollPeriod),
+                        EntityId = approvedPeriod.Id.ToString(),
+                        OldValuesJson = "{\"Status\":\"Submitted\"}",
+                        NewValuesJson = $"{{\"Status\":\"Approved\",\"ApprovedByUserId\":{approverUserId}}}",
+                        AffectedColumns = "Status,ApprovedByUserId,ApprovedAt",
+                        IpAddress = _currentUser.IpAddress ?? "127.0.0.1",
+                        UserAgent = _currentUser.UserAgent ?? "WorkflowEngine",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username
+                    }, cancellationToken);
+                }
+                break;
         }
     }
 
@@ -1212,6 +1301,31 @@ public class ProcessWorkflowActionCommandHandler : IRequestHandler<ProcessWorkfl
                 if (attRecord != null)
                 {
                     attRecord.EditReason = $"[Từ chối giải trình: {comment}] {attRecord.EditReason}";
+                }
+                break;
+
+            case "PayrollPeriod":
+                var rejectedPeriod = await _context.PayrollPeriods
+                    .FirstOrDefaultAsync(p => p.Id == instance.EntityId, cancellationToken);
+                if (rejectedPeriod != null && rejectedPeriod.Status == "Submitted")
+                {
+                    rejectedPeriod.Status = "Calculated";
+                    await _context.AuditLogs.AddAsync(new AuditLog
+                    {
+                        UserId = _currentUser.UserId,
+                        Username = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username,
+                        ModuleName = "Payroll",
+                        ActionType = "PayrollPeriod_Reject",
+                        EntityName = nameof(Domain.Entities.Payroll.PayrollPeriod),
+                        EntityId = rejectedPeriod.Id.ToString(),
+                        OldValuesJson = "{\"Status\":\"Submitted\"}",
+                        NewValuesJson = "{\"Status\":\"Calculated\"}",
+                        AffectedColumns = "Status",
+                        IpAddress = _currentUser.IpAddress ?? "127.0.0.1",
+                        UserAgent = _currentUser.UserAgent ?? "WorkflowEngine",
+                        CreatedAt = DateTime.UtcNow,
+                        CreatedBy = string.IsNullOrWhiteSpace(_currentUser.Username) ? "SYSTEM" : _currentUser.Username
+                    }, cancellationToken);
                 }
                 break;
         }
