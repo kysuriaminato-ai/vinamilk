@@ -1,0 +1,720 @@
+@model Vinamilk.HRM.Application.Payroll.SalaryStructuresOverviewDto
+@{
+    var canEdit = User.HasClaim("Permission", "Payroll.Approve") || User.IsInRole("SUPER_ADMIN") || User.IsInRole("HR_DIRECTOR");
+    var selectedEmployee = Model.Employees.FirstOrDefault(e => e.Id == Model.SelectedEmployeeId);
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Payroll" class="btn btn-outline-primary">
+            <i class="ti ti-cash me-1"></i>1. Bảng lương & Kỳ tính lương
+        </a>
+        <a href="/Payroll/Parameters" class="btn btn-outline-primary">
+            <i class="ti ti-adjustments-horizontal me-1"></i>2. Tham số Luật 2026 & Biểu thuế TNCN
+        </a>
+        <a href="/Payroll/SalaryStructures" class="btn vnm-btn-primary">
+            <i class="ti ti-calculator me-1"></i>3. Cấu trúc lương & Công thức NCalc
+        </a>
+        <a href="/Security/AuditLogs" class="btn btn-outline-secondary">
+            <i class="ti ti-history me-1"></i>4. AuditLog Thay đổi
+        </a>
+    </div>
+    <span class="badge bg-info-subtle text-info-emphasis px-3 py-2">
+        <i class="ti ti-shield-check me-1"></i>Sàn thử việc cấu hình: ≥ @Model.MinProbationSalaryRatePercent.ToString("0.#")%
+    </span>
+</div>
+
+@if (TempData["PayrollSuccess"] is string okMsg)
+{
+    <div class="alert alert-success alert-dismissible fade show">
+        <i class="ti ti-check me-2"></i>@okMsg
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["PayrollError"] is string errMsg)
+{
+    <div class="alert alert-danger alert-dismissible fade show">
+        <i class="ti ti-alert-triangle me-2"></i>@errMsg
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<ul class="nav nav-tabs mb-4" id="cl5Tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active fw-semibold" id="tab-profiles-btn" data-bs-toggle="tab" data-bs-target="#tab-profiles" type="button" role="tab">
+            <i class="ti ti-user-dollar me-1"></i>Hồ sơ lương theo ngày hiệu lực (@Model.EmployeeProfiles.Count)
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" id="tab-formulas-btn" data-bs-toggle="tab" data-bs-target="#tab-formulas" type="button" role="tab">
+            <i class="ti ti-math-function me-1"></i>Thành phần lương & Kiểm tra công thức NCalc (@Model.Components.Count)
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" id="tab-templates-btn" data-bs-toggle="tab" data-bs-target="#tab-templates" type="button" role="tab">
+            <i class="ti ti-template me-1"></i>Mẫu cấu trúc lương theo nhóm (@Model.Templates.Count)
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="cl5TabContent">
+    <!-- TAB 1: HỒ SƠ LƯƠNG NHÂN VIÊN THEO NGÀY HIỆU LỰC -->
+    <div class="tab-pane fade show active" id="tab-profiles" role="tabpanel">
+        <div class="card vnm-card mb-4">
+            <div class="card-body">
+                <form method="get" action="/Payroll/SalaryStructures" class="row g-3 align-items-end">
+                    <div class="col-md-7">
+                        <label class="form-label fw-semibold">Chọn nhân viên để xem / cập nhật lịch sử lương hiệu lực</label>
+                        <select name="employeeId" class="form-select" onchange="this.form.submit()">
+                            @foreach (var emp in Model.Employees)
+                            {
+                                if (emp.Id == Model.SelectedEmployeeId)
+                                {
+                                    <option value="@emp.Id" selected>@emp.EmployeeCode - @emp.FullName (@emp.UnitName) | LCB gốc: @emp.BaseSalary.ToString("N0") đ</option>
+                                }
+                                else
+                                {
+                                    <option value="@emp.Id">@emp.EmployeeCode - @emp.FullName (@emp.UnitName) | LCB gốc: @emp.BaseSalary.ToString("N0") đ</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-5 text-md-end">
+                        <div class="small text-muted">
+                            Tất cả thay đổi giữa tháng tự động tách đoạn hiệu lực & chia tỷ lệ công/OT khi chạy bảng lương.
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="card vnm-card h-100">
+                    <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                        <span><i class="ti ti-timeline me-1 text-primary"></i>Lịch sử hiệu lực lương: @(selectedEmployee != null ? $"{selectedEmployee.EmployeeCode} - {selectedEmployee.FullName}" : "Chưa chọn")</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 small">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Hiệu lực</th>
+                                    <th class="text-end">Lương thực tế / BH</th>
+                                    <th>Hình thức / Thử việc</th>
+                                    <th>Mẫu lương & Phụ cấp</th>
+                                    <th>Quyết định</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model.EmployeeProfiles.Count == 0)
+                                {
+                                    <tr><td colspan="5" class="text-center text-muted py-4">Nhân viên chưa có bản ghi hồ sơ lương hiệu lực nào.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var p in Model.EmployeeProfiles)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-semibold text-primary">@p.EffectiveFrom.ToString("dd/MM/yyyy")</div>
+                                                <div class="text-muted">→ @(p.EffectiveTo.HasValue ? p.EffectiveTo.Value.ToString("dd/MM/yyyy") : "Hiện tại")</div>
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="fw-bold">@p.BaseSalary.ToString("N0") đ</div>
+                                                <div class="text-muted">Đóng BH: <span class="fw-semibold text-dark">@p.InsuranceSalary.ToString("N0") đ</span></div>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-secondary-subtle text-dark">@p.PayMode</span>
+                                                @if (p.UnitRate > 0m)
+                                                {
+                                                    <div class="text-muted">Đơn giá: @p.UnitRate.ToString("N0")</div>
+                                                }
+                                                @if (p.IsProbation)
+                                                {
+                                                    <div><span class="badge bg-warning-subtle text-warning-emphasis">Thử việc @p.ProbationRatePercent.ToString("0.#")%</span></div>
+                                                }
+                                                <div>
+                                                    <span class="badge @(p.IsUnionMember ? "bg-success-subtle text-success" : "bg-light text-muted")">
+                                                        @(p.IsUnionMember ? "Đoàn viên CĐ" : "Không CĐ")
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="fw-semibold">@(p.TemplateName ?? "Mặc định")</div>
+                                                @if (!string.IsNullOrWhiteSpace(p.ScaleAndStepLabel))
+                                                {
+                                                    <div class="text-muted">@p.ScaleAndStepLabel</div>
+                                                }
+                                                @if (p.PositionAllowance > 0 || p.OtherAllowance > 0)
+                                                {
+                                                    <div class="text-muted">PCCV: @p.PositionAllowance.ToString("N0") | Khác: @p.OtherAllowance.ToString("N0")</div>
+                                                }
+                                                @foreach (var fa in p.FixedAllowances)
+                                                {
+                                                    <div class="text-info">@fa.ComponentCode: @fa.Amount.ToString("N0") đ</div>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="fw-semibold">@(p.DecisionNumber ?? "-")</div>
+                                                <div class="text-muted">@(p.Reason ?? "")</div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card vnm-card">
+                    <div class="card-header bg-white fw-semibold">
+                        <i class="ti ti-plus me-1 text-success"></i>Thêm mốc hiệu lực lương mới
+                    </div>
+                    <div class="card-body">
+                        @if (canEdit && selectedEmployee != null)
+                        {
+                            <form method="post" action="/Payroll/SaveSalaryProfile" class="row g-2">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="employeeId" value="@selectedEmployee.Id" />
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Ngày hiệu lực</label>
+                                    <input type="date" name="effectiveFrom" class="form-control form-control-sm" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Hình thức trả lương</label>
+                                    <select name="payMode" class="form-select form-select-sm">
+                                        <option value="Monthly">Lương tháng (Monthly)</option>
+                                        <option value="Daily">Lương ngày (Daily)</option>
+                                        <option value="Hourly">Lương giờ (Hourly)</option>
+                                        <option value="PieceRate">Lương sản phẩm (PieceRate)</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Lương thực tế / thỏa thuận</label>
+                                    <input type="number" step="1000" min="0" name="baseSalary" class="form-control form-control-sm" value="@selectedEmployee.BaseSalary" required />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Lương đóng BHXH (tách riêng)</label>
+                                    <input type="number" step="1000" min="0" name="insuranceSalary" class="form-control form-control-sm" value="@selectedEmployee.BaseSalary" required />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Đơn giá (Ngày/Giờ/SP nếu có)</label>
+                                    <input type="number" step="100" min="0" name="unitRate" class="form-control form-control-sm" value="0" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Mẫu cấu trúc lương</label>
+                                    <select name="salaryTemplateId" class="form-select form-select-sm">
+                                        <option value="">-- Mặc định --</option>
+                                        @foreach (var tpl in Model.Templates.Where(t => t.IsActive))
+                                        {
+                                            <option value="@tpl.Id" selected="@tpl.IsDefaultForCompany">@tpl.TemplateCode - @tpl.TemplateName</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Ngạch / Bậc lương</label>
+                                    <select name="salaryStepId" class="form-select form-select-sm">
+                                        <option value="">-- Không gắn bậc --</option>
+                                        @foreach (var st in Model.SalarySteps)
+                                        {
+                                            <option value="@st.Id">@st.Label (@st.StandardSalary.ToString("N0") đ)</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Tỷ lệ hưởng thử việc (%)</label>
+                                    <input type="number" step="0.5" min="0" max="100" name="probationRatePercent" class="form-control form-control-sm" value="100" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Phụ cấp chức vụ</label>
+                                    <input type="number" step="1000" min="0" name="positionAllowance" class="form-control form-control-sm" value="0" />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Phụ cấp khác</label>
+                                    <input type="number" step="1000" min="0" name="otherAllowance" class="form-control form-control-sm" value="0" />
+                                </div>
+                                <div class="col-6 form-check ms-2 mt-2">
+                                    <input type="checkbox" class="form-check-input" name="isProbation" value="true" id="chkProb" />
+                                    <label class="form-check-label small" for="chkProb">Đang thử việc (≥ @Model.MinProbationSalaryRatePercent.ToString("0.#")%)</label>
+                                </div>
+                                <div class="col-5 form-check mt-2">
+                                    <input type="checkbox" class="form-check-input" name="isUnionMember" value="true" id="chkUnion" checked="@selectedEmployee.IsUnionMember" />
+                                    <label class="form-check-label small" for="chkUnion">Đoàn viên công đoàn</label>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label small fw-semibold">Số quyết định & Lý do điều chỉnh</label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" name="decisionNumber" class="form-control" placeholder="QĐ-ĐCL-2026/..." style="max-width: 150px;" />
+                                        <input type="text" name="reason" class="form-control" placeholder="Ví dụ: Điều chỉnh lương định kỳ từ ngày 16..." />
+                                    </div>
+                                </div>
+                                <div class="col-12 mt-3">
+                                    <button type="submit" class="btn btn-success btn-sm w-100 fw-semibold">
+                                        <i class="ti ti-device-floppy me-1"></i>Lưu mốc hiệu lực & Đóng mốc cũ
+                                    </button>
+                                </div>
+                            </form>
+                        }
+                        else
+                        {
+                            <div class="text-muted small">Bạn chỉ có quyền xem. Cần quyền <code>Payroll.Approve</code> để chỉnh sửa hồ sơ lương.</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: THÀNH PHẦN LƯƠNG & TRÌNH KIỂM TRA CÔNG THỨC NCalc -->
+    <div class="tab-pane fade" id="tab-formulas" role="tabpanel">
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="card vnm-card">
+                    <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                        <span><i class="ti ti-list-details me-1 text-primary"></i>Danh mục Thành phần lương & Công thức NCalc</span>
+                        <small class="text-muted">Bấm "Nạp sửa" để kiểm tra/chỉnh sửa</small>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 small">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Mã / Tên</th>
+                                    <th>Loại / Cách tính</th>
+                                    <th>Công thức / Mức miễn thuế</th>
+                                    <th>Căn cứ pháp lý</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in Model.Components)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="fw-bold font-monospace">@c.ComponentCode</div>
+                                            <div>@c.ComponentName</div>
+                                            @if (c.IsSocialInsuranceBase)
+                                            {
+                                                <span class="badge bg-primary-subtle text-primary">Tính BHXH</span>
+                                            }
+                                            @if (!c.ShowOnPayslip)
+                                            {
+                                                <span class="badge bg-secondary-subtle text-dark">Ẩn trên phiếu lương</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="badge @(c.ComponentType == "Deduction" ? "bg-danger-subtle text-danger" : c.ComponentType == "Info" ? "bg-info-subtle text-dark" : "bg-success-subtle text-success")">
+                                                @c.ComponentType
+                                            </span>
+                                            <div class="text-muted mt-1">@c.CalculationType</div>
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrWhiteSpace(c.FormulaExpression))
+                                            {
+                                                <code class="d-block text-wrap">@c.FormulaExpression</code>
+                                            }
+                                            else if (c.DefaultAmount > 0m)
+                                            {
+                                                <span>Mặc định: @c.DefaultAmount.ToString("N0") đ</span>
+                                            }
+                                            @if (!c.IsTaxable)
+                                            {
+                                                <div class="text-success fw-semibold">Miễn thuế TNCN 100%</div>
+                                            }
+                                            else if (c.TaxExemptLimit > 0m || !string.IsNullOrWhiteSpace(c.TaxExemptLimitParameterCode))
+                                            {
+                                                <div class="text-info">Trần miễn thuế: @c.TaxExemptLimit.ToString("N0") đ @(!string.IsNullOrWhiteSpace(c.TaxExemptLimitParameterCode) ? $"({c.TaxExemptLimitParameterCode})" : "")</div>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="text-muted">@(c.LegalReference ?? "-")</div>
+                                            @if (c.NeedsHrVerification)
+                                            {
+                                                <span class="badge bg-warning-subtle text-warning-emphasis">NeedsHrVerification</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <button type="button"
+                                                    class="btn btn-outline-primary btn-sm load-comp-btn"
+                                                    data-id="@c.Id"
+                                                    data-code="@c.ComponentCode"
+                                                    data-name="@c.ComponentName"
+                                                    data-type="@c.ComponentType"
+                                                    data-calc="@c.CalculationType"
+                                                    data-default="@c.DefaultAmount"
+                                                    data-taxable="@c.IsTaxable.ToString().ToLowerInvariant()"
+                                                    data-exempt="@c.TaxExemptLimit"
+                                                    data-exemptparam="@c.TaxExemptLimitParameterCode"
+                                                    data-sibase="@c.IsSocialInsuranceBase.ToString().ToLowerInvariant()"
+                                                    data-show="@c.ShowOnPayslip.ToString().ToLowerInvariant()"
+                                                    data-formula="@c.FormulaExpression"
+                                                    data-sort="@c.SortOrder"
+                                                    data-legal="@c.LegalReference"
+                                                    data-hrverify="@c.NeedsHrVerification.ToString().ToLowerInvariant()"
+                                                    data-desc="@c.Description">
+                                                Nạp sửa
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="card vnm-card">
+                    <div class="card-header bg-white fw-semibold">
+                        <i class="ti ti-flask me-1 text-primary"></i>Kiểm tra & Lưu Công thức NCalc
+                    </div>
+                    <div class="card-body">
+                        <form id="componentForm" method="post" action="/Payroll/SaveComponent" class="row g-2">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" id="compId" value="" />
+                            <div class="col-5">
+                                <label class="form-label small fw-semibold">Mã thành phần</label>
+                                <input type="text" name="componentCode" id="compCode" class="form-control form-control-sm text-uppercase font-monospace" placeholder="NIGHT_ALLOWANCE" required />
+                            </div>
+                            <div class="col-7">
+                                <label class="form-label small fw-semibold">Tên hiển thị</label>
+                                <input type="text" name="componentName" id="compName" class="form-control form-control-sm" placeholder="Phụ cấp làm đêm..." required />
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small fw-semibold">Loại</label>
+                                <select name="componentType" id="compType" class="form-select form-select-sm">
+                                    <option value="Earning">Earning (Thu nhập)</option>
+                                    <option value="Allowance">Allowance (Phụ cấp)</option>
+                                    <option value="Bonus">Bonus (Thưởng)</option>
+                                    <option value="Deduction">Deduction (Khấu trừ)</option>
+                                    <option value="Info">Info (Trung gian)</option>
+                                </select>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small fw-semibold">Cách tính</label>
+                                <select name="calculationType" id="compCalcType" class="form-select form-select-sm">
+                                    <option value="Formula">Formula (NCalc)</option>
+                                    <option value="Fixed">Fixed (Cố định)</option>
+                                    <option value="System">System (Engine)</option>
+                                </select>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small fw-semibold">Thứ tự / Mặc định</label>
+                                <input type="number" name="sortOrder" id="compSortOrder" class="form-control form-control-sm" value="20" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-semibold">Công thức NCalc</label>
+                                <textarea name="formulaExpression" id="compFormula" rows="2" class="form-control form-control-sm font-monospace" placeholder="Round(INFO_HOURLY_RATE * GIO_DEM * 0.30, 0)"></textarea>
+                                <div class="form-text small">
+                                    Biến có sẵn: <code>LUONG_CO_BAN_HIEN_TAI</code>, <code>LUONG_DONG_BH</code>, <code>CONG_CHUAN</code>, <code>CONG_THUC_TE</code>, <code>OT150</code>, <code>OT200</code>, <code>OT300</code>, <code>GIO_DEM</code>, <code>DIEM_KPI</code>, <code>HOA_HONG_DOANH_SO</code>, hoặc mã thành phần khác (VD: <code>INFO_HOURLY_RATE</code>). Hàm: <code>Round</code>, <code>Min</code>, <code>Max</code>, <code>Clamp</code>, <code>Iif</code>.
+                                </div>
+                            </div>
+
+                            <!-- Biến mẫu để kiểm tra công thức trước khi lưu -->
+                            <div class="col-12 bg-light p-2 rounded border">
+                                <div class="small fw-semibold mb-1"><i class="ti ti-test-pipe me-1"></i>Biến mẫu chạy thử công thức (trước khi lưu)</div>
+                                <div class="row g-1">
+                                    <div class="col-4">
+                                        <label class="small text-muted">LCB hiện tại</label>
+                                        <input type="number" id="sampleBaseSalary" class="form-control form-control-sm" value="20000000" />
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="small text-muted">Công chuẩn / Thực</label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" id="sampleStdDays" class="form-control" value="26" />
+                                            <input type="number" id="samplePayDays" class="form-control" value="26" />
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="small text-muted">OT150 / Giờ đêm</label>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" id="sampleOt150" class="form-control" value="4" />
+                                            <input type="number" id="sampleNightHrs" class="form-control" value="16" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" id="btnTestFormula" class="btn btn-outline-primary btn-sm w-100 mt-2 fw-semibold">
+                                    <i class="ti ti-player-play me-1"></i>Kiểm tra Cú pháp, Vòng lặp & Xem kết quả thử
+                                </button>
+                                <div id="formulaTestResultBox" class="mt-2 d-none small"></div>
+                            </div>
+
+                            <div class="col-4">
+                                <label class="form-label small fw-semibold">Mặc định (Fixed)</label>
+                                <input type="number" name="defaultAmount" id="compDefaultAmount" class="form-control form-control-sm" value="0" />
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small fw-semibold">Miễn thuế tối đa</label>
+                                <input type="number" name="taxExemptLimit" id="compExemptLimit" class="form-control form-control-sm" value="0" />
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small fw-semibold">Tham số trần thuế</label>
+                                <select name="taxExemptLimitParameterCode" id="compExemptParam" class="form-select form-select-sm">
+                                    <option value="">-- Không --</option>
+                                    @foreach (var pr in Model.TaxExemptParameters)
+                                    {
+                                        <option value="@pr.ParamCode">@pr.ParamCode (@pr.ParamValue.ToString("N0"))</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-12 d-flex flex-wrap gap-3 my-1">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="isTaxable" id="compIsTaxable" value="true" checked />
+                                    <label class="form-check-label small" for="compIsTaxable">Chịu thuế TNCN</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="isSocialInsuranceBase" id="compSiBase" value="true" />
+                                    <label class="form-check-label small" for="compSiBase">Tính đóng BHXH</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="showOnPayslip" id="compShowPayslip" value="true" checked />
+                                    <label class="form-check-label small" for="compShowPayslip">Hiện trên phiếu lương</label>
+                                </div>
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" name="needsHrVerification" id="compHrVerify" value="true" />
+                                    <label class="form-check-label small" for="compHrVerify">Cần HR đối chiếu</label>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small fw-semibold">Căn cứ pháp lý (LegalReference)</label>
+                                <input type="text" name="legalReference" id="compLegalRef" class="form-control form-control-sm" placeholder="VD: Điều 98 BLLĐ 2019 / TT 111/2013..." />
+                            </div>
+                            @if (canEdit)
+                            {
+                                <div class="col-12 mt-2 d-flex gap-2">
+                                    <button type="submit" class="btn vnm-btn-primary btn-sm flex-fill fw-semibold">
+                                        <i class="ti ti-device-floppy me-1"></i>Lưu Thành phần lương
+                                    </button>
+                                    <button type="button" id="btnResetCompForm" class="btn btn-outline-secondary btn-sm">Tạo mới</button>
+                                </div>
+                            }
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: MẪU CẤU TRÚC LƯƠNG THEO NHÓM ĐỐI TƯỢNG -->
+    <div class="tab-pane fade" id="tab-templates" role="tabpanel">
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <div class="row g-3">
+                    @foreach (var tpl in Model.Templates)
+                    {
+                        <div class="col-md-6">
+                            <div class="card vnm-card h-100">
+                                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="fw-bold">@tpl.TemplateName</div>
+                                        <span class="badge bg-primary-subtle text-primary font-monospace">@tpl.TemplateCode</span>
+                                        <span class="badge bg-light text-dark border">@tpl.StaffGroup</span>
+                                        @if (tpl.IsDefaultForCompany)
+                                        {
+                                            <span class="badge bg-success-subtle text-success">Mặc định</span>
+                                        }
+                                    </div>
+                                    <span class="badge bg-secondary-subtle text-dark">@tpl.RoundingRule</span>
+                                </div>
+                                <div class="card-body small">
+                                    <p class="text-muted mb-2">@tpl.Description</p>
+                                    <div class="mb-2">
+                                        <strong>Căn cứ:</strong> @(tpl.LegalReference ?? "-")
+                                        @if (tpl.NeedsHrVerification)
+                                        {
+                                            <span class="badge bg-warning-subtle text-warning-emphasis ms-1">HR đối chiếu</span>
+                                        }
+                                    </div>
+                                    <div class="fw-semibold mb-1">Thành phần áp dụng (@tpl.Components.Count):</div>
+                                    <ul class="list-unstyled mb-0">
+                                        @foreach (var tc in tpl.Components.OrderBy(x => x.SortOrder))
+                                        {
+                                            <li class="py-1 border-bottom d-flex justify-content-between">
+                                                <span><code>@tc.ComponentCode</code> - @tc.ComponentName</span>
+                                                <span class="text-muted">#@tc.SortOrder</span>
+                                            </li>
+                                        }
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card vnm-card">
+                    <div class="card-header bg-white fw-semibold">
+                        <i class="ti ti-layout-grid-add me-1 text-success"></i>Tạo / Cập nhật Mẫu cấu trúc lương
+                    </div>
+                    <div class="card-body">
+                        @if (canEdit)
+                        {
+                            <form method="post" action="/Payroll/SaveTemplate" class="row g-2">
+                                @Html.AntiForgeryToken()
+                                <div class="col-5">
+                                    <label class="form-label small fw-semibold">Mã mẫu</label>
+                                    <input type="text" name="templateCode" class="form-control form-control-sm font-monospace text-uppercase" placeholder="EXEC_PKG" required />
+                                </div>
+                                <div class="col-7">
+                                    <label class="form-label small fw-semibold">Tên mẫu lương</label>
+                                    <input type="text" name="templateName" class="form-control form-control-sm" placeholder="Khối Quản lý..." required />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Nhóm đối tượng</label>
+                                    <select name="staffGroup" class="form-select form-select-sm">
+                                        <option value="Office">Văn phòng (Office)</option>
+                                        <option value="Factory">Nhà máy (Factory)</option>
+                                        <option value="Sales">Kinh doanh (Sales)</option>
+                                        <option value="Management">Quản lý (Management)</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Làm tròn</label>
+                                    <select name="roundingRule" class="form-select form-select-sm">
+                                        <option value="RoundToDong">Làm tròn đến đồng (mặc định)</option>
+                                        <option value="RoundHalfToEven">RoundHalfToEven</option>
+                                        <option value="RoundToThousand">Làm tròn đến nghìn</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Chu kỳ trả mặc định</label>
+                                    <select name="defaultPayFrequency" class="form-select form-select-sm">
+                                        <option value="Monthly">Monthly</option>
+                                        <option value="Daily">Daily</option>
+                                        <option value="Hourly">Hourly</option>
+                                        <option value="PieceRate">PieceRate</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-semibold">Tỷ lệ thử việc (%)</label>
+                                    <input type="number" step="0.5" name="defaultProbationSalaryRatePercent" class="form-control form-control-sm" value="@Model.MinProbationSalaryRatePercent" />
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label small fw-semibold">Chọn thành phần lương thuộc mẫu</label>
+                                    <div class="border rounded p-2" style="max-height: 190px; overflow-y: auto;">
+                                        @foreach (var comp in Model.Components.Where(x => x.IsActive))
+                                        {
+                                            <div class="form-check small">
+                                                <input class="form-check-input" type="checkbox" name="selectedComponentIds" value="@comp.Id" id="tpl_c_@comp.Id" checked="@(comp.ComponentCode is "INFO_HOURLY_RATE" or "BASIC_PAY" or "SI_DEDUCTION" or "PIT_TAX")" />
+                                                <label class="form-check-label" for="tpl_c_@comp.Id">
+                                                    <code>@comp.ComponentCode</code> - @comp.ComponentName
+                                                </label>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <input type="text" name="legalReference" class="form-control form-control-sm" placeholder="Căn cứ quy chế / văn bản..." />
+                                </div>
+                                <div class="col-12 d-flex gap-3">
+                                    <div class="form-check small">
+                                        <input class="form-check-input" type="checkbox" name="isActive" value="true" checked id="tplActive" />
+                                        <label class="form-check-label" for="tplActive">Hiệu lực</label>
+                                    </div>
+                                    <div class="form-check small">
+                                        <input class="form-check-input" type="checkbox" name="needsHrVerification" value="true" checked id="tplVerify" />
+                                        <label class="form-check-label" for="tplVerify">HR đối chiếu</label>
+                                    </div>
+                                </div>
+                                <div class="col-12 mt-2">
+                                    <button type="submit" class="btn btn-success btn-sm w-100 fw-semibold">
+                                        <i class="ti ti-device-floppy me-1"></i>Lưu Mẫu Cấu trúc Lương
+                                    </button>
+                                </div>
+                            </form>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    const form = document.getElementById('componentForm');
+    const tokenInput = form ? form.querySelector('input[name="__RequestVerificationToken"]') : null;
+    const btnTest = document.getElementById('btnTestFormula');
+    const box = document.getElementById('formulaTestResultBox');
+
+    if (btnTest && form) {
+        btnTest.addEventListener('click', async function () {
+            const payload = {
+                formulaExpression: document.getElementById('compFormula').value,
+                targetComponentCode: document.getElementById('compCode').value,
+                isTaxable: document.getElementById('compIsTaxable').checked,
+                taxExemptLimit: Number(document.getElementById('compExemptLimit').value || 0),
+                taxExemptLimitParameterCode: document.getElementById('compExemptParam').value || null,
+                sampleVariables: {
+                    LUONG_CO_BAN: Number(document.getElementById('sampleBaseSalary').value || 0),
+                    LUONG_CO_BAN_HIEN_TAI: Number(document.getElementById('sampleBaseSalary').value || 0),
+                    CONG_CHUAN: Number(document.getElementById('sampleStdDays').value || 26),
+                    CONG_THUC_TE: Number(document.getElementById('samplePayDays').value || 26),
+                    OT150: Number(document.getElementById('sampleOt150').value || 0),
+                    GIO_DEM: Number(document.getElementById('sampleNightHrs').value || 0)
+                }
+            };
+
+            box.classList.remove('d-none', 'alert', 'alert-success', 'alert-danger');
+            box.innerHTML = 'Đang kiểm tra công thức NCalc...';
+
+            try {
+                const res = await fetch('/Payroll/TestFormula', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': tokenInput ? tokenInput.value : ''
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.isValid) {
+                    box.className = 'mt-2 alert alert-success p-2 mb-0 small';
+                    box.innerHTML = `<strong><i class="ti ti-check me-1"></i>Công thức hợp lệ!</strong><br/>
+                        Kết quả tính thử: <strong>${Number(data.evaluatedAmount || 0).toLocaleString('vi-VN')}</strong> | Chịu thuế: <strong>${Number(data.taxableAmount || 0).toLocaleString('vi-VN')}</strong><br/>
+                        Thứ tự phụ thuộc: <code>${(data.dependencyOrder || []).join(' → ')}</code>`;
+                } else {
+                    box.className = 'mt-2 alert alert-danger p-2 mb-0 small';
+                    box.innerHTML = `<strong><i class="ti ti-alert-triangle me-1"></i>Không hợp lệ:</strong> ${data.errorMessage || 'Lỗi công thức'}`;
+                }
+            } catch (e) {
+                box.className = 'mt-2 alert alert-danger p-2 mb-0 small';
+                box.textContent = 'Không gọi được endpoint kiểm tra: ' + e;
+            }
+        });
+    }
+
+    document.querySelectorAll('.load-comp-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.getElementById('compId').value = btn.dataset.id || '';
+            document.getElementById('compCode').value = btn.dataset.code || '';
+            document.getElementById('compName').value = btn.dataset.name || '';
+            document.getElementById('compType').value = btn.dataset.type || 'Earning';
+            document.getElementById('compCalcType').value = btn.dataset.calc || 'Formula';
+            document.getElementById('compDefaultAmount').value = btn.dataset.default || '0';
+            document.getElementById('compIsTaxable').checked = btn.dataset.taxable === 'true';
+            document.getElementById('compExemptLimit').value = btn.dataset.exempt || '0';
+            document.getElementById('compExemptParam').value = btn.dataset.exemptparam || '';
+            document.getElementById('compSiBase').checked = btn.dataset.sibase === 'true';
+            document.getElementById('compShowPayslip').checked = btn.dataset.show === 'true';
+            document.getElementById('compFormula').value = btn.dataset.formula || '';
+            document.getElementById('compSortOrder').value = btn.dataset.sort || '20';
+            document.getElementById('compLegalRef').value = btn.dataset.legal || '';
+            document.getElementById('compHrVerify').checked = btn.dataset.hrverify === 'true';
+            if (box) box.classList.add('d-none');
+        });
+    });
+
+    const btnReset = document.getElementById('btnResetCompForm');
+    if (btnReset && form) {
+        btnReset.addEventListener('click', () => {
+            form.reset();
+            document.getElementById('compId').value = '';
+            if (box) box.classList.add('d-none');
+        });
+    }
+})();
+</script>
+}

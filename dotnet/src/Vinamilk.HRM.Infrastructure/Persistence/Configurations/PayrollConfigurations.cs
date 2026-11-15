@@ -28,6 +28,8 @@ public class PayrollStatutoryParameterConfiguration : IEntityTypeConfiguration<P
         builder.Property(x => x.CompanyUnionFeeRate).HasColumnType("decimal(7,4)");
         builder.Property(x => x.SelfDeduction).HasColumnType("decimal(18,2)");
         builder.Property(x => x.DependentDeduction).HasColumnType("decimal(18,2)");
+        builder.Property(x => x.MinProbationSalaryRatePercent).HasColumnType("decimal(5,2)").HasDefaultValue(85.00m);
+        builder.Property(x => x.NeedsHrVerification).HasDefaultValue(true);
 
         builder.HasIndex(x => new { x.EffectiveFrom, x.EffectiveTo })
             .HasDatabaseName("IX_PayrollStatutoryParameters_EffectivePeriod");
@@ -98,13 +100,135 @@ public class SalaryComponentConfiguration : IEntityTypeConfiguration<SalaryCompo
         builder.Property(x => x.ComponentCode).HasColumnType("varchar(50)").IsRequired();
         builder.Property(x => x.ComponentName).HasMaxLength(150).IsRequired();
         builder.Property(x => x.ComponentType).HasColumnType("varchar(30)").IsRequired();
+        builder.Property(x => x.CalculationType).HasColumnType("varchar(30)").HasDefaultValue("Formula");
+        builder.Property(x => x.DefaultAmount).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
         builder.Property(x => x.TaxExemptLimit).HasColumnType("decimal(18,2)");
-        builder.Property(x => x.FormulaExpression).HasMaxLength(500);
+        builder.Property(x => x.TaxExemptLimitParameterCode).HasColumnType("varchar(50)");
+        builder.Property(x => x.ShowOnPayslip).HasDefaultValue(true);
+        builder.Property(x => x.FormulaExpression).HasMaxLength(1000);
+        builder.Property(x => x.LegalReference).HasMaxLength(300);
+        builder.Property(x => x.Description).HasMaxLength(500);
 
         builder.HasIndex(x => x.ComponentCode)
             .IsUnique()
             .HasDatabaseName("UQ_SalaryComponents_ComponentCode")
             .HasFilter("[IsDeleted] = 0");
+    }
+}
+
+public class SalaryTemplateConfiguration : IEntityTypeConfiguration<SalaryTemplate>
+{
+    public void Configure(EntityTypeBuilder<SalaryTemplate> builder)
+    {
+        builder.ConfigureBaseAuditable<SalaryTemplate, int>("SalaryTemplates", "payroll");
+
+        builder.Property(x => x.TemplateCode).HasColumnType("varchar(50)").IsRequired();
+        builder.Property(x => x.TemplateName).HasMaxLength(200).IsRequired();
+        builder.Property(x => x.StaffGroup).HasColumnType("varchar(30)").HasDefaultValue("Office");
+        builder.Property(x => x.DefaultPayFrequency).HasColumnType("varchar(30)").HasDefaultValue("Monthly");
+        builder.Property(x => x.DefaultProbationSalaryRatePercent).HasColumnType("decimal(5,2)").HasDefaultValue(85.00m);
+        builder.Property(x => x.RoundingRule).HasColumnType("varchar(30)").HasDefaultValue("RoundToDong");
+        builder.Property(x => x.LegalReference).HasMaxLength(300);
+        builder.Property(x => x.Description).HasMaxLength(500);
+
+        builder.HasIndex(x => x.TemplateCode)
+            .IsUnique()
+            .HasDatabaseName("UQ_SalaryTemplates_TemplateCode")
+            .HasFilter("[IsDeleted] = 0");
+    }
+}
+
+public class SalaryTemplateComponentConfiguration : IEntityTypeConfiguration<SalaryTemplateComponent>
+{
+    public void Configure(EntityTypeBuilder<SalaryTemplateComponent> builder)
+    {
+        builder.ConfigureBaseAuditable<SalaryTemplateComponent, int>("SalaryTemplateComponents", "payroll");
+
+        builder.Property(x => x.OverrideFormulaExpression).HasMaxLength(1000);
+        builder.Property(x => x.DefaultFixedAmount).HasColumnType("decimal(18,0)");
+
+        builder.HasIndex(x => new { x.SalaryTemplateId, x.SalaryComponentId })
+            .IsUnique()
+            .HasDatabaseName("UQ_SalaryTemplateComponents_Template_Comp")
+            .HasFilter("[IsDeleted] = 0");
+
+        builder.HasOne(x => x.SalaryTemplate)
+            .WithMany(t => t.Components)
+            .HasForeignKey(x => x.SalaryTemplateId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.SalaryComponent)
+            .WithMany(c => c.TemplateComponents)
+            .HasForeignKey(x => x.SalaryComponentId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class EmployeeSalaryProfileConfiguration : IEntityTypeConfiguration<EmployeeSalaryProfile>
+{
+    public void Configure(EntityTypeBuilder<EmployeeSalaryProfile> builder)
+    {
+        builder.ConfigureBaseAuditable<EmployeeSalaryProfile, int>("EmployeeSalaryProfiles", "payroll");
+
+        builder.Property(x => x.BaseSalary).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.InsuranceSalary).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.PayMode).HasColumnType("varchar(30)").HasDefaultValue("Monthly");
+        builder.Property(x => x.UnitRate).HasColumnType("decimal(18,4)").HasDefaultValue(0m);
+        builder.Property(x => x.ProbationRatePercent).HasColumnType("decimal(5,2)").HasDefaultValue(100.00m);
+        builder.Property(x => x.PositionAllowance).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
+        builder.Property(x => x.OtherAllowance).HasColumnType("decimal(18,0)").HasDefaultValue(0m);
+        builder.Property(x => x.DecisionNumber).HasMaxLength(80);
+        builder.Property(x => x.Reason).HasMaxLength(500);
+
+        builder.HasIndex(x => new { x.EmployeeId, x.EffectiveFrom })
+            .HasDatabaseName("IX_EmployeeSalaryProfiles_Emp_Effective");
+
+        builder.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.SalaryScale)
+            .WithMany()
+            .HasForeignKey(x => x.SalaryScaleId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.SalaryStep)
+            .WithMany()
+            .HasForeignKey(x => x.SalaryStepId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.SalaryTemplate)
+            .WithMany(t => t.EmployeeProfiles)
+            .HasForeignKey(x => x.SalaryTemplateId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class EmployeeSalaryProfileAllowanceConfiguration : IEntityTypeConfiguration<EmployeeSalaryProfileAllowance>
+{
+    public void Configure(EntityTypeBuilder<EmployeeSalaryProfileAllowance> builder)
+    {
+        builder.ConfigureBaseAuditable<EmployeeSalaryProfileAllowance, int>("EmployeeSalaryProfileAllowances", "payroll");
+
+        builder.Property(x => x.ComponentCode).HasColumnType("varchar(50)").IsRequired();
+        builder.Property(x => x.Amount).HasColumnType("decimal(18,0)");
+        builder.Property(x => x.Notes).HasMaxLength(300);
+
+        builder.HasIndex(x => new { x.EmployeeSalaryProfileId, x.SalaryComponentId })
+            .IsUnique()
+            .HasDatabaseName("UQ_EmpSalaryProfileAllowances_Profile_Comp")
+            .HasFilter("[IsDeleted] = 0");
+
+        builder.HasOne(x => x.EmployeeSalaryProfile)
+            .WithMany(p => p.FixedAllowances)
+            .HasForeignKey(x => x.EmployeeSalaryProfileId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(x => x.SalaryComponent)
+            .WithMany()
+            .HasForeignKey(x => x.SalaryComponentId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 

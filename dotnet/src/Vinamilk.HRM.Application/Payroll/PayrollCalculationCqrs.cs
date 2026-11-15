@@ -21,7 +21,26 @@ public sealed record PayrollCalculationInput(
     int DependentCount,
     bool IsUnionMember = true,
     int WageRegion = 1,
-    decimal UnusedLeavePayout = 0m);
+    decimal UnusedLeavePayout = 0m,
+    decimal? InsuranceContractSalaryOverride = null,
+    decimal? PrecomputedActualBaseSalary = null,
+    decimal? PrecomputedOvertimePay = null,
+    decimal ExtraTemplateEarnings = 0m,
+    decimal ExtraTaxExemptAmount = 0m,
+    decimal CustomDeductions = 0m);
+
+public sealed record MidMonthAggregatedPayrollResult(
+    PayrollCalculationBreakdown Breakdown,
+    decimal EffectiveContractBaseSalary,
+    decimal EffectivePositionAllowance,
+    decimal EffectiveOtherAllowance,
+    decimal ExtraTemplateEarnings,
+    decimal TaxExemptAmount,
+    decimal CustomDeductions,
+    decimal InsuranceContractSalaryUsed,
+    IReadOnlyList<MidMonthPayrollSliceBreakdown> Slices,
+    IReadOnlyList<EvaluatedSalaryLineDto> AggregatedLines,
+    string? SplitSummaryNote);
 
 public sealed record PayrollStatutoryContext(
     PayrollStatutoryParameter Parameter,
@@ -116,24 +135,31 @@ public static class VietnamPayrollEngine
         if (input.StandardWorkdays <= 0m)
             throw new ArgumentOutOfRangeException(nameof(input), "Số ngày công chuẩn kỳ lương phải lớn hơn 0.");
 
-        var actualBase = Math.Round(
+        var actualBase = input.PrecomputedActualBaseSalary ?? Math.Round(
             input.ContractBaseSalary * (input.PayableWorkdays / input.StandardWorkdays),
             0,
             MidpointRounding.AwayFromZero);
 
         var hourlyRate = input.ContractBaseSalary / (input.StandardWorkdays * 8m);
-        var otPay = Math.Round(
+        var otPay = input.PrecomputedOvertimePay ?? Math.Round(
             hourlyRate * (input.OtHours150 * 1.5m + input.OtHours200 * 2.0m + input.OtHours300 * 3.0m),
             0,
             MidpointRounding.AwayFromZero);
 
-        var gross = actualBase + input.PositionAllowance + input.OtherAllowance + otPay + input.KpiBonus + input.UnusedLeavePayout;
+        var gross = actualBase
+            + input.PositionAllowance
+            + input.OtherAllowance
+            + otPay
+            + input.KpiBonus
+            + input.UnusedLeavePayout
+            + input.ExtraTemplateEarnings;
 
         var siCap = parameter.StatutoryBaseSalary * parameter.SocialInsuranceCapMultiplier;
         var regionalMinWage = parameter.GetRegionalMinWage(input.WageRegion);
         var uiCap = regionalMinWage * parameter.UnemploymentInsuranceCapMultiplier;
 
-        var insContractSalary = input.ContractBaseSalary + input.PositionAllowance;
+        var insContractSalary = input.InsuranceContractSalaryOverride
+            ?? (input.ContractBaseSalary + input.PositionAllowance);
         var siBase = Math.Min(insContractSalary, siCap);
         var uiBase = Math.Min(insContractSalary, uiCap);
 
@@ -151,11 +177,11 @@ public static class VietnamPayrollEngine
 
         var selfDeduction = parameter.SelfDeduction;
         var depDeduction = Math.Max(0, input.DependentCount) * parameter.DependentDeduction;
-        var taxableIncome = Math.Max(0m, gross - totalEmpIns);
+        var taxableIncome = Math.Max(0m, gross - totalEmpIns - Math.Max(0m, input.ExtraTaxExemptAmount));
         var assessableIncome = Math.Max(0m, taxableIncome - selfDeduction - depDeduction);
         var pit = CalculateProgressivePit(assessableIncome, pitBrackets);
 
-        var net = Math.Max(0m, gross - totalEmpIns - pit - input.DisciplineDeduction);
+        var net = Math.Max(0m, gross - totalEmpIns - pit - input.DisciplineDeduction - Math.Max(0m, input.CustomDeductions));
 
         return new PayrollCalculationBreakdown(
             actualBase,
@@ -176,6 +202,169 @@ public static class VietnamPayrollEngine
             assessableIncome,
             pit,
             net);
+    }
+
+    /// <summary>
+    /// Tổng hợp kỳ lương có thể chia nhiều đoạn hiệu lực trong tháng (đổi lương/phụ cấp giữa tháng),
+    /// hỗ trợ hình thức trả Monthly/Daily/Hourly/PieceRate, thử việc, miễn thuế theo trần tháng và lương đóng BH tách riêng.
+    /// </summary>
+    public static MidMonthAggregatedPayrollResult CalculateFromMidMonthSlices(
+        IReadOnlyList<PayrollPeriodProfileSliceInput> slices,
+        PayrollStatutoryContext statutoryContext,
+        decimal standardWorkdays,
+        decimal totalPayableWorkdays,
+        decimal totalOt150,
+        decimal totalOt200,
+        decimal totalOt300,
+        int dependentCount,
+        int wageRegion,
+        decimal unusedLeavePayout = 0m,
+        decimal kpiBonus = 0m,
+        decimal disciplineDeduction = 0m,
+        string roundingRule = "RoundToDong",
+        IReadOnlyDictionary<string, decimal>? taxExemptParamValues = null)
+    {
+        if (slices == null || slices.Count == 0)
+            throw new ArgumentException("Danh sách đoạn hiệu lực hồ sơ lương không được rỗng.", nameof(slices));
+
+        var evaluatedSlices = new List<MidMonthPayrollSliceBreakdown>(slices.Count);
+        var specLookup = new Dictionary<string, FormulaComponentSpec>(StringComparer.OrdinalIgnoreCase);
+
+        for (int i = 0; i < slices.Count; i++)
+        {
+            var slice = slices[i];
+            if (slice.TemplateComponents != null)
+            {
+                foreach (var spec in slice.TemplateComponents)
+                    specLookup[spec.ComponentCode] = spec;
+            }
+
+            evaluatedSlices.Add(MidMonthSalarySplitter.EvaluateSlice(
+                slice,
+                standardWorkdays,
+                roundingRule,
+                taxExemptParamValues,
+                extraCommissionOrKpi: i == slices.Count - 1 ? kpiBonus : 0m));
+        }
+
+        decimal sumActualBase = evaluatedSlices.Sum(s => s.ActualBaseSalary);
+        decimal sumPosAllowance = evaluatedSlices.Sum(s => s.PositionAllowance);
+        decimal sumOtherAllowance = evaluatedSlices.Sum(s => s.OtherAllowance);
+        decimal sumOtPay = evaluatedSlices.Sum(s => s.OvertimePay);
+        decimal sumExtraEarnings = evaluatedSlices.Sum(s => s.ExtraTemplateEarnings);
+        decimal sumCustomDeductions = evaluatedSlices.Sum(s => s.CustomDeductions);
+
+        // Aggregate evaluated component lines across segments and enforce monthly TaxExemptLimit cap cleanly
+        var groupedLines = evaluatedSlices
+            .SelectMany(s => s.Lines)
+            .GroupBy(l => l.ComponentCode, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var first = g.First();
+                decimal rawSum = g.Sum(x => x.RawValue);
+                decimal finalSum = g.Sum(x => x.FinalAmount);
+                bool isInfo = string.Equals(first.ComponentType, "Info", StringComparison.OrdinalIgnoreCase);
+                bool isDeduction = string.Equals(first.ComponentType, "Deduction", StringComparison.OrdinalIgnoreCase);
+
+                decimal exemptCap = 0m;
+                if (specLookup.TryGetValue(first.ComponentCode, out var spec))
+                {
+                    exemptCap = spec.TaxExemptLimit;
+                    if (!string.IsNullOrWhiteSpace(spec.TaxExemptLimitParameterCode) &&
+                        taxExemptParamValues != null &&
+                        taxExemptParamValues.TryGetValue(spec.TaxExemptLimitParameterCode, out var pVal))
+                    {
+                        exemptCap = pVal;
+                    }
+                }
+
+                decimal taxableAmount = 0m;
+                if (!isInfo && !isDeduction)
+                {
+                    if (!first.IsTaxable)
+                    {
+                        taxableAmount = 0m;
+                    }
+                    else if (exemptCap > 0m)
+                    {
+                        var exemptAmt = Math.Min(Math.Max(0m, finalSum), exemptCap);
+                        taxableAmount = Math.Max(0m, finalSum - exemptAmt);
+                    }
+                    else
+                    {
+                        taxableAmount = finalSum;
+                    }
+                }
+
+                var mergedNote = g.Count() > 1
+                    ? $"Tách {g.Count()} đoạn hiệu lực trong kỳ"
+                    : first.Note;
+
+                return new EvaluatedSalaryLineDto(
+                    first.SalaryComponentId,
+                    first.ComponentCode,
+                    first.ComponentName,
+                    first.ComponentType,
+                    rawSum,
+                    finalSum,
+                    taxableAmount,
+                    first.IsTaxable,
+                    first.IsSocialInsuranceBase,
+                    first.ShowOnPayslip,
+                    mergedNote);
+            })
+            .ToList();
+
+        decimal totalTaxExempt = groupedLines
+            .Where(l => !string.Equals(l.ComponentType, "Info", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(l.ComponentType, "Deduction", StringComparison.OrdinalIgnoreCase))
+            .Sum(l => Math.Max(0m, l.FinalAmount - l.TaxableAmount));
+
+        var latestSlice = evaluatedSlices[^1];
+        var latestProfile = slices[^1].Profile;
+        decimal insContractSalary = latestProfile.InsuranceSalary > 0m
+            ? latestProfile.InsuranceSalary
+            : (latestSlice.BaseSalary + latestProfile.PositionAllowance);
+
+        var breakdown = Calculate(new PayrollCalculationInput(
+            ContractBaseSalary: latestSlice.BaseSalary,
+            PositionAllowance: sumPosAllowance,
+            OtherAllowance: sumOtherAllowance,
+            StandardWorkdays: standardWorkdays,
+            PayableWorkdays: totalPayableWorkdays,
+            OtHours150: totalOt150,
+            OtHours200: totalOt200,
+            OtHours300: totalOt300,
+            KpiBonus: kpiBonus,
+            DisciplineDeduction: disciplineDeduction,
+            DependentCount: dependentCount,
+            IsUnionMember: latestProfile.IsUnionMember,
+            WageRegion: wageRegion,
+            UnusedLeavePayout: unusedLeavePayout,
+            InsuranceContractSalaryOverride: insContractSalary,
+            PrecomputedActualBaseSalary: sumActualBase,
+            PrecomputedOvertimePay: sumOtPay,
+            ExtraTemplateEarnings: sumExtraEarnings,
+            ExtraTaxExemptAmount: totalTaxExempt,
+            CustomDeductions: sumCustomDeductions), statutoryContext);
+
+        string? splitNote = evaluatedSlices.Count > 1
+            ? "Tách lương theo hiệu lực: " + string.Join("; ", evaluatedSlices.Select(s =>
+                $"{s.SegmentStart:dd/MM}-{s.SegmentEnd:dd/MM}: {s.SegmentWorkdays:N2} công, LCB={s.BaseSalary:N0}, Thực={s.ActualBaseSalary:N0}"))
+            : null;
+
+        return new MidMonthAggregatedPayrollResult(
+            breakdown,
+            latestSlice.BaseSalary,
+            sumPosAllowance,
+            sumOtherAllowance,
+            sumExtraEarnings,
+            totalTaxExempt,
+            sumCustomDeductions,
+            insContractSalary,
+            evaluatedSlices,
+            groupedLines,
+            splitNote);
     }
 
     /// <summary>
@@ -258,12 +447,26 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
                 $"Kỳ lương {period.PeriodCode} đang ở trạng thái '{period.Status}', không được phép tính lại hoặc chỉnh sửa.");
         }
 
+        var periodStartDate = period.StartDate != default
+            ? period.StartDate
+            : new DateOnly(period.Year, period.Month, 1);
         var periodEndDate = period.EndDate != default
             ? period.EndDate
             : new DateOnly(period.Year, period.Month, DateTime.DaysInMonth(period.Year, period.Month));
 
         var statutoryContext = await VietnamPayrollEngine.ResolveStatutoryContextAsync(
             _context, periodEndDate, cancellationToken);
+
+        // Nạp tham số miễn thuế & cấu hình phụ thuộc ngày hiệu lực kỳ lương
+        var activeParams = await _context.PayrollParameters
+            .AsNoTracking()
+            .Where(p => p.EffectiveFrom <= periodEndDate && (!p.EffectiveTo.HasValue || p.EffectiveTo.Value >= periodStartDate))
+            .OrderBy(p => p.EffectiveFrom)
+            .ToListAsync(cancellationToken);
+
+        var taxExemptParamValues = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        foreach (var prm in activeParams)
+            taxExemptParamValues[prm.ParamCode] = prm.ParamValue;
 
         var periodSettlements = await _context.TerminationLeaveSettlements
             .Where(s => s.TargetPayrollYear == period.Year
@@ -294,6 +497,80 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
         var attendanceMap = await _context.MonthlyAttendanceSummaries
             .Where(a => a.Year == period.Year && a.Month == period.Month && employeeIds.Contains(a.EmployeeId))
             .ToDictionaryAsync(a => a.EmployeeId, cancellationToken);
+
+        // Nạp hồ sơ lương hiệu lực trong kỳ + mẫu lương & công thức
+        var activeProfiles = await _context.EmployeeSalaryProfiles
+            .Include(p => p.FixedAllowances)
+            .Include(p => p.SalaryTemplate)
+            .AsNoTracking()
+            .Where(p => p.IsActive
+                && employeeIds.Contains(p.EmployeeId)
+                && p.EffectiveFrom <= periodEndDate
+                && (!p.EffectiveTo.HasValue || p.EffectiveTo.Value >= periodStartDate))
+            .OrderBy(p => p.EffectiveFrom)
+            .ToListAsync(cancellationToken);
+
+        var profilesByEmpId = activeProfiles
+            .GroupBy(p => p.EmployeeId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<EmployeeSalaryProfile>)g.ToList());
+
+        var templateIds = activeProfiles
+            .Where(p => p.SalaryTemplateId.HasValue)
+            .Select(p => p.SalaryTemplateId!.Value)
+            .Distinct()
+            .ToList();
+
+        var templateComponentMap = new Dictionary<int, IReadOnlyList<FormulaComponentSpec>>();
+        var templateRoundingMap = new Dictionary<int, string>();
+        if (templateIds.Count > 0)
+        {
+            var templates = await _context.SalaryTemplates
+                .Include(t => t.Components)
+                    .ThenInclude(tc => tc.SalaryComponent)
+                .AsNoTracking()
+                .Where(t => templateIds.Contains(t.Id))
+                .ToListAsync(cancellationToken);
+
+            foreach (var tpl in templates)
+            {
+                templateRoundingMap[tpl.Id] = string.IsNullOrWhiteSpace(tpl.RoundingRule) ? "RoundToDong" : tpl.RoundingRule;
+                templateComponentMap[tpl.Id] = tpl.Components
+                    .Where(tc => tc.SalaryComponent.IsActive)
+                    .OrderBy(tc => tc.SortOrder)
+                    .Select(tc => new FormulaComponentSpec(
+                        tc.SalaryComponentId,
+                        tc.SalaryComponent.ComponentCode,
+                        tc.SalaryComponent.ComponentName,
+                        tc.SalaryComponent.ComponentType,
+                        tc.SalaryComponent.CalculationType,
+                        tc.DefaultFixedAmount ?? tc.SalaryComponent.DefaultAmount,
+                        tc.OverrideFormulaExpression ?? tc.SalaryComponent.FormulaExpression,
+                        tc.SortOrder,
+                        tc.SalaryComponent.IsTaxable,
+                        tc.SalaryComponent.TaxExemptLimit,
+                        tc.SalaryComponent.TaxExemptLimitParameterCode,
+                        tc.SalaryComponent.IsSocialInsuranceBase,
+                        tc.SalaryComponent.ShowOnPayslip))
+                    .ToList();
+            }
+        }
+
+        Dictionary<int, List<Domain.Entities.Time.DailyAttendance>> dailyAttendanceByEmpId = new();
+        if (activeProfiles.Count > 0)
+        {
+            var empIdsWithProfiles = profilesByEmpId.Keys.ToHashSet();
+            var dailyRows = await _context.DailyAttendances
+                .AsNoTracking()
+                .Where(d => empIdsWithProfiles.Contains(d.EmployeeId)
+                    && d.AttendanceDate >= periodStartDate
+                    && d.AttendanceDate <= periodEndDate)
+                .OrderBy(d => d.AttendanceDate)
+                .ToListAsync(cancellationToken);
+
+            dailyAttendanceByEmpId = dailyRows
+                .GroupBy(d => d.EmployeeId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
 
         var dependentCounts = await _context.EmployeeDependents
             .Where(d => d.IsTaxDeductible && employeeIds.Contains(d.EmployeeId))
@@ -329,7 +606,16 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
             ? allCurrentRecords.Where(r => r.EmployeeId == request.EmployeeId.Value).ToList()
             : allCurrentRecords;
         if (recordsToRemove.Count > 0)
+        {
+            var removeRecordIds = recordsToRemove.Select(r => r.Id).ToHashSet();
+            var oldDetails = await _context.PayrollRecordDetails
+                .Where(d => removeRecordIds.Contains(d.PayrollRecordId))
+                .ToListAsync(cancellationToken);
+            if (oldDetails.Count > 0)
+                _context.PayrollRecordDetails.RemoveRange(oldDetails);
+
             _context.PayrollRecords.RemoveRange(recordsToRemove);
+        }
 
         var snapshotItems = new List<object>();
         int highVarianceCount = 0;
@@ -341,27 +627,88 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
             dependentCounts.TryGetValue(emp.Id, out var deps);
             int wageRegion = emp.WageRegion ?? emp.OrganizationUnit?.WageRegion ?? 1;
 
+            decimal payableWorkdays = att?.TotalPayableWorkdays ?? period.StandardWorkdays;
             decimal ot150 = att?.TotalOtHours150 ?? 0m;
             decimal ot200 = att?.TotalOtHours200 ?? 0m;
             decimal ot300 = att?.TotalOtHours300 ?? 0m;
+            decimal nightHours = att?.TotalNightHours ?? 0m;
 
             decimal unusedLeavePayout = settlementByEmpId.TryGetValue(emp.Id, out var payoutAmt) ? payoutAmt : 0m;
 
-            var breakdown = VietnamPayrollEngine.Calculate(new PayrollCalculationInput(
-                emp.BaseSalary,
-                emp.PositionAllowance,
-                emp.OtherAllowance,
-                period.StandardWorkdays,
-                att?.TotalPayableWorkdays ?? period.StandardWorkdays,
-                ot150,
-                ot200,
-                ot300,
-                0m,
-                0m,
-                deps,
-                emp.IsUnionMember,
-                wageRegion,
-                unusedLeavePayout), statutoryContext);
+            PayrollCalculationBreakdown breakdown;
+            decimal contractBaseSalary;
+            decimal posAllowance;
+            decimal otherAllowance;
+            decimal taxExemptAmount = 0m;
+            decimal disciplineDeduction = 0m;
+            string? splitNote = null;
+            IReadOnlyList<EvaluatedSalaryLineDto>? evaluatedLines = null;
+
+            if (profilesByEmpId.TryGetValue(emp.Id, out var empProfiles) && empProfiles.Count > 0)
+            {
+                dailyAttendanceByEmpId.TryGetValue(emp.Id, out var dailyAtts);
+                var slices = MidMonthSalarySplitter.BuildPeriodSlices(
+                    periodStartDate,
+                    periodEndDate,
+                    payableWorkdays,
+                    ot150,
+                    ot200,
+                    ot300,
+                    nightHours,
+                    empProfiles,
+                    templateComponentMap,
+                    dailyAtts);
+
+                var lastTplId = slices[^1].Profile.SalaryTemplateId ?? 0;
+                var roundingRule = templateRoundingMap.TryGetValue(lastTplId, out var rRule) ? rRule : "RoundToDong";
+
+                var agg = VietnamPayrollEngine.CalculateFromMidMonthSlices(
+                    slices,
+                    statutoryContext,
+                    period.StandardWorkdays,
+                    payableWorkdays,
+                    ot150,
+                    ot200,
+                    ot300,
+                    deps,
+                    wageRegion,
+                    unusedLeavePayout: unusedLeavePayout,
+                    kpiBonus: 0m,
+                    disciplineDeduction: 0m,
+                    roundingRule: roundingRule,
+                    taxExemptParamValues: taxExemptParamValues);
+
+                breakdown = agg.Breakdown;
+                contractBaseSalary = agg.EffectiveContractBaseSalary;
+                posAllowance = agg.EffectivePositionAllowance;
+                otherAllowance = agg.EffectiveOtherAllowance + agg.ExtraTemplateEarnings;
+                taxExemptAmount = agg.TaxExemptAmount;
+                disciplineDeduction = agg.CustomDeductions;
+                splitNote = agg.SplitSummaryNote;
+                evaluatedLines = agg.AggregatedLines;
+            }
+            else
+            {
+                contractBaseSalary = emp.BaseSalary;
+                posAllowance = emp.PositionAllowance;
+                otherAllowance = emp.OtherAllowance;
+
+                breakdown = VietnamPayrollEngine.Calculate(new PayrollCalculationInput(
+                    emp.BaseSalary,
+                    emp.PositionAllowance,
+                    emp.OtherAllowance,
+                    period.StandardWorkdays,
+                    payableWorkdays,
+                    ot150,
+                    ot200,
+                    ot300,
+                    0m,
+                    0m,
+                    deps,
+                    emp.IsUnionMember,
+                    wageRegion,
+                    unusedLeavePayout), statutoryContext);
+            }
 
             var pitSlices = VietnamPayrollEngine.CalculateProgressivePitBreakdown(
                 breakdown.AssessableIncome, statutoryContext.PitBrackets);
@@ -390,15 +737,15 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
                 PositionId = emp.PositionId,
                 MonthlyAttendanceSummaryId = att?.Id,
                 StandardWorkdays = period.StandardWorkdays,
-                PayableWorkdays = att?.TotalPayableWorkdays ?? period.StandardWorkdays,
+                PayableWorkdays = payableWorkdays,
                 OtHours150 = ot150,
                 OtHours200 = ot200,
                 OtHours300 = ot300,
                 TotalOtHours = ot150 + ot200 + ot300,
-                ContractBaseSalary = emp.BaseSalary,
+                ContractBaseSalary = contractBaseSalary,
                 ActualBaseSalary = breakdown.ActualBaseSalary,
-                PositionAllowance = emp.PositionAllowance,
-                OtherAllowance = emp.OtherAllowance,
+                PositionAllowance = posAllowance,
+                OtherAllowance = otherAllowance,
                 OvertimePay = breakdown.OvertimePay,
                 KpiBonus = 0m,
                 UnusedLeavePayout = unusedLeavePayout,
@@ -416,18 +763,38 @@ public class CalculateMonthlyPayrollCommandHandler : IRequestHandler<CalculateMo
                 DependentCount = deps,
                 SelfDeductionAmount = breakdown.SelfDeductionAmount,
                 DependentDeductionAmount = breakdown.DependentDeductionAmount,
-                TaxableIncome = Math.Max(0m, breakdown.GrossIncome - breakdown.TotalEmployeeInsurance),
+                TaxableIncome = Math.Max(0m, breakdown.GrossIncome - breakdown.TotalEmployeeInsurance - taxExemptAmount),
                 AssessableIncome = breakdown.AssessableIncome,
                 PersonalIncomeTax = breakdown.PersonalIncomeTax,
                 PitBracketsJson = JsonSerializer.Serialize(pitSlices),
-                DisciplineDeduction = 0m,
+                DisciplineDeduction = disciplineDeduction,
                 NetSalary = breakdown.NetSalary,
                 PreviousRevisionNetSalary = prevRevNet,
                 PreviousPeriodNetSalary = prevPeriodNet,
                 VariancePercentVsPreviousPeriod = variancePct,
                 HasHighVarianceWarning = highVariance,
-                PaymentStatus = "Calculated"
+                PaymentStatus = "Calculated",
+                Notes = splitNote
             };
+
+            if (evaluatedLines != null)
+            {
+                foreach (var line in evaluatedLines.Where(l =>
+                    l.ShowOnPayslip
+                    && l.SalaryComponentId > 0
+                    && !string.Equals(l.ComponentType, "Info", StringComparison.OrdinalIgnoreCase)))
+                {
+                    rec.Details.Add(new PayrollRecordDetail
+                    {
+                        SalaryComponentId = line.SalaryComponentId,
+                        ComponentCode = line.ComponentCode,
+                        ComponentName = line.ComponentName,
+                        Amount = line.FinalAmount,
+                        CalculationNote = line.Note
+                    });
+                }
+            }
+
             newlyAdded.Add(rec);
             _context.PayrollRecords.Add(rec);
 

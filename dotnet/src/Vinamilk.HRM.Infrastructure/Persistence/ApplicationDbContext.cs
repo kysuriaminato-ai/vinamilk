@@ -81,6 +81,10 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<PayrollParameter> PayrollParameters => Set<PayrollParameter>();
     public DbSet<TaxBracket> TaxBrackets => Set<TaxBracket>();
     public DbSet<SalaryComponent> SalaryComponents => Set<SalaryComponent>();
+    public DbSet<SalaryTemplate> SalaryTemplates => Set<SalaryTemplate>();
+    public DbSet<SalaryTemplateComponent> SalaryTemplateComponents => Set<SalaryTemplateComponent>();
+    public DbSet<EmployeeSalaryProfile> EmployeeSalaryProfiles => Set<EmployeeSalaryProfile>();
+    public DbSet<EmployeeSalaryProfileAllowance> EmployeeSalaryProfileAllowances => Set<EmployeeSalaryProfileAllowance>();
     public DbSet<PayrollPeriod> PayrollPeriods => Set<PayrollPeriod>();
     public DbSet<PayrollRecord> PayrollRecords => Set<PayrollRecord>();
     public DbSet<PayrollRecordDetail> PayrollRecordDetails => Set<PayrollRecordDetail>();

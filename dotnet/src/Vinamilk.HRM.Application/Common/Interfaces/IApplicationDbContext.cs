@@ -73,6 +73,10 @@ public interface IApplicationDbContext
     DbSet<PayrollParameter> PayrollParameters { get; }
     DbSet<TaxBracket> TaxBrackets { get; }
     DbSet<SalaryComponent> SalaryComponents { get; }
+    DbSet<SalaryTemplate> SalaryTemplates { get; }
+    DbSet<SalaryTemplateComponent> SalaryTemplateComponents { get; }
+    DbSet<EmployeeSalaryProfile> EmployeeSalaryProfiles { get; }
+    DbSet<EmployeeSalaryProfileAllowance> EmployeeSalaryProfileAllowances { get; }
     DbSet<PayrollPeriod> PayrollPeriods { get; }
     DbSet<PayrollRecord> PayrollRecords { get; }
     DbSet<PayrollRecordDetail> PayrollRecordDetails { get; }

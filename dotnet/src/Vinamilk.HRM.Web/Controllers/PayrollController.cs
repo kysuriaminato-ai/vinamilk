@@ -368,5 +368,211 @@ public class PayrollController : Controller
 
         return RedirectToAction(nameof(Parameters));
     }
+
+    // =========================================================================
+    // CL5: CẤU TRÚC LƯƠNG, HỒ SƠ LƯƠNG HIỆU LỰC, MẪU LƯƠNG & CÔNG THỨC NCalc
+    // =========================================================================
+
+    [HttpGet("SalaryStructures")]
+    public async Task<IActionResult> SalaryStructures(int? employeeId = null, CancellationToken cancellationToken = default)
+    {
+        ViewData["Title"] = "Cấu trúc lương, Công thức NCalc & Hồ sơ lương hiệu lực";
+        ViewData["BreadcrumbParent"] = "Chấm công & Tiền lương (C&B)";
+
+        var model = await _mediator.Send(new GetSalaryStructuresOverviewQuery(employeeId), cancellationToken);
+        return View(model);
+    }
+
+    public sealed record TestFormulaAjaxRequest(
+        string FormulaExpression,
+        string? TargetComponentCode,
+        bool IsTaxable,
+        decimal TaxExemptLimit,
+        string? TaxExemptLimitParameterCode,
+        Dictionary<string, decimal>? SampleVariables);
+
+    [HttpPost("TestFormula")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> TestFormula(
+        [FromBody] TestFormulaAjaxRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(new ValidateAndTestSalaryFormulaQuery(
+            request.FormulaExpression,
+            request.TargetComponentCode,
+            request.SampleVariables,
+            request.IsTaxable,
+            request.TaxExemptLimit,
+            request.TaxExemptLimitParameterCode), cancellationToken);
+
+        return Json(result);
+    }
+
+    [HttpPost("SaveComponent")]
+    [Authorize(Policy = "Payroll.Approve")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveComponent(
+        int? id,
+        string componentCode,
+        string componentName,
+        string componentType,
+        string calculationType,
+        decimal defaultAmount,
+        bool isTaxable,
+        decimal taxExemptLimit,
+        string? taxExemptLimitParameterCode,
+        bool isSocialInsuranceBase,
+        bool showOnPayslip,
+        string? formulaExpression,
+        int sortOrder,
+        bool isActive = true,
+        string? legalReference = null,
+        bool needsHrVerification = false,
+        string? description = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _mediator.Send(new SaveSalaryComponentCommand(
+                id,
+                componentCode,
+                componentName,
+                componentType,
+                calculationType,
+                defaultAmount,
+                isTaxable,
+                taxExemptLimit,
+                taxExemptLimitParameterCode,
+                isSocialInsuranceBase,
+                showOnPayslip,
+                formulaExpression,
+                sortOrder,
+                isActive,
+                legalReference,
+                needsHrVerification,
+                description), cancellationToken);
+
+            TempData["PayrollSuccess"] = $"Đã lưu thành phần lương '{componentCode?.Trim().ToUpperInvariant()}' (đã kiểm tra cú pháp & vòng lặp NCalc).";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(SalaryStructures));
+    }
+
+    [HttpPost("SaveTemplate")]
+    [Authorize(Policy = "Payroll.Approve")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveTemplate(
+        int? id,
+        string templateCode,
+        string templateName,
+        string staffGroup,
+        string defaultPayFrequency,
+        decimal defaultProbationSalaryRatePercent,
+        string roundingRule,
+        bool isDefaultForCompany,
+        bool isActive,
+        string? legalReference,
+        bool needsHrVerification,
+        string? description,
+        int[]? selectedComponentIds,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var items = selectedComponentIds?
+                .Select((compId, idx) => new SaveSalaryTemplateItemInput(compId, idx + 1))
+                .ToList();
+
+            await _mediator.Send(new SaveSalaryTemplateCommand(
+                id,
+                templateCode,
+                templateName,
+                staffGroup,
+                defaultPayFrequency,
+                defaultProbationSalaryRatePercent,
+                roundingRule,
+                isDefaultForCompany,
+                isActive,
+                legalReference,
+                needsHrVerification,
+                description,
+                items), cancellationToken);
+
+            TempData["PayrollSuccess"] = $"Đã lưu mẫu cấu trúc lương '{templateCode?.Trim().ToUpperInvariant()}' và ghi AuditLog.";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(SalaryStructures));
+    }
+
+    [HttpPost("SaveSalaryProfile")]
+    [Authorize(Policy = "Payroll.Approve")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveSalaryProfile(
+        int employeeId,
+        DateOnly effectiveFrom,
+        decimal baseSalary,
+        decimal insuranceSalary,
+        int? salaryStepId,
+        int? salaryTemplateId,
+        string payMode,
+        decimal unitRate,
+        bool isProbation,
+        decimal probationRatePercent,
+        decimal positionAllowance,
+        decimal otherAllowance,
+        bool isUnionMember,
+        string? decisionNumber,
+        string? reason,
+        int[]? allowanceComponentIds,
+        decimal[]? allowanceAmounts,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var fixedAllowances = new List<EmployeeSalaryAllowanceInput>();
+            if (allowanceComponentIds != null && allowanceAmounts != null)
+            {
+                for (int i = 0; i < Math.Min(allowanceComponentIds.Length, allowanceAmounts.Length); i++)
+                {
+                    if (allowanceComponentIds[i] > 0 && allowanceAmounts[i] > 0m)
+                        fixedAllowances.Add(new EmployeeSalaryAllowanceInput(allowanceComponentIds[i], allowanceAmounts[i]));
+                }
+            }
+
+            await _mediator.Send(new SaveEmployeeSalaryProfileCommand(
+                employeeId,
+                effectiveFrom,
+                baseSalary,
+                insuranceSalary,
+                salaryStepId,
+                salaryTemplateId,
+                payMode,
+                unitRate,
+                isProbation,
+                probationRatePercent,
+                positionAllowance,
+                otherAllowance,
+                isUnionMember,
+                decisionNumber,
+                reason,
+                fixedAllowances), cancellationToken);
+
+            TempData["PayrollSuccess"] = $"Đã lưu hồ sơ lương hiệu lực từ {effectiveFrom:dd/MM/yyyy} cho nhân viên #{employeeId}.";
+        }
+        catch (Exception ex)
+        {
+            TempData["PayrollError"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(SalaryStructures), new { employeeId });
+    }
 }
 

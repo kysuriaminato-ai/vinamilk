@@ -789,6 +789,144 @@ public sealed class ApplicationDbContextInitializer
             await _context.LeaveTypes.AddRangeAsync(missingLeaveTypes, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
         }
+
+        // Idempotent seed cho CL5: Tham số miễn thuế, Thành phần lương công thức NCalc, 3 Mẫu cấu trúc lương & Hồ sơ lương nhân viên
+        await EnsureSalaryStructureSeededAsync(cancellationToken);
+    }
+
+    private async Task EnsureSalaryStructureSeededAsync(CancellationToken cancellationToken)
+    {
+        // 1. Tham số miễn thuế & mức tối thiểu thử việc (hỗ trợ EffectiveFrom/EffectiveTo & LegalReference)
+        var existingParamCodes = await _context.PayrollParameters
+            .Select(p => p.ParamCode)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var cl5Params = BuildDefaultTaxExemptPayrollParameters()
+            .Where(p => !existingParamCodes.Contains(p.ParamCode, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        if (cl5Params.Count > 0)
+        {
+            await _context.PayrollParameters.AddRangeAsync(cl5Params, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        // 2. Thành phần lương NCalc đa tầng + tham chiếu miễn thuế
+        var defaultComponents = BuildDefaultSalaryComponentsCl5();
+        var existingComponents = await _context.SalaryComponents.ToListAsync(cancellationToken);
+        var compByCode = existingComponents.ToDictionary(c => c.ComponentCode, StringComparer.OrdinalIgnoreCase);
+        bool compChanged = false;
+
+        foreach (var def in defaultComponents)
+        {
+            if (!compByCode.TryGetValue(def.ComponentCode, out var existing))
+            {
+                await _context.SalaryComponents.AddAsync(def, cancellationToken);
+                compByCode[def.ComponentCode] = def;
+                compChanged = true;
+            }
+            else if (string.IsNullOrWhiteSpace(existing.LegalReference) && !string.IsNullOrWhiteSpace(def.LegalReference))
+            {
+                existing.CalculationType = def.CalculationType;
+                existing.FormulaExpression ??= def.FormulaExpression;
+                existing.TaxExemptLimitParameterCode ??= def.TaxExemptLimitParameterCode;
+                existing.LegalReference = def.LegalReference;
+                existing.NeedsHrVerification = def.NeedsHrVerification;
+                existing.Description ??= def.Description;
+                compChanged = true;
+            }
+        }
+        if (compChanged)
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+            compByCode = (await _context.SalaryComponents.ToListAsync(cancellationToken))
+                .ToDictionary(c => c.ComponentCode, StringComparer.OrdinalIgnoreCase);
+        }
+
+        // 3. 3 Mẫu cấu trúc lương theo nhóm đối tượng (Văn phòng / Nhà máy / Kinh doanh)
+        var existingTemplateCodes = await _context.SalaryTemplates
+            .Select(t => t.TemplateCode)
+            .ToListAsync(cancellationToken);
+        var cl5Templates = BuildDefaultSalaryTemplatesWithComponents(compByCode)
+            .Where(t => !existingTemplateCodes.Contains(t.TemplateCode, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        if (cl5Templates.Count > 0)
+        {
+            await _context.SalaryTemplates.AddRangeAsync(cl5Templates, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        // 4. Khởi tạo hồ sơ lương theo ngày hiệu lực cho các nhân viên hiện có nếu chưa có hồ sơ
+        if (!await _context.EmployeeSalaryProfiles.AnyAsync(cancellationToken))
+        {
+            var templatesByCode = await _context.SalaryTemplates
+                .AsNoTracking()
+                .ToDictionaryAsync(t => t.TemplateCode, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+            var employees = await _context.Employees
+                .Include(e => e.OrganizationUnit)
+                .Include(e => e.Position)
+                .Include(e => e.SalaryStep)
+                .AsNoTracking()
+                .ToListAsync(cancellationToken);
+
+            if (employees.Count > 0 && templatesByCode.Count > 0)
+            {
+                var defaultTpl = templatesByCode.Values.FirstOrDefault(t => t.IsDefaultForCompany) ?? templatesByCode.Values.First();
+                templatesByCode.TryGetValue("FACTORY_SHIFT", out var factoryTpl);
+                templatesByCode.TryGetValue("SALES_COMMISSION", out var salesTpl);
+
+                var profiles = new List<EmployeeSalaryProfile>(employees.Count);
+                foreach (var emp in employees)
+                {
+                    var unitCode = emp.OrganizationUnit?.UnitCode ?? string.Empty;
+                    var unitName = emp.OrganizationUnit?.UnitName ?? string.Empty;
+                    var posName = emp.Position?.PositionName ?? string.Empty;
+
+                    SalaryTemplate chosenTpl = defaultTpl;
+                    if (factoryTpl != null && (unitCode.StartsWith("NM", StringComparison.OrdinalIgnoreCase)
+                        || unitCode.StartsWith("TT", StringComparison.OrdinalIgnoreCase)
+                        || unitName.Contains("Nhà máy", StringComparison.OrdinalIgnoreCase)
+                        || unitName.Contains("Trang trại", StringComparison.OrdinalIgnoreCase)
+                        || posName.Contains("Công nhân", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        chosenTpl = factoryTpl;
+                    }
+                    else if (salesTpl != null && (unitName.Contains("Kinh doanh", StringComparison.OrdinalIgnoreCase)
+                        || unitCode.StartsWith("KD", StringComparison.OrdinalIgnoreCase)
+                        || posName.Contains("Kinh doanh", StringComparison.OrdinalIgnoreCase)
+                        || posName.Contains("Bán hàng", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        chosenTpl = salesTpl;
+                    }
+
+                    bool isProbation = string.Equals(emp.WorkStatus, "Probation", StringComparison.OrdinalIgnoreCase);
+                    profiles.Add(new EmployeeSalaryProfile
+                    {
+                        EmployeeId = emp.Id,
+                        EffectiveFrom = emp.HireDate,
+                        EffectiveTo = null,
+                        BaseSalary = emp.BaseSalary,
+                        InsuranceSalary = emp.BaseSalary + emp.PositionAllowance,
+                        SalaryScaleId = emp.SalaryStep?.SalaryScaleId,
+                        SalaryStepId = emp.SalaryStepId,
+                        SalaryTemplateId = chosenTpl.Id,
+                        PayMode = "Monthly",
+                        UnitRate = 0m,
+                        IsProbation = isProbation,
+                        ProbationRatePercent = isProbation ? 85.00m : 100.00m,
+                        PositionAllowance = emp.PositionAllowance,
+                        OtherAllowance = emp.OtherAllowance,
+                        IsUnionMember = emp.IsUnionMember,
+                        DecisionNumber = $"HĐLĐ-{emp.EmployeeCode}",
+                        Reason = "Khởi tạo hồ sơ lương theo hiệu lực từ dữ liệu hợp đồng gốc",
+                        IsActive = true
+                    });
+                }
+
+                await _context.EmployeeSalaryProfiles.AddRangeAsync(profiles, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
     }
 
     public static List<AttendanceSymbolDefinition> BuildDefaultAttendanceSymbols() =>
@@ -1182,5 +1320,325 @@ public sealed class ApplicationDbContextInitializer
         new() { BracketLevel = 4, LowerBound = 60_000_000m, UpperBound = 100_000_000m, TaxRate = 0.30m, EffectiveFrom = new DateOnly(2026, 1, 1), EffectiveTo = null, LegalReference = "Luật 109/2025/QH15 (Biểu 5 bậc)" },
         new() { BracketLevel = 5, LowerBound = 100_000_000m, UpperBound = null, TaxRate = 0.35m, EffectiveFrom = new DateOnly(2026, 1, 1), EffectiveTo = null, LegalReference = "Luật 109/2025/QH15 (Biểu 5 bậc)" }
     ];
+
+    public static List<PayrollParameter> BuildDefaultTaxExemptPayrollParameters() =>
+    [
+        new()
+        {
+            ParamCode = "PIT_EXEMPT_MEAL",
+            ParamName = "Mức miễn thuế TNCN phụ cấp ăn ca/trưa hàng tháng",
+            ParamValue = 730_000m,
+            ValueUnit = "VND",
+            EffectiveFrom = new DateOnly(2015, 1, 1),
+            EffectiveTo = null,
+            LegalReference = "Thông tư 111/2013/TT-BTC Điều 2 khoản 2 điểm g.5 & TT 26/2016/TT-BLĐTBXH (cần HR đối chiếu khi văn bản mới có hiệu lực)"
+        },
+        new()
+        {
+            ParamCode = "PIT_EXEMPT_PHONE",
+            ParamName = "Mức khoán chi điện thoại phục vụ công việc miễn thuế TNCN",
+            ParamValue = 500_000m,
+            ValueUnit = "VND",
+            EffectiveFrom = new DateOnly(2024, 1, 1),
+            EffectiveTo = null,
+            LegalReference = "Quy chế tài chính nội bộ & TT 111/2013/TT-BTC Điều 2 khoản 2 điểm đ.4 (cần HR đối chiếu)"
+        },
+        new()
+        {
+            ParamCode = "MIN_PROBATION_SALARY_RATE",
+            ParamName = "Tỷ lệ lương thử việc tối thiểu so với lương công việc (%)",
+            ParamValue = 85.00m,
+            ValueUnit = "Percent",
+            EffectiveFrom = new DateOnly(2021, 1, 1),
+            EffectiveTo = null,
+            LegalReference = "Điều 26 Bộ luật Lao động 45/2019/QH14 (tối thiểu 85%)"
+        }
+    ];
+
+    public static List<SalaryComponent> BuildDefaultSalaryComponentsCl5() =>
+    [
+        new()
+        {
+            ComponentCode = "INFO_HOURLY_RATE",
+            ComponentName = "Đơn giá giờ công chuẩn (biến trung gian)",
+            ComponentType = "Info",
+            CalculationType = "Formula",
+            FormulaExpression = "LUONG_CO_BAN_HIEN_TAI / (CONG_CHUAN * GIO_LAM_VIEC_NGAY)",
+            IsTaxable = false,
+            IsSocialInsuranceBase = false,
+            ShowOnPayslip = false,
+            SortOrder = 1,
+            LegalReference = "Điều 98 Bộ luật Lao động 2019",
+            NeedsHrVerification = true,
+            Description = "Thành phần trung gian tính đơn giá 1 giờ công để dùng lại trong công thức OT và phụ cấp ca đêm."
+        },
+        new()
+        {
+            ComponentCode = "BASIC_PAY",
+            ComponentName = "Lương cơ bản theo ngày công (P1)",
+            ComponentType = "Earning",
+            CalculationType = "Formula",
+            FormulaExpression = "Round(LUONG_CO_BAN_HIEN_TAI * CONG_THUC_TE / CONG_CHUAN, 0)",
+            IsTaxable = true,
+            IsSocialInsuranceBase = true,
+            ShowOnPayslip = true,
+            SortOrder = 2,
+            LegalReference = "Điều 90 Bộ luật Lao động 2019",
+            NeedsHrVerification = true,
+            Description = "Lương theo công thực tế/chuẩn; tự động xét tỷ lệ thử việc."
+        },
+        new()
+        {
+            ComponentCode = "POS_ALLOWANCE",
+            ComponentName = "Phụ cấp chức vụ",
+            ComponentType = "Allowance",
+            CalculationType = "Fixed",
+            IsTaxable = true,
+            IsSocialInsuranceBase = true,
+            ShowOnPayslip = true,
+            SortOrder = 3,
+            LegalReference = "Thông tư 59/2015/TT-BLĐTBXH & TT 10/2020/TT-BLĐTBXH",
+            NeedsHrVerification = true
+        },
+        new()
+        {
+            ComponentCode = "MEAL_ALLOWANCE",
+            ComponentName = "Phụ cấp tiền ăn ca / ăn trưa",
+            ComponentType = "Allowance",
+            CalculationType = "Fixed",
+            DefaultAmount = 730_000m,
+            IsTaxable = true,
+            TaxExemptLimit = 730_000m,
+            TaxExemptLimitParameterCode = "PIT_EXEMPT_MEAL",
+            IsSocialInsuranceBase = false,
+            ShowOnPayslip = true,
+            SortOrder = 4,
+            LegalReference = "TT 111/2013/TT-BTC Điều 2.2.g.5 (miễn thuế tối đa 730.000đ/tháng - cần HR đối chiếu)",
+            NeedsHrVerification = true
+        },
+        new()
+        {
+            ComponentCode = "PHONE_ALLOWANCE",
+            ComponentName = "Khoán phụ cấp điện thoại công việc",
+            ComponentType = "Allowance",
+            CalculationType = "Fixed",
+            DefaultAmount = 500_000m,
+            IsTaxable = true,
+            TaxExemptLimit = 500_000m,
+            TaxExemptLimitParameterCode = "PIT_EXEMPT_PHONE",
+            IsSocialInsuranceBase = false,
+            ShowOnPayslip = true,
+            SortOrder = 5,
+            LegalReference = "Khoán chi công việc theo quy chế công ty (cần HR đối chiếu)",
+            NeedsHrVerification = true
+        },
+        new()
+        {
+            ComponentCode = "HAZARD_ALLOWANCE",
+            ComponentName = "Phụ cấp nặng nhọc, độc hại nhà máy (5%)",
+            ComponentType = "Allowance",
+            CalculationType = "Formula",
+            FormulaExpression = "Round(LUONG_CO_BAN_HIEN_TAI * 0.05 * CONG_THUC_TE / CONG_CHUAN, 0)",
+            IsTaxable = true,
+            IsSocialInsuranceBase = false,
+            ShowOnPayslip = true,
+            SortOrder = 6,
+            LegalReference = "Điều 90 BLLĐ 2019 & Quy chế nhà máy (cần HR đối chiếu)",
+            NeedsHrVerification = true
+        },
+        new()
+        {
+            ComponentCode = "NIGHT_ALLOWANCE",
+            ComponentName = "Phụ cấp làm việc ban đêm (+30% đơn giá giờ)",
+            ComponentType = "Allowance",
+            CalculationType = "Formula",
+            FormulaExpression = "Round(INFO_HOURLY_RATE * GIO_DEM * 0.30, 0)",
+            IsTaxable = false,
+            IsSocialInsuranceBase = false,
+            ShowOnPayslip = true,
+            SortOrder = 7,
+            LegalReference = "Điều 98 Khoản 2 BLLĐ 2019 (làm đêm thêm ít nhất 30%; phần trả thêm miễn thuế TNCN)",
+            NeedsHrVerification = true
+        },
+        new()
+        {
+            ComponentCode = "OT_PAY",
+            ComponentName = "Tiền làm thêm giờ (OT 150%/200%/300%)",
+            ComponentType = "Earning",
+            CalculationType = "Formula",
+            FormulaExpression = "Round(INFO_HOURLY_RATE * (OT150 * 1.5 + OT200 * 2.0 + OT300 * 3.0), 0)",
+            IsTaxable = true,
+            IsSocialInsuranceBase = false,
+            ShowOnPayslip = true,
+            SortOrder = 8,
+            LegalReference = "Điều 98 Khoản 1 BLLĐ 2019",
+            NeedsHrVerification = true
+        },
+        new()
+        {
+            ComponentCode = "OTHER_ALLOWANCE",
+            ComponentName = "Phụ cấp xăng xe, điện thoại, hỗ trợ khác (P2)",
+            ComponentType = "Allowance",
+            CalculationType = "Fixed",
+            IsTaxable = true,
+            TaxExemptLimit = 730_000m,
+            TaxExemptLimitParameterCode = "PIT_EXEMPT_MEAL",
+            IsSocialInsuranceBase = false,
+            ShowOnPayslip = true,
+            SortOrder = 9,
+            LegalReference = "Quy chế phụ cấp nội bộ (cần HR đối chiếu mức miễn thuế)",
+            NeedsHrVerification = true
+        },
+        new()
+        {
+            ComponentCode = "KPI_BONUS",
+            ComponentName = "Thưởng hiệu quả công việc KPI (P3)",
+            ComponentType = "Bonus",
+            CalculationType = "Fixed",
+            IsTaxable = true,
+            IsSocialInsuranceBase = false,
+            ShowOnPayslip = true,
+            SortOrder = 10,
+            LegalReference = "Quy chế thưởng KPI doanh nghiệp",
+            NeedsHrVerification = true
+        },
+        new()
+        {
+            ComponentCode = "SALES_COMMISSION",
+            ComponentName = "Hoa hồng doanh số khối Kinh doanh",
+            ComponentType = "Bonus",
+            CalculationType = "Formula",
+            FormulaExpression = "Round(HOA_HONG_DOANH_SO * DIEM_KPI, 0)",
+            IsTaxable = true,
+            IsSocialInsuranceBase = false,
+            ShowOnPayslip = true,
+            SortOrder = 11,
+            LegalReference = "Chính sách hoa hồng khối Kinh doanh",
+            NeedsHrVerification = true
+        },
+        new()
+        {
+            ComponentCode = "SI_DEDUCTION",
+            ComponentName = "Khấu trừ BHXH, BHYT, BHTN (NLĐ 10.5%)",
+            ComponentType = "Deduction",
+            CalculationType = "System",
+            IsTaxable = false,
+            IsSocialInsuranceBase = false,
+            ShowOnPayslip = true,
+            SortOrder = 12,
+            LegalReference = "Luật BHXH 41/2024/QH15 & Luật BHYT",
+            NeedsHrVerification = true
+        },
+        new()
+        {
+            ComponentCode = "PIT_TAX",
+            ComponentName = "Thuế Thu nhập cá nhân (TNCN)",
+            ComponentType = "Deduction",
+            CalculationType = "System",
+            IsTaxable = false,
+            IsSocialInsuranceBase = false,
+            ShowOnPayslip = true,
+            SortOrder = 13,
+            LegalReference = "Luật Thuế TNCN & Luật 109/2025/QH15",
+            NeedsHrVerification = true
+        }
+    ];
+
+    public static List<SalaryTemplate> BuildDefaultSalaryTemplatesWithComponents(
+        IReadOnlyDictionary<string, SalaryComponent> compByCode)
+    {
+        static List<SalaryTemplateComponent> MapCodes(
+            IReadOnlyDictionary<string, SalaryComponent> lookup,
+            params (string Code, int Order)[] items)
+        {
+            var list = new List<SalaryTemplateComponent>();
+            foreach (var (code, order) in items)
+            {
+                if (lookup.TryGetValue(code, out var comp))
+                {
+                    list.Add(new SalaryTemplateComponent
+                    {
+                        SalaryComponentId = comp.Id,
+                        SortOrder = order,
+                        IsRequired = true
+                    });
+                }
+            }
+            return list;
+        }
+
+        return
+        [
+            new()
+            {
+                TemplateCode = "OFFICE_STD",
+                TemplateName = "Khối Văn phòng chuẩn (3P)",
+                StaffGroup = "Office",
+                DefaultPayFrequency = "Monthly",
+                DefaultProbationSalaryRatePercent = 85.00m,
+                RoundingRule = "RoundToDong",
+                IsDefaultForCompany = true,
+                IsActive = true,
+                LegalReference = "Quy chế lương 3P Khối Văn phòng & BLLĐ 2019",
+                NeedsHrVerification = true,
+                Description = "Áp dụng cho nhân sự khối Văn phòng, Tài chính, Nhân sự, CNTT.",
+                Components = MapCodes(compByCode,
+                    ("INFO_HOURLY_RATE", 1),
+                    ("BASIC_PAY", 2),
+                    ("POS_ALLOWANCE", 3),
+                    ("OTHER_ALLOWANCE", 4),
+                    ("OT_PAY", 5),
+                    ("SI_DEDUCTION", 6),
+                    ("PIT_TAX", 7))
+            },
+            new()
+            {
+                TemplateCode = "FACTORY_SHIFT",
+                TemplateName = "Khối Nhà máy & Trang trại (Ca đêm, Độc hại)",
+                StaffGroup = "Factory",
+                DefaultPayFrequency = "Monthly",
+                DefaultProbationSalaryRatePercent = 85.00m,
+                RoundingRule = "RoundToDong",
+                IsDefaultForCompany = false,
+                IsActive = true,
+                LegalReference = "Điều 98 BLLĐ 2019 (Ca đêm +30%, OT) & Quy chế Nhà máy",
+                NeedsHrVerification = true,
+                Description = "Bao gồm phụ cấp độc hại 5% và phụ cấp làm việc ban đêm (+30% đơn giá giờ).",
+                Components = MapCodes(compByCode,
+                    ("INFO_HOURLY_RATE", 1),
+                    ("BASIC_PAY", 2),
+                    ("POS_ALLOWANCE", 3),
+                    ("OTHER_ALLOWANCE", 4),
+                    ("HAZARD_ALLOWANCE", 5),
+                    ("NIGHT_ALLOWANCE", 6),
+                    ("OT_PAY", 7),
+                    ("SI_DEDUCTION", 8),
+                    ("PIT_TAX", 9))
+            },
+            new()
+            {
+                TemplateCode = "SALES_COMMISSION",
+                TemplateName = "Khối Kinh doanh & Hoa hồng doanh số",
+                StaffGroup = "Sales",
+                DefaultPayFrequency = "Monthly",
+                DefaultProbationSalaryRatePercent = 85.00m,
+                RoundingRule = "RoundToDong",
+                IsDefaultForCompany = false,
+                IsActive = true,
+                LegalReference = "Chính sách hoa hồng khối Kinh doanh",
+                NeedsHrVerification = true,
+                Description = "Lương cơ bản + phụ cấp khoán công tác + hoa hồng doanh số theo hệ số KPI.",
+                Components = MapCodes(compByCode,
+                    ("INFO_HOURLY_RATE", 1),
+                    ("BASIC_PAY", 2),
+                    ("POS_ALLOWANCE", 3),
+                    ("OTHER_ALLOWANCE", 4),
+                    ("SALES_COMMISSION", 5),
+                    ("OT_PAY", 6),
+                    ("SI_DEDUCTION", 7),
+                    ("PIT_TAX", 8))
+            }
+        ];
+    }
 }
 

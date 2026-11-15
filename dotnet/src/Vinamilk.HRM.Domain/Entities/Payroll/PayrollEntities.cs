@@ -37,6 +37,9 @@ public class PayrollStatutoryParameter : BaseAuditableEntity
     public decimal CompanyUnionFeeRate { get; set; } = 0.02m;
     public decimal SelfDeduction { get; set; }
     public decimal DependentDeduction { get; set; }
+    /// <summary>Tỷ lệ lương thử việc tối thiểu (% - mặc định 85% theo Điều 26 BLLĐ 2019).</summary>
+    public decimal MinProbationSalaryRatePercent { get; set; } = 85.00m;
+    public bool NeedsHrVerification { get; set; } = true;
 
     public decimal GetRegionalMinWage(int wageRegion) => wageRegion switch
     {
@@ -73,15 +76,100 @@ public class SalaryComponent : BaseAuditableEntity
 {
     public string ComponentCode { get; set; } = string.Empty;
     public string ComponentName { get; set; } = string.Empty;
+    /// <summary>Earning | Allowance | Bonus | Deduction | Info</summary>
     public string ComponentType { get; set; } = "Earning";
+    /// <summary>Fixed | Formula | System</summary>
+    public string CalculationType { get; set; } = "Formula";
+    public decimal DefaultAmount { get; set; } = 0m;
     public bool IsTaxable { get; set; } = true;
     public decimal TaxExemptLimit { get; set; } = 0m;
+    public string? TaxExemptLimitParameterCode { get; set; }
     public bool IsSocialInsuranceBase { get; set; } = false;
+    public bool ShowOnPayslip { get; set; } = true;
     public string? FormulaExpression { get; set; }
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
+    public string? LegalReference { get; set; }
+    public bool NeedsHrVerification { get; set; } = false;
+    public string? Description { get; set; }
 
     public ICollection<PayrollRecordDetail> RecordDetails { get; set; } = new List<PayrollRecordDetail>();
+    public ICollection<SalaryTemplateComponent> TemplateComponents { get; set; } = new List<SalaryTemplateComponent>();
+}
+
+public class SalaryTemplate : BaseAuditableEntity
+{
+    public string TemplateCode { get; set; } = string.Empty;
+    public string TemplateName { get; set; } = string.Empty;
+    /// <summary>Office | Factory | Sales | Management | General</summary>
+    public string StaffGroup { get; set; } = "Office";
+    /// <summary>Monthly | Daily | Hourly | PieceRate</summary>
+    public string DefaultPayFrequency { get; set; } = "Monthly";
+    public decimal DefaultProbationSalaryRatePercent { get; set; } = 85.00m;
+    /// <summary>RoundToDong | RoundHalfToEven | RoundToThousand</summary>
+    public string RoundingRule { get; set; } = "RoundToDong";
+    public bool IsDefaultForCompany { get; set; } = false;
+    public bool IsActive { get; set; } = true;
+    public string? LegalReference { get; set; }
+    public bool NeedsHrVerification { get; set; } = true;
+    public string? Description { get; set; }
+
+    public ICollection<SalaryTemplateComponent> Components { get; set; } = new List<SalaryTemplateComponent>();
+    public ICollection<EmployeeSalaryProfile> EmployeeProfiles { get; set; } = new List<EmployeeSalaryProfile>();
+}
+
+public class SalaryTemplateComponent : BaseAuditableEntity
+{
+    public int SalaryTemplateId { get; set; }
+    public int SalaryComponentId { get; set; }
+    public int SortOrder { get; set; }
+    public string? OverrideFormulaExpression { get; set; }
+    public decimal? DefaultFixedAmount { get; set; }
+    public bool IsRequired { get; set; } = true;
+
+    public SalaryTemplate SalaryTemplate { get; set; } = null!;
+    public SalaryComponent SalaryComponent { get; set; } = null!;
+}
+
+public class EmployeeSalaryProfile : BaseAuditableEntity
+{
+    public int EmployeeId { get; set; }
+    public DateOnly EffectiveFrom { get; set; }
+    public DateOnly? EffectiveTo { get; set; }
+    public decimal BaseSalary { get; set; }
+    public decimal InsuranceSalary { get; set; }
+    public int? SalaryScaleId { get; set; }
+    public int? SalaryStepId { get; set; }
+    public int? SalaryTemplateId { get; set; }
+    /// <summary>Monthly | Daily | Hourly | PieceRate</summary>
+    public string PayMode { get; set; } = "Monthly";
+    public decimal UnitRate { get; set; } = 0m;
+    public bool IsProbation { get; set; } = false;
+    public decimal ProbationRatePercent { get; set; } = 100.00m;
+    public decimal PositionAllowance { get; set; } = 0m;
+    public decimal OtherAllowance { get; set; } = 0m;
+    public bool IsUnionMember { get; set; } = true;
+    public string? DecisionNumber { get; set; }
+    public string? Reason { get; set; }
+    public bool IsActive { get; set; } = true;
+
+    public Employee Employee { get; set; } = null!;
+    public SalaryScale? SalaryScale { get; set; }
+    public SalaryStep? SalaryStep { get; set; }
+    public SalaryTemplate? SalaryTemplate { get; set; }
+    public ICollection<EmployeeSalaryProfileAllowance> FixedAllowances { get; set; } = new List<EmployeeSalaryProfileAllowance>();
+}
+
+public class EmployeeSalaryProfileAllowance : BaseAuditableEntity
+{
+    public int EmployeeSalaryProfileId { get; set; }
+    public int SalaryComponentId { get; set; }
+    public string ComponentCode { get; set; } = string.Empty;
+    public decimal Amount { get; set; } = 0m;
+    public string? Notes { get; set; }
+
+    public EmployeeSalaryProfile EmployeeSalaryProfile { get; set; } = null!;
+    public SalaryComponent SalaryComponent { get; set; } = null!;
 }
 
 public static class PayrollPeriodStatuses
