@@ -115,7 +115,7 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
 
         builder.Property(x => x.EmployeeCode).HasColumnType("varchar(30)").IsRequired();
         builder.Property(x => x.FullName).HasMaxLength(150).IsRequired();
-        builder.Property(x => x.Gender).HasMaxLength(10).IsRequired();
+        builder.Property(x => x.Gender).HasMaxLength(20).IsRequired();
         builder.Property(x => x.CitizenIdEncrypted).HasMaxLength(512).IsRequired();
         builder.Property(x => x.CitizenIdHash).HasColumnType("char(64)").IsRequired();
         builder.Property(x => x.CitizenIdIssuePlace).HasMaxLength(200);

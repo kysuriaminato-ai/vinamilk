@@ -182,9 +182,162 @@ public sealed record PayrollRecordTraceDto(
     decimal OtNightExtraPay,
     decimal OtTaxExemptAmount,
     IReadOnlyList<CalculationTraceStepDto> Steps,
-    IReadOnlyList<PitBracketTaxSliceDto> PitBrackets);
+    IReadOnlyList<PitBracketTaxSliceDto> PitBrackets,
+    bool IsRecomputedReference = false,
+    string? ReferenceNotice = null,
+    decimal SelfDeductionAmount = 0m,
+    decimal DependentDeductionAmount = 0m,
+    int DependentCount = 0,
+    decimal TaxableIncome = 0m,
+    decimal AssessableIncome = 0m,
+    decimal EmployeeSocialInsurance = 0m,
+    decimal EmployeeHealthInsurance = 0m,
+    decimal EmployeeUnemploymentInsurance = 0m,
+    decimal PositionAllowance = 0m,
+    decimal OtherAllowance = 0m,
+    decimal OvertimePay = 0m,
+    decimal KpiBonus = 0m,
+    decimal DisciplineDeduction = 0m,
+    decimal StandardWorkdays = 0m,
+    decimal PayableWorkdays = 0m);
 
 public sealed record GetPayrollRecordTraceQuery(long PayrollRecordId) : IRequest<PayrollRecordTraceDto>;
+
+public static class PayrollTraceHelper
+{
+    public static async Task<(
+        IReadOnlyList<CalculationTraceStepDto> Steps,
+        IReadOnlyList<PitBracketTaxSliceDto> PitSlices,
+        bool IsRecomputedReference,
+        string? ReferenceNotice)> ResolveOrRecomputeAsync(
+        IApplicationDbContext context,
+        PayrollRecord rec,
+        DateOnly periodEndDate,
+        int wageRegion,
+        CancellationToken cancellationToken = default)
+    {
+        var steps = !string.IsNullOrWhiteSpace(rec.CalculationTraceJson)
+            ? JsonSerializer.Deserialize<List<CalculationTraceStepDto>>(rec.CalculationTraceJson) ?? new List<CalculationTraceStepDto>()
+            : new List<CalculationTraceStepDto>();
+
+        var brackets = !string.IsNullOrWhiteSpace(rec.PitBracketsJson)
+            ? JsonSerializer.Deserialize<List<PitBracketTaxSliceDto>>(rec.PitBracketsJson) ?? new List<PitBracketTaxSliceDto>()
+            : new List<PitBracketTaxSliceDto>();
+
+        bool isStaleStatutory = periodEndDate >= new DateOnly(2026, 1, 1)
+            && rec.SelfDeductionAmount == 11_000_000m
+            && string.Equals(rec.TaxResidencyMode, "ResidentStandard", StringComparison.OrdinalIgnoreCase);
+
+        if (steps.Count >= 15 && !isStaleStatutory)
+        {
+            return (steps, brackets, false, null);
+        }
+
+        var statutoryContext = await VietnamPayrollEngine.TryResolveStatutoryContextAsync(context, periodEndDate, cancellationToken)
+            ?? BuildFallbackStatutoryContext(rec, periodEndDate);
+
+        decimal stdDays = rec.StandardWorkdays > 0m ? rec.StandardWorkdays : 22m;
+        var input = new PayrollCalculationInput(
+            ContractBaseSalary: rec.ContractBaseSalary,
+            StandardWorkdays: stdDays,
+            PayableWorkdays: rec.PayableWorkdays,
+            PositionAllowance: rec.PositionAllowance,
+            OtherAllowance: rec.OtherAllowance,
+            OtHours150: rec.OtHours150,
+            OtHours200: rec.OtHours200,
+            OtHours300: rec.OtHours300,
+            KpiBonus: rec.KpiBonus,
+            DisciplineDeduction: rec.DisciplineDeduction,
+            DependentCount: rec.DependentCount,
+            IsUnionMember: rec.EmployeeUnionFee > 0m,
+            WageRegion: wageRegion > 0 ? wageRegion : 1,
+            UnusedLeavePayout: rec.UnusedLeavePayout,
+            InsuranceContractSalaryOverride: rec.InsuranceSalaryBase > 0m ? rec.InsuranceSalaryBase : null,
+            PrecomputedActualBaseSalary: rec.ActualBaseSalary > 0m ? rec.ActualBaseSalary : null,
+            PrecomputedOvertimePay: rec.OvertimePay > 0m ? rec.OvertimePay : null,
+            CommissionBonus: rec.CommissionBonus,
+            ThirteenthMonthBonus: rec.ThirteenthMonthBonus,
+            RetroEarningAmount: rec.RetroEarningAmount,
+            RetroDeductionAmount: rec.RetroDeductionAmount,
+            SalaryAdvanceDeduction: rec.SalaryAdvanceDeduction,
+            LoanInstallmentDeduction: rec.LoanInstallmentDeduction,
+            TaxResidencyMode: rec.TaxResidencyMode,
+            HasPitCommitment08: rec.UsedCommitment08,
+            PrecomputedOtNightExtraPay: rec.OtNightExtraPay,
+            PrecomputedOtTaxExemptAmount: rec.OtTaxExemptAmount);
+
+        var breakdown = VietnamPayrollEngine.Calculate(input, statutoryContext);
+        var recomputedPit = string.Equals(breakdown.TaxResidencyMode, "ResidentStandard", StringComparison.OrdinalIgnoreCase)
+            ? VietnamPayrollEngine.CalculateProgressivePitBreakdown(breakdown.AssessableIncome, statutoryContext.PitBrackets)
+            : new List<PitBracketTaxSliceDto>();
+
+        var netToGross = rec.IsNetToGross && rec.TargetNetSalary.HasValue
+            ? new NetToGrossSolution(rec.ContractBaseSalary, breakdown, rec.TargetNetSalary.Value, rec.NetSalary, 0m, 0, true)
+            : null;
+
+        var recomputedSteps = VietnamPayrollEngine.BuildCalculationTrace(
+            input,
+            breakdown,
+            statutoryContext.Parameter,
+            recomputedPit,
+            netToGross,
+            "Tính lại để tham chiếu từ bản ghi lương");
+
+        return (recomputedSteps, recomputedPit, true, "Tính lại để tham chiếu");
+    }
+
+    private static PayrollStatutoryContext BuildFallbackStatutoryContext(PayrollRecord rec, DateOnly periodEndDate)
+    {
+        bool is2026 = periodEndDate >= new DateOnly(2026, 1, 1);
+        var param = new PayrollStatutoryParameter
+        {
+            EffectiveFrom = periodEndDate,
+            StatutoryBaseSalary = periodEndDate >= new DateOnly(2026, 7, 1) ? 2_530_000m : 2_340_000m,
+            SocialInsuranceCapMultiplier = 20m,
+            UnemploymentInsuranceCapMultiplier = 20m,
+            MinWageRegion1 = is2026 ? 5_310_000m : 4_960_000m,
+            MinWageRegion2 = is2026 ? 4_730_000m : 4_410_000m,
+            MinWageRegion3 = is2026 ? 4_140_000m : 3_860_000m,
+            MinWageRegion4 = is2026 ? 3_700_000m : 3_450_000m,
+            SelfDeduction = rec.SelfDeductionAmount > 0m ? rec.SelfDeductionAmount : (is2026 ? 15_500_000m : 11_000_000m),
+            DependentDeduction = is2026 ? 6_200_000m : 4_400_000m,
+            EmployeeSiRate = 0.08m,
+            EmployeeHiRate = 0.015m,
+            EmployeeUiRate = 0.01m,
+            CompanySiRate = 0.17m,
+            CompanyHiRate = 0.03m,
+            CompanyUiRate = 0.01m,
+            CompanyOccupationalAccidentRate = 0.005m,
+            CompanyUnionFeeRate = 0.02m,
+            EmployeeUnionFeeRate = 0.01m,
+            LegalReference = is2026
+                ? "NQ 110/2025/UBTVQH15 & Luật Thuế TNCN 2025 (Tham chiếu)"
+                : "NQ 954/2020/UBTVQH14 & NĐ 73/2024/NĐ-CP (Tham chiếu)"
+        };
+
+        IReadOnlyList<PitBracket> brackets = is2026
+            ? new List<PitBracket>
+            {
+                new() { BracketLevel = 1, LowerBound = 0m, UpperBound = 10_000_000m, TaxRate = 0.05m, EffectiveFrom = periodEndDate },
+                new() { BracketLevel = 2, LowerBound = 10_000_000m, UpperBound = 30_000_000m, TaxRate = 0.10m, EffectiveFrom = periodEndDate },
+                new() { BracketLevel = 3, LowerBound = 30_000_000m, UpperBound = 60_000_000m, TaxRate = 0.20m, EffectiveFrom = periodEndDate },
+                new() { BracketLevel = 4, LowerBound = 60_000_000m, UpperBound = 100_000_000m, TaxRate = 0.30m, EffectiveFrom = periodEndDate },
+                new() { BracketLevel = 5, LowerBound = 100_000_000m, UpperBound = null, TaxRate = 0.35m, EffectiveFrom = periodEndDate }
+            }
+            : new List<PitBracket>
+            {
+                new() { BracketLevel = 1, LowerBound = 0m, UpperBound = 5_000_000m, TaxRate = 0.05m, EffectiveFrom = periodEndDate },
+                new() { BracketLevel = 2, LowerBound = 5_000_000m, UpperBound = 10_000_000m, TaxRate = 0.10m, EffectiveFrom = periodEndDate },
+                new() { BracketLevel = 3, LowerBound = 10_000_000m, UpperBound = 18_000_000m, TaxRate = 0.15m, EffectiveFrom = periodEndDate },
+                new() { BracketLevel = 4, LowerBound = 18_000_000m, UpperBound = 32_000_000m, TaxRate = 0.20m, EffectiveFrom = periodEndDate },
+                new() { BracketLevel = 5, LowerBound = 32_000_000m, UpperBound = 52_000_000m, TaxRate = 0.25m, EffectiveFrom = periodEndDate },
+                new() { BracketLevel = 6, LowerBound = 52_000_000m, UpperBound = 80_000_000m, TaxRate = 0.30m, EffectiveFrom = periodEndDate },
+                new() { BracketLevel = 7, LowerBound = 80_000_000m, UpperBound = null, TaxRate = 0.35m, EffectiveFrom = periodEndDate }
+            };
+
+        return new PayrollStatutoryContext(param, brackets);
+    }
+}
 
 public sealed class GetPayrollRecordTraceQueryHandler : IRequestHandler<GetPayrollRecordTraceQuery, PayrollRecordTraceDto>
 {
@@ -202,13 +355,13 @@ public sealed class GetPayrollRecordTraceQueryHandler : IRequestHandler<GetPayro
             .FirstOrDefaultAsync(r => r.Id == request.PayrollRecordId, cancellationToken)
             ?? throw new KeyNotFoundException($"Không tìm thấy bảng lương chi tiết #{request.PayrollRecordId}.");
 
-        var steps = !string.IsNullOrWhiteSpace(rec.CalculationTraceJson)
-            ? JsonSerializer.Deserialize<List<CalculationTraceStepDto>>(rec.CalculationTraceJson) ?? new List<CalculationTraceStepDto>()
-            : new List<CalculationTraceStepDto>();
-
-        var brackets = !string.IsNullOrWhiteSpace(rec.PitBracketsJson)
-            ? JsonSerializer.Deserialize<List<PitBracketTaxSliceDto>>(rec.PitBracketsJson) ?? new List<PitBracketTaxSliceDto>()
-            : new List<PitBracketTaxSliceDto>();
+        var wageRegion = rec.Employee.WageRegion ?? rec.OrganizationUnit.WageRegion;
+        var (steps, brackets, isRecomputed, notice) = await PayrollTraceHelper.ResolveOrRecomputeAsync(
+            _context,
+            rec,
+            rec.PayrollPeriod.EndDate,
+            wageRegion,
+            cancellationToken);
 
         return new PayrollRecordTraceDto(
             rec.Id,
@@ -231,7 +384,24 @@ public sealed class GetPayrollRecordTraceQueryHandler : IRequestHandler<GetPayro
             rec.OtNightExtraPay,
             rec.OtTaxExemptAmount,
             steps,
-            brackets);
+            brackets,
+            isRecomputed,
+            notice,
+            rec.SelfDeductionAmount,
+            rec.DependentDeductionAmount,
+            rec.DependentCount,
+            rec.TaxableIncome,
+            rec.AssessableIncome,
+            rec.EmployeeSocialInsurance,
+            rec.EmployeeHealthInsurance,
+            rec.EmployeeUnemploymentInsurance,
+            rec.PositionAllowance,
+            rec.OtherAllowance,
+            rec.OvertimePay,
+            rec.KpiBonus,
+            rec.DisciplineDeduction,
+            rec.StandardWorkdays,
+            rec.PayableWorkdays);
     }
 }
 
@@ -249,6 +419,196 @@ public sealed class SolveNetToGrossQueryHandler : IRequestHandler<SolveNetToGros
         var effDate = request.EffectiveDate ?? DateOnly.FromDateTime(DateTime.Today);
         var ctx = await VietnamPayrollEngine.ResolveStatutoryContextAsync(_context, effDate, cancellationToken);
         return VietnamPayrollEngine.SolveGrossFromNet(request.Input, ctx);
+    }
+}
+
+public sealed record AdhocPayrollCalculatorInput(
+    decimal ContractBaseSalary = 20_000_000m,
+    decimal PositionAllowance = 0m,
+    decimal OtherAllowance = 0m,
+    decimal StandardWorkdays = 22m,
+    decimal PayableWorkdays = 22m,
+    decimal OtHours150 = 0m,
+    decimal OtHours200 = 0m,
+    decimal OtHours300 = 0m,
+    decimal OtHours150Night = 0m,
+    decimal OtHours200Night = 0m,
+    decimal OtHours300Night = 0m,
+    decimal RegularNightHours = 0m,
+    decimal KpiBonus = 0m,
+    decimal CommissionBonus = 0m,
+    decimal DisciplineDeduction = 0m,
+    decimal ExtraTaxExemptAmount = 0m,
+    int DependentCount = 0,
+    bool IsUnionMember = true,
+    int WageRegion = 1,
+    decimal? InsuranceSalaryOverride = null,
+    DateOnly? EffectiveDate = null,
+    string TaxResidencyMode = "ResidentStandard",
+    bool HasPitCommitment08 = false,
+    bool IsNetToGross = false,
+    decimal TargetNetSalary = 0m);
+
+public sealed record AdhocPayrollCalculatorResultDto(
+    DateOnly EffectiveDate,
+    PayrollStatutoryParameter StatutoryParameter,
+    PayrollCalculationBreakdown Breakdown,
+    PayrollRecordTraceDto Trace,
+    NetToGrossSolution? NetToGross = null);
+
+public sealed record CalculateAdhocPayrollQuery(AdhocPayrollCalculatorInput Input)
+    : IRequest<AdhocPayrollCalculatorResultDto>;
+
+public sealed class CalculateAdhocPayrollQueryHandler : IRequestHandler<CalculateAdhocPayrollQuery, AdhocPayrollCalculatorResultDto>
+{
+    private readonly IApplicationDbContext _context;
+
+    public CalculateAdhocPayrollQueryHandler(IApplicationDbContext context) => _context = context;
+
+    public async Task<AdhocPayrollCalculatorResultDto> Handle(CalculateAdhocPayrollQuery request, CancellationToken cancellationToken)
+    {
+        var req = request.Input;
+        var effDate = req.EffectiveDate ?? DateOnly.FromDateTime(DateTime.Today);
+        var stdDays = req.StandardWorkdays > 0m ? req.StandardWorkdays : 22m;
+
+        var ctx = await VietnamPayrollEngine.TryResolveStatutoryContextAsync(_context, effDate, cancellationToken)
+            ?? throw new InvalidOperationException($"Chưa cấu hình tham số luật lao động/thuế TNCN có hiệu lực tại ngày {effDate:dd/MM/yyyy}.");
+
+        NetToGrossSolution? n2gSol = null;
+        PayrollCalculationInput calcInput;
+
+        if (req.IsNetToGross && req.TargetNetSalary > 0m)
+        {
+            var n2gInput = new NetToGrossInput(
+                TargetNetSalary: req.TargetNetSalary,
+                PositionAllowance: req.PositionAllowance,
+                OtherAllowance: req.OtherAllowance,
+                StandardWorkdays: stdDays,
+                PayableWorkdays: req.PayableWorkdays,
+                OtHours150: req.OtHours150,
+                OtHours200: req.OtHours200,
+                OtHours300: req.OtHours300,
+                KpiBonus: req.KpiBonus,
+                CommissionBonus: req.CommissionBonus,
+                DisciplineDeduction: req.DisciplineDeduction,
+                DependentCount: req.DependentCount,
+                IsUnionMember: req.IsUnionMember,
+                WageRegion: req.WageRegion,
+                FixedInsuranceContractSalary: req.InsuranceSalaryOverride,
+                TaxResidencyMode: req.TaxResidencyMode,
+                HasPitCommitment08: req.HasPitCommitment08,
+                OtHours150Night: req.OtHours150Night,
+                OtHours200Night: req.OtHours200Night,
+                OtHours300Night: req.OtHours300Night,
+                RegularNightHours: req.RegularNightHours,
+                ExtraTaxExemptAmount: req.ExtraTaxExemptAmount);
+
+            n2gSol = VietnamPayrollEngine.SolveGrossFromNet(n2gInput, ctx);
+            calcInput = new PayrollCalculationInput(
+                ContractBaseSalary: n2gSol.SolvedContractBaseSalary,
+                StandardWorkdays: stdDays,
+                PayableWorkdays: req.PayableWorkdays,
+                PositionAllowance: req.PositionAllowance,
+                OtherAllowance: req.OtherAllowance,
+                OtHours150: req.OtHours150,
+                OtHours200: req.OtHours200,
+                OtHours300: req.OtHours300,
+                KpiBonus: req.KpiBonus,
+                DisciplineDeduction: req.DisciplineDeduction,
+                DependentCount: req.DependentCount,
+                IsUnionMember: req.IsUnionMember,
+                WageRegion: req.WageRegion,
+                InsuranceContractSalaryOverride: req.InsuranceSalaryOverride,
+                ExtraTaxExemptAmount: req.ExtraTaxExemptAmount,
+                OtHours150Night: req.OtHours150Night,
+                OtHours200Night: req.OtHours200Night,
+                OtHours300Night: req.OtHours300Night,
+                RegularNightHours: req.RegularNightHours,
+                CommissionBonus: req.CommissionBonus,
+                TaxResidencyMode: req.TaxResidencyMode,
+                HasPitCommitment08: req.HasPitCommitment08);
+        }
+        else
+        {
+            calcInput = new PayrollCalculationInput(
+                ContractBaseSalary: req.ContractBaseSalary,
+                StandardWorkdays: stdDays,
+                PayableWorkdays: req.PayableWorkdays,
+                PositionAllowance: req.PositionAllowance,
+                OtherAllowance: req.OtherAllowance,
+                OtHours150: req.OtHours150,
+                OtHours200: req.OtHours200,
+                OtHours300: req.OtHours300,
+                KpiBonus: req.KpiBonus,
+                DisciplineDeduction: req.DisciplineDeduction,
+                DependentCount: req.DependentCount,
+                IsUnionMember: req.IsUnionMember,
+                WageRegion: req.WageRegion,
+                InsuranceContractSalaryOverride: req.InsuranceSalaryOverride,
+                ExtraTaxExemptAmount: req.ExtraTaxExemptAmount,
+                OtHours150Night: req.OtHours150Night,
+                OtHours200Night: req.OtHours200Night,
+                OtHours300Night: req.OtHours300Night,
+                RegularNightHours: req.RegularNightHours,
+                CommissionBonus: req.CommissionBonus,
+                TaxResidencyMode: req.TaxResidencyMode,
+                HasPitCommitment08: req.HasPitCommitment08);
+        }
+
+        var breakdown = VietnamPayrollEngine.Calculate(calcInput, ctx);
+        var pitSlices = string.Equals(breakdown.TaxResidencyMode, "ResidentStandard", StringComparison.OrdinalIgnoreCase)
+            ? VietnamPayrollEngine.CalculateProgressivePitBreakdown(breakdown.AssessableIncome, ctx.PitBrackets)
+            : new List<PitBracketTaxSliceDto>();
+
+        var steps = VietnamPayrollEngine.BuildCalculationTrace(
+            calcInput,
+            breakdown,
+            ctx.Parameter,
+            pitSlices,
+            n2gSol,
+            $"Máy tính lương ad-hoc (hiệu lực {effDate:dd/MM/yyyy})");
+
+        var trace = new PayrollRecordTraceDto(
+            PayrollRecordId: 0,
+            PayrollPeriodId: 0,
+            PeriodCode: $"CALC-{effDate:yyyy-MM}",
+            EmployeeCode: "ADHOC",
+            EmployeeName: req.IsNetToGross ? "Tính thử Net → Gross" : "Tính thử Gross → Net",
+            DepartmentName: $"Vùng BHTN {req.WageRegion}",
+            ContractBaseSalary: calcInput.ContractBaseSalary,
+            ActualBaseSalary: breakdown.ActualBaseSalary,
+            GrossIncome: breakdown.GrossIncome,
+            TotalEmployeeInsurance: breakdown.TotalEmployeeInsurance,
+            PersonalIncomeTax: breakdown.PersonalIncomeTax,
+            NetSalary: breakdown.NetSalary,
+            TotalCompanyCost: breakdown.TotalCompanyCost,
+            TaxResidencyMode: breakdown.TaxResidencyMode,
+            UsedCommitment08: breakdown.UsedCommitment08,
+            IsNetToGross: req.IsNetToGross,
+            TargetNetSalary: req.IsNetToGross ? req.TargetNetSalary : null,
+            OtNightExtraPay: breakdown.OtNightExtraPay,
+            OtTaxExemptAmount: breakdown.OtTaxExemptAmount,
+            Steps: steps,
+            PitBrackets: pitSlices,
+            IsRecomputedReference: false,
+            ReferenceNotice: null,
+            SelfDeductionAmount: breakdown.SelfDeductionAmount,
+            DependentDeductionAmount: breakdown.DependentDeductionAmount,
+            DependentCount: req.DependentCount,
+            TaxableIncome: breakdown.TaxableIncome,
+            AssessableIncome: breakdown.AssessableIncome,
+            EmployeeSocialInsurance: breakdown.EmployeeSocialInsurance,
+            EmployeeHealthInsurance: breakdown.EmployeeHealthInsurance,
+            EmployeeUnemploymentInsurance: breakdown.EmployeeUnemploymentInsurance,
+            PositionAllowance: req.PositionAllowance,
+            OtherAllowance: req.OtherAllowance,
+            OvertimePay: breakdown.OvertimePay,
+            KpiBonus: req.KpiBonus + req.CommissionBonus,
+            DisciplineDeduction: req.DisciplineDeduction,
+            StandardWorkdays: stdDays,
+            PayableWorkdays: req.PayableWorkdays);
+
+        return new AdhocPayrollCalculatorResultDto(effDate, ctx.Parameter, breakdown, trace, n2gSol);
     }
 }
 

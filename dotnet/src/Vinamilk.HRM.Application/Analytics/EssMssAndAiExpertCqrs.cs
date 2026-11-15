@@ -30,7 +30,16 @@ public sealed record EssPayslipDto(
     decimal PersonalIncomeTax,
     decimal NetSalary,
     string PaymentStatus,
-    string PeriodStatus);
+    string PeriodStatus,
+    decimal StandardWorkdays = 22m,
+    decimal ActualBaseSalary = 0m,
+    decimal AllowanceTotal = 0m,
+    decimal OvertimePay = 0m,
+    decimal BonusTotal = 0m,
+    decimal FamilyDeductionTotal = 0m,
+    decimal AssessableIncome = 0m,
+    bool IsRecomputedReference = false,
+    IReadOnlyList<Vinamilk.HRM.Application.Payroll.CalculationTraceStepDto>? CondensedSteps = null);
 
 public sealed record EssAttendanceSummaryDto(
     int Month,
@@ -171,17 +180,41 @@ public class GetEssMssPortalQueryHandler : IRequestHandler<GetEssMssPortalQuery,
             .Take(12)
             .ToListAsync(cancellationToken);
 
-        var payslips = payrollList.Select(p => new EssPayslipDto(
-            p.Id,
-            p.PayrollPeriod.PeriodCode,
-            p.PayrollPeriod.PeriodTitle,
-            p.PayableWorkdays,
-            p.GrossIncome,
-            p.TotalEmployeeInsurance,
-            p.PersonalIncomeTax,
-            p.NetSalary,
-            p.PaymentStatus,
-            p.PayrollPeriod.Status)).ToList();
+        var wageRegion = targetEmp.WageRegion ?? targetEmp.OrganizationUnit.WageRegion;
+        var payslips = new List<EssPayslipDto>(payrollList.Count);
+        foreach (var p in payrollList)
+        {
+            IReadOnlyList<Vinamilk.HRM.Application.Payroll.CalculationTraceStepDto>? steps = null;
+            bool isRecomputed = false;
+            if (payslips.Count == 0)
+            {
+                var resolved = await Vinamilk.HRM.Application.Payroll.PayrollTraceHelper.ResolveOrRecomputeAsync(
+                    _context, p, p.PayrollPeriod.EndDate, wageRegion, cancellationToken);
+                steps = resolved.Steps;
+                isRecomputed = resolved.IsRecomputedReference;
+            }
+
+            payslips.Add(new EssPayslipDto(
+                p.Id,
+                p.PayrollPeriod.PeriodCode,
+                p.PayrollPeriod.PeriodTitle,
+                p.PayableWorkdays,
+                p.GrossIncome,
+                p.TotalEmployeeInsurance,
+                p.PersonalIncomeTax,
+                p.NetSalary,
+                p.PaymentStatus,
+                p.PayrollPeriod.Status,
+                p.StandardWorkdays,
+                p.ActualBaseSalary,
+                p.PositionAllowance + p.OtherAllowance,
+                p.OvertimePay,
+                p.KpiBonus + p.CommissionBonus + p.ThirteenthMonthBonus,
+                p.SelfDeductionAmount + p.DependentDeductionAmount,
+                p.AssessableIncome,
+                isRecomputed,
+                steps));
+        }
 
         var latestPayslip = payslips.FirstOrDefault();
 

@@ -991,6 +991,134 @@ public sealed class PayrollDocumentService : IPayrollDocumentService
         return ms.ToArray();
     }
 
+    public byte[] GeneratePayrollTracePdf(
+        PayrollRecordTraceDto trace,
+        DateOnly? effectiveDate = null,
+        string? calculatorNote = null)
+    {
+        ArgumentNullException.ThrowIfNull(trace);
+
+        var doc = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(1.2f, Unit.Centimetre);
+                page.DefaultTextStyle(x => x.FontSize(8.8f));
+
+                page.Header().Column(col =>
+                {
+                    col.Item().Row(row =>
+                    {
+                        row.RelativeItem().Column(left =>
+                        {
+                            left.Item().Text("CÔNG TY CỔ PHẦN SỮA VIỆT NAM (VINAMILK)").Bold().FontSize(10.5f).FontColor("#003DA5");
+                            left.Item().Text("Diễn giải công thức & bước tính lương chi tiết (15 bước)").FontSize(8.2f).FontColor("#64748b");
+                        });
+                        row.RelativeItem().AlignRight().Column(right =>
+                        {
+                            right.Item().Text($"BẢNG KÊ DIỄN GIẢI TÍNH LƯƠNG • KỲ {trace.PeriodCode}").Bold().FontSize(10);
+                            right.Item().Text(effectiveDate.HasValue
+                                ? $"Tham số hiệu lực: {effectiveDate.Value:dd/MM/yyyy} | Chế độ thuế: {trace.TaxResidencyMode}"
+                                : $"Chế độ thuế: {trace.TaxResidencyMode}").FontSize(8);
+                        });
+                    });
+                    col.Item().PaddingVertical(5).LineHorizontal(1).LineColor("#003DA5");
+                });
+
+                page.Content().Column(col =>
+                {
+                    col.Spacing(7);
+
+                    col.Item().Border(0.75f).BorderColor("#cbd5e1").Padding(7).Column(info =>
+                    {
+                        info.Spacing(2.5f);
+                        info.Item().Text($"Nhân viên: {trace.EmployeeName} ({trace.EmployeeCode})   |   Đơn vị: {trace.DepartmentName}").Bold();
+                        info.Item().Text($"Lương HĐ: {trace.ContractBaseSalary:N0} đ   |   Gross: {trace.GrossIncome:N0} đ   |   BH NLĐ: {trace.TotalEmployeeInsurance:N0} đ   |   Thuế TNCN: {trace.PersonalIncomeTax:N0} đ   |   Thực lĩnh Net: {trace.NetSalary:N0} đ   |   Tổng CP DN: {trace.TotalCompanyCost:N0} đ");
+                        if (trace.IsRecomputedReference || !string.IsNullOrWhiteSpace(trace.ReferenceNotice))
+                        {
+                            info.Item().Text($"Lưu ý: {trace.ReferenceNotice ?? "Tính lại để tham chiếu"} — Dữ liệu diễn giải được Engine dựng lại từ các khoản đã lưu.").FontColor("#b45309").Bold();
+                        }
+                        if (!string.IsNullOrWhiteSpace(calculatorNote))
+                        {
+                            info.Item().Text(calculatorNote).FontColor("#0369a1");
+                        }
+                    });
+
+                    col.Item().Text("I. DIỄN GIẢI CHI TIẾT 15 BƯỚC TÍNH LƯƠNG").Bold().FontColor("#003DA5");
+                    col.Item().Table(table =>
+                    {
+                        table.ColumnsDefinition(c =>
+                        {
+                            c.RelativeColumn(0.6f);
+                            c.RelativeColumn(2.6f);
+                            c.RelativeColumn(4.8f);
+                            c.RelativeColumn(2.1f);
+                            c.RelativeColumn(2.1f);
+                        });
+
+                        AddTableHeader(table, "Bước", "Nội dung", "Công thức & Tham số thay số", "Kết quả (VNĐ)", "Căn cứ pháp lý");
+                        foreach (var s in trace.Steps.OrderBy(x => x.StepOrder))
+                        {
+                            var formulaText = string.IsNullOrWhiteSpace(s.VariablesSummary)
+                                ? s.Formula
+                                : $"{s.Formula}\n→ {s.VariablesSummary}";
+                            var amountText = s.SecondaryAmount.HasValue && s.StepOrder == 15
+                                ? $"Net: {s.SecondaryAmount.Value:N0}\nCP DN: {s.ResultAmount:N0}"
+                                : s.SecondaryAmount.HasValue && s.StepOrder == 8
+                                    ? $"BHXH: {s.ResultAmount:N0}\nBHTN: {s.SecondaryAmount.Value:N0}"
+                                    : $"{s.ResultAmount:N0}";
+
+                            table.Cell().BorderBottom(0.5f).BorderColor("#e2e8f0").Padding(3.5f).AlignCenter().Text($"{s.StepOrder}").Bold();
+                            table.Cell().BorderBottom(0.5f).BorderColor("#e2e8f0").Padding(3.5f).Text(s.ItemName).SemiBold();
+                            table.Cell().BorderBottom(0.5f).BorderColor("#e2e8f0").Padding(3.5f).Text(formulaText);
+                            table.Cell().BorderBottom(0.5f).BorderColor("#e2e8f0").Padding(3.5f).AlignRight().Text(amountText).Bold();
+                            table.Cell().BorderBottom(0.5f).BorderColor("#e2e8f0").Padding(3.5f).Text(s.LegalReference ?? "-");
+                        }
+                    });
+
+                    if (trace.PitBrackets.Count > 0)
+                    {
+                        col.Item().Text($"II. BẢNG TÍNH THUẾ TNCN LŨY TIẾN TỪNG BẬC ({trace.PitBrackets.Count} BẬC)").Bold().FontColor("#003DA5");
+                        col.Item().Table(table =>
+                        {
+                            table.ColumnsDefinition(c =>
+                            {
+                                c.RelativeColumn(1.2f);
+                                c.RelativeColumn(4f);
+                                c.RelativeColumn(1.5f);
+                                c.RelativeColumn(2.5f);
+                                c.RelativeColumn(2.5f);
+                            });
+
+                            AddTableHeader(table, "Bậc", "Khoảng thu nhập tính thuế", "Thuế suất", "TN tính vào bậc", "Tiền thuế (VNĐ)");
+                            foreach (var b in trace.PitBrackets)
+                            {
+                                var rangeText = b.UpperBound.HasValue
+                                    ? $"Trên {b.LowerBound:N0} đến {b.UpperBound.Value:N0}"
+                                    : $"Trên {b.LowerBound:N0}";
+                                table.Cell().BorderBottom(0.5f).BorderColor("#e2e8f0").Padding(3.5f).Text($"Bậc {b.BracketLevel}");
+                                table.Cell().BorderBottom(0.5f).BorderColor("#e2e8f0").Padding(3.5f).Text(rangeText);
+                                table.Cell().BorderBottom(0.5f).BorderColor("#e2e8f0").Padding(3.5f).AlignRight().Text($"{b.TaxRate * 100m:0.#}%");
+                                table.Cell().BorderBottom(0.5f).BorderColor("#e2e8f0").Padding(3.5f).AlignRight().Text($"{b.IncomeInBracket:N0}");
+                                table.Cell().BorderBottom(0.5f).BorderColor("#e2e8f0").Padding(3.5f).AlignRight().Text($"{b.TaxAmount:N0}");
+                            }
+                            AddTableTotalRowSpan(table, 5, "TỔNG THUẾ TNCN PHẢI NỘP", $"{trace.PersonalIncomeTax:N0} đ");
+                        });
+                    }
+                });
+
+                page.Footer().AlignCenter().Text(x =>
+                {
+                    x.Span($"Vinamilk Enterprise HRM • Diễn giải công thức tính lương ({trace.EmployeeCode} - {trace.PeriodCode}) • Trang ");
+                    x.CurrentPageNumber();
+                });
+            });
+        });
+
+        return doc.GeneratePdf();
+    }
+
     private static string EscapeCsv(string? value)
     {
         if (string.IsNullOrEmpty(value)) return string.Empty;

@@ -39,6 +39,13 @@
         <div class="fw-medium">@TempData["CoreHrSuccess"]</div>
     </div>
 }
+@if (TempData["CoreHrError"] != null)
+{
+    <div class="alert alert-danger border-0 shadow-sm d-flex align-items-center gap-2 mb-4">
+        <i class="ti ti-alert-triangle fs-4"></i>
+        <div class="fw-medium">@TempData["CoreHrError"]</div>
+    </div>
+}
 
 <!-- KPI SUMMARY ROW -->
 <div class="row g-3 mb-4">
@@ -104,98 +111,149 @@
 </ul>
 
 <div class="tab-content">
-    <!-- TAB 1: CÂY CƠ CẤU TỔ CHỨC (DRAG & DROP REORDER + CRUD) -->
+    <!-- TAB 1: CÂY CƠ CẤU TỔ CHỨC ĐA CẤP (SERVER-RENDERED TREE + DRAG & DROP + CRUD) -->
     <div class="tab-pane fade show active" id="tab-tree" role="tabpanel">
         <div class="vnm-card p-4">
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
                 <div>
                     <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
-                        Cây Cơ cấu Tổ chức Đa cấp (`Công ty > Khối > Phòng/Nhà máy/Trang trại > Tổ`)
+                        Cây Cơ cấu Tổ chức Đa cấp (Công ty &gt; Khối &gt; Phòng/Nhà máy/Trang trại &gt; Tổ)
                     </h2>
                     <p class="text-secondary fs-6 mb-0">
-                        Kéo thả biểu tượng <i class="ti ti-grip-vertical"></i> để sắp xếp thứ tự hiển thị đơn vị (Tự động lưu qua CQRS <code>ReorderOrganizationUnitsCommand</code>).
+                        Hiển thị cây phân cấp trực tiếp từ máy chủ có nút thu/mở nhánh, trưởng đơn vị, số nhân sự, vùng lương; kéo thả <i class="ti ti-grip-vertical"></i> để đổi thứ tự anh/chị/em cùng cấp.
                     </p>
                 </div>
-                <span class="vnm-badge vnm-badge-info"><i class="ti ti-arrows-sort me-1"></i>SortableJS Enabled</span>
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAllOrgBranches(true)">
+                        <i class="ti ti-chevrons-down me-1"></i>Mở tất cả
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAllOrgBranches(false)">
+                        <i class="ti ti-chevrons-up me-1"></i>Thu gọn
+                    </button>
+                    <button type="button" class="btn btn-sm vnm-btn-primary" onclick="openNewUnitModal(null)">
+                        <i class="ti ti-plus me-1"></i>Thêm Đơn vị
+                    </button>
+                </div>
             </div>
 
-            <div class="vnm-table-wrapper">
-                <table class="vnm-table vnm-table-mobile-cards">
-                    <thead>
-                        <tr>
-                            <th style="width: 42px;"></th>
-                            <th>Mã ĐV</th>
-                            <th>Tên Đơn vị / Phân cấp Cây (`TreePath`)</th>
-                            <th>Loại hình</th>
-                            <th>Cấp</th>
-                            <th>Trưởng Đơn vị</th>
-                            <th>Thực tế / Định biên</th>
-                            <th class="text-end">Thao tác</th>
-                        </tr>
-                    </thead>
-                    <tbody id="orgUnitsSortableBody">
-                        @foreach (var u in Model.Units)
+            @if (Model.Units.Count == 0)
+            {
+                <div class="text-center py-5 px-3 border rounded-3 bg-light-subtle">
+                    <div class="fs-1 text-muted mb-2"><i class="ti ti-sitemap-off"></i></div>
+                    <h5 class="fw-bold mb-1">Chưa có dữ liệu Cơ cấu Tổ chức</h5>
+                    <p class="text-secondary mb-3">Hệ thống chưa có đơn vị nào được thiết lập. Nhấn nút bên dưới để tạo đơn vị gốc đầu tiên.</p>
+                    <button type="button" class="btn vnm-btn-primary" onclick="openNewUnitModal(null)">
+                        <i class="ti ti-plus me-1"></i>Tạo Đơn vị Gốc
+                    </button>
+                </div>
+            }
+            else
+            {
+                var unitById = Model.Units.ToDictionary(u => u.Id);
+                var childrenLookup = Model.Units
+                    .OrderBy(u => u.SortOrder)
+                    .ThenBy(u => u.UnitCode)
+                    .ToLookup(u => u.ParentUnitId.HasValue && unitById.ContainsKey(u.ParentUnitId.Value) ? u.ParentUnitId : null);
+
+                Microsoft.AspNetCore.Html.IHtmlContent RenderOrgTreeBranch(int? parentId, int depth)
+                {
+                    var items = childrenLookup[parentId].ToList();
+                    if (items.Count == 0)
+                    {
+                        return Microsoft.AspNetCore.Html.HtmlString.Empty;
+                    }
+
+                    var sb = new System.Text.StringBuilder();
+                    sb.Append($"<ul class='org-tree-list list-unstyled mb-0 {(depth > 0 ? "ms-4 ps-3 border-start border-2 border-primary-subtle" : "")}' data-parent-id='{(parentId?.ToString() ?? "")}'>");
+                    foreach (var u in items)
+                    {
+                        var children = childrenLookup[u.Id].ToList();
+                        var hasChildren = children.Count > 0;
+                        var canDelete = !hasChildren && u.ActualHeadcount == 0;
+                        var deleteBlockReason = hasChildren
+                            ? $"Không thể xóa vì còn {children.Count} đơn vị con trực thuộc"
+                            : (u.ActualHeadcount > 0 ? $"Không thể xóa vì đang có {u.ActualHeadcount} nhân sự trực thuộc" : "Xóa đơn vị");
+
+                        var levelBadge = u.UnitLevel switch
                         {
-                            var indentPx = Math.Max(0, (u.UnitLevel - 1) * 24);
-                            var levelBadge = u.UnitLevel switch
-                            {
-                                1 => "bg-primary text-white",
-                                2 => "bg-info-subtle text-info",
-                                3 => "bg-success-subtle text-success",
-                                _ => "bg-secondary-subtle text-secondary"
-                            };
+                            1 => "bg-primary text-white",
+                            2 => "bg-info-subtle text-info-emphasis",
+                            3 => "bg-success-subtle text-success-emphasis",
+                            _ => "bg-secondary-subtle text-secondary"
+                        };
+                        var regionLabel = u.WageRegion switch
+                        {
+                            1 => "Vùng I",
+                            2 => "Vùng II",
+                            3 => "Vùng III",
+                            4 => "Vùng IV",
+                            _ => $"Vùng {u.WageRegion}"
+                        };
 
-                            <tr data-unit-id="@u.Id">
-                                <td class="text-center text-muted" style="cursor: grab;" title="Kéo thả để đổi thứ tự">
-                                    <i class="ti ti-grip-vertical fs-5"></i>
-                                </td>
-                                <td data-label="Mã ĐV">
-                                    <span class="badge bg-primary-subtle text-primary font-monospace fw-bold">@u.UnitCode</span>
-                                </td>
-                                <td data-label="Tên Đơn vị">
-                                    <div style="padding-left: @(indentPx)px;" class="d-flex align-items-center gap-2">
-                                        @if (u.UnitLevel > 1)
-                                        {
-                                            <span class="text-muted font-monospace">└─</span>
-                                        }
-                                        <div>
-                                            <div class="fw-bold">@u.UnitName</div>
-                                            <div class="text-muted font-monospace" style="font-size: 0.7rem;">TreePath: @u.TreePath • CostCenter: @(u.CostCenterCode ?? "CC-VNM")</div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td data-label="Loại hình">
-                                    <span class="badge @levelBadge">@u.UnitType</span>
-                                </td>
-                                <td data-label="Cấp" class="font-monospace fw-bold">Cấp @u.UnitLevel</td>
-                                <td data-label="Trưởng Đơn vị" class="fs-7">
-                                    @(u.ManagerName ?? "Ban Tổng Giám đốc")
-                                </td>
-                                <td data-label="Định biên">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span class="font-monospace fw-bold text-primary">@u.ActualHeadcount</span>
-                                        <span class="text-muted">/</span>
-                                        <span class="font-monospace text-secondary">@u.PlannedHeadcount</span>
-                                    </div>
-                                </td>
-                                <td data-label="Thao tác" class="text-end">
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="/Employees?OrganizationUnitId=@u.Id" class="btn btn-outline-secondary" title="Xem nhân sự thuộc đơn vị">
-                                            <i class="ti ti-users"></i>
-                                        </a>
-                                        <button type="button"
-                                                class="btn btn-outline-primary"
-                                                title="Chỉnh sửa đơn vị"
-                                                onclick="openUnitModal(@u.Id, '@u.UnitCode', '@Html.Raw(u.UnitName.Replace("'", "\\'"))', '@u.UnitType', @(u.ParentUnitId?.ToString() ?? "null"), '@(u.CostCenterCode ?? "")', @u.PlannedHeadcount, @u.SortOrder)">
-                                            <i class="ti ti-edit"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
+                        var encodedCode = System.Net.WebUtility.HtmlEncode(u.UnitCode);
+                        var encodedName = System.Net.WebUtility.HtmlEncode(u.UnitName);
+                        var encodedType = System.Net.WebUtility.HtmlEncode(u.UnitType);
+                        var encodedCc = System.Net.WebUtility.HtmlEncode(u.CostCenterCode ?? "");
+                        var encodedMgr = System.Net.WebUtility.HtmlEncode(u.ManagerName ?? "Chưa phân công");
+                        var encodedAddr = System.Net.WebUtility.HtmlEncode(u.Address ?? "");
+
+                        sb.Append($"<li class='org-tree-item mb-2' data-unit-id='{u.Id}'>");
+                        sb.Append("<div class='d-flex flex-wrap align-items-center justify-content-between gap-2 p-2 px-3 rounded-3 border bg-white shadow-xs'>");
+                        sb.Append("<div class='d-flex align-items-center gap-2 flex-grow-1 min-w-0'>");
+                        sb.Append("<span class='org-drag-handle text-muted px-1' style='cursor: grab;' title='Kéo thả sắp xếp thứ tự cùng cấp'><i class='ti ti-grip-vertical'></i></span>");
+                        if (hasChildren)
+                        {
+                            sb.Append($"<button type='button' class='btn btn-xs btn-light border org-toggle-btn' onclick='toggleOrgBranch(this)' aria-expanded='true' title='Thu gọn / Mở rộng nhánh'><i class='ti ti-chevron-down'></i></button>");
                         }
-                    </tbody>
-                </table>
-            </div>
+                        else
+                        {
+                            sb.Append("<span class='text-muted px-2' style='width:28px;text-align:center;'><i class='ti ti-point-filled'></i></span>");
+                        }
+
+                        sb.Append($"<span class='badge bg-primary-subtle text-primary font-monospace fw-bold'>{encodedCode}</span>");
+                        sb.Append("<div class='min-w-0'>");
+                        sb.Append($"<div class='fw-bold text-truncate'>{encodedName} <span class='badge {levelBadge} ms-1'>{encodedType} • Cấp {u.UnitLevel}</span></div>");
+                        sb.Append($"<div class='text-muted fs-7'>Trưởng ĐV: <strong class='text-body'>{encodedMgr}</strong> • <span class='badge bg-warning-subtle text-warning-emphasis'>{regionLabel}</span> • <span class='font-monospace text-primary fw-semibold'>{u.ActualHeadcount}</span>/{u.PlannedHeadcount} NV</div>");
+                        sb.Append("</div></div>");
+
+                        sb.Append("<div class='d-flex align-items-center gap-1'>");
+                        sb.Append($"<a href='/Employees?OrganizationUnitId={u.Id}' class='btn btn-sm btn-outline-secondary' title='Xem nhân sự thuộc đơn vị'><i class='ti ti-users'></i></a>");
+                        sb.Append($"<button type='button' class='btn btn-sm btn-outline-success' title='Thêm đơn vị con' onclick='openNewUnitModal({u.Id})'><i class='ti ti-folder-plus'></i></button>");
+                        sb.Append($"<button type='button' class='btn btn-sm btn-outline-primary' title='Chỉnh sửa đơn vị' " +
+                                  $"data-id='{u.Id}' data-code='{encodedCode}' data-name='{encodedName}' data-type='{encodedType}' " +
+                                  $"data-parent='{(u.ParentUnitId?.ToString() ?? "")}' data-manager='{(u.ManagerEmployeeId?.ToString() ?? "")}' " +
+                                  $"data-region='{u.WageRegion}' data-costcenter='{encodedCc}' data-planned='{u.PlannedHeadcount}' " +
+                                  $"data-sort='{u.SortOrder}' data-address='{encodedAddr}' onclick='openEditUnitFromBtn(this)'><i class='ti ti-edit'></i></button>");
+
+                        if (canDelete)
+                        {
+                            sb.Append($"<button type='button' class='btn btn-sm btn-outline-danger' title='Xóa đơn vị' onclick=\"confirmDeleteUnit({u.Id}, '{encodedCode}')\"><i class='ti ti-trash'></i></button>");
+                        }
+                        else
+                        {
+                            sb.Append($"<button type='button' class='btn btn-sm btn-outline-secondary opacity-50' title='{System.Net.WebUtility.HtmlEncode(deleteBlockReason)}' onclick=\"showDeleteBlocked('{System.Net.WebUtility.HtmlEncode(deleteBlockReason)}')\"><i class='ti ti-lock'></i></button>");
+                        }
+                        sb.Append("</div></div>");
+
+                        if (hasChildren)
+                        {
+                            sb.Append("<div class='org-tree-children mt-2'>");
+                            sb.Append(RenderOrgTreeBranch(u.Id, depth + 1).ToString());
+                            sb.Append("</div>");
+                        }
+                        sb.Append("</li>");
+                    }
+                    sb.Append("</ul>");
+                    return new Microsoft.AspNetCore.Html.HtmlString(sb.ToString());
+                }
+
+                @RenderOrgTreeBranch(null, 0)
+
+                <form id="deleteUnitHiddenForm" asp-controller="Organization" asp-action="DeleteUnit" method="post" class="d-none">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" id="deleteUnitIdHidden" />
+                </form>
+            }
         </div>
     </div>
 
@@ -412,13 +470,32 @@
                             <input type="text" name="unitName" id="unitNameInput" class="form-control" required placeholder="VD: Phòng Nghiên cứu & Phát triển Sữa công thức" />
                         </div>
                         <div class="col-12">
-                            <label class="form-label fw-semibold">Đơn vị Cấp trên (`ParentUnitId`)</label>
+                            <label class="form-label fw-semibold">Đơn vị Cấp trên (<code>ParentUnitId</code>)</label>
                             <select name="parentUnitId" id="parentUnitIdInput" class="form-select">
-                                <option value="">-- Cấp 1 (Trực thuộc Tổng Công ty) --</option>
-                                @foreach (var u in Model.Units.Where(x => x.UnitLevel <= 2))
+                                <option value="">-- Cấp 1 (Đơn vị gốc / Tổng Công ty) --</option>
+                                @foreach (var u in Model.Units.OrderBy(x => x.UnitLevel).ThenBy(x => x.UnitCode))
                                 {
                                     <option value="@u.Id">[Cấp @u.UnitLevel] @u.UnitCode — @u.UnitName</option>
                                 }
+                            </select>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold">Trưởng Đơn vị</label>
+                            <select name="managerEmployeeId" id="managerEmployeeIdInput" class="form-select">
+                                <option value="">-- Chưa phân công --</option>
+                                @foreach (var emp in Model.ManagerCandidates)
+                                {
+                                    <option value="@emp.Id">@emp.EmployeeCode — @emp.FullName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold">Vùng lương tối thiểu</label>
+                            <select name="wageRegion" id="wageRegionInput" class="form-select">
+                                <option value="1">Vùng I</option>
+                                <option value="2">Vùng II</option>
+                                <option value="3">Vùng III</option>
+                                <option value="4">Vùng IV</option>
                             </select>
                         </div>
                         <div class="col-md-4">
@@ -427,11 +504,15 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-semibold">Định biên NV</label>
-                            <input type="number" name="plannedHeadcount" id="plannedHcInput" class="form-control font-monospace" value="25" required />
+                            <input type="number" name="plannedHeadcount" id="plannedHcInput" class="form-control font-monospace" value="25" min="1" required />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-semibold">Thứ tự sắp xếp</label>
                             <input type="number" name="sortOrder" id="sortOrderInput" class="form-control font-monospace" value="10" required />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Địa chỉ</label>
+                            <input type="text" name="address" id="unitAddressInput" class="form-control" placeholder="Địa chỉ trụ sở / nhà máy..." />
                         </div>
                     </div>
                 </div>
@@ -523,35 +604,106 @@
             });
         }
 
-        function openUnitModal(id, code, name, type, parentId, costCenter, plannedHc, sortOrder) {
+        function openUnitModal(id, code, name, type, parentId, costCenter, plannedHc, sortOrder, managerId, wageRegion, address) {
             document.getElementById('unitIdInput').value = id || '';
             document.getElementById('unitCodeInput').value = code || '';
             document.getElementById('unitNameInput').value = name || '';
             document.getElementById('unitTypeInput').value = type || 'Department';
             document.getElementById('parentUnitIdInput').value = parentId || '';
+            document.getElementById('managerEmployeeIdInput').value = managerId || '';
+            document.getElementById('wageRegionInput').value = wageRegion || '1';
             document.getElementById('costCenterInput').value = costCenter || 'CC-VNM-2026';
             document.getElementById('plannedHcInput').value = plannedHc || 25;
             document.getElementById('sortOrderInput').value = sortOrder || 10;
-            new bootstrap.Modal(document.getElementById('unitModal')).show();
+            document.getElementById('unitAddressInput').value = address || '';
+            document.getElementById('unitModalTitle').textContent = id ? `Cập nhật Đơn vị [${code}]` : 'Thêm Đơn vị Tổ chức Mới';
+            if (window.bootstrap) {
+                window.bootstrap.Modal.getOrCreateInstance(document.getElementById('unitModal')).show();
+            }
+        }
+
+        function openNewUnitModal(parentId) {
+            openUnitModal('', '', '', 'Department', parentId || '', 'CC-VNM-2026', 25, 10, '', '1', '');
+        }
+
+        function openEditUnitFromBtn(btn) {
+            const d = btn.dataset;
+            openUnitModal(d.id, d.code, d.name, d.type, d.parent, d.costcenter, d.planned, d.sort, d.manager, d.region, d.address);
+        }
+
+        function toggleOrgBranch(btn) {
+            const li = btn.closest('li.org-tree-item');
+            const childrenWrap = li ? li.querySelector(':scope > .org-tree-children') : null;
+            if (!childrenWrap) return;
+            const isHidden = childrenWrap.classList.toggle('d-none');
+            btn.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+            const icon = btn.querySelector('i');
+            if (icon) {
+                icon.className = isHidden ? 'ti ti-chevron-right' : 'ti ti-chevron-down';
+            }
+        }
+
+        function toggleAllOrgBranches(expand) {
+            document.querySelectorAll('.org-tree-children').forEach(el => {
+                el.classList.toggle('d-none', !expand);
+            });
+            document.querySelectorAll('.org-toggle-btn').forEach(btn => {
+                btn.setAttribute('aria-expanded', expand ? 'true' : 'false');
+                const icon = btn.querySelector('i');
+                if (icon) {
+                    icon.className = expand ? 'ti ti-chevron-down' : 'ti ti-chevron-right';
+                }
+            });
+        }
+
+        function confirmDeleteUnit(unitId, unitCode) {
+            if (!confirm(`Xác nhận xóa đơn vị [${unitCode}]?`)) return;
+            document.getElementById('deleteUnitIdHidden').value = unitId;
+            document.getElementById('deleteUnitHiddenForm').submit();
+        }
+
+        function showDeleteBlocked(reason) {
+            if (window.VnmUI && window.VnmUI.toast) {
+                VnmUI.toast(reason, 'warning');
+            } else {
+                alert(reason);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', function () {
-            const tbody = document.getElementById('orgUnitsSortableBody');
-            if (tbody && window.Sortable) {
-                new Sortable(tbody, {
-                    animation: 150,
-                    onEnd: async function () {
-                        const ids = Array.from(tbody.querySelectorAll('tr[data-unit-id]'))
-                            .map(tr => parseInt(tr.getAttribute('data-unit-id'), 10));
-                        try {
-                            await fetch('/Organization/ReorderUnits', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(ids)
-                            });
-                            VnmUI.toast('Đã lưu thứ tự sắp xếp cây đơn vị vào SQL Server!', 'success');
-                        } catch (e) { }
-                    }
+            // Fallback chuyển tab nếu CDN Bootstrap chưa tải
+            document.querySelectorAll('.nav-tabs [data-bs-toggle="tab"]').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    if (window.bootstrap && window.bootstrap.Tab) return;
+                    const targetSel = btn.getAttribute('data-bs-target');
+                    document.querySelectorAll('.nav-tabs .nav-link').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-content .tab-pane').forEach(p => p.classList.remove('show', 'active'));
+                    btn.classList.add('active');
+                    const pane = document.querySelector(targetSel);
+                    if (pane) pane.classList.add('show', 'active');
+                });
+            });
+
+            if (window.Sortable) {
+                document.querySelectorAll('.org-tree-list').forEach(list => {
+                    new Sortable(list, {
+                        animation: 150,
+                        handle: '.org-drag-handle',
+                        onEnd: async function () {
+                            const ids = Array.from(document.querySelectorAll('.org-tree-item[data-unit-id]'))
+                                .map(el => parseInt(el.getAttribute('data-unit-id'), 10));
+                            try {
+                                await fetch('/Organization/ReorderUnits', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(ids)
+                                });
+                                if (window.VnmUI && window.VnmUI.toast) {
+                                    VnmUI.toast('Đã lưu thứ tự sắp xếp cây đơn vị!', 'success');
+                                }
+                            } catch (e) { }
+                        }
+                    });
                 });
             }
         });

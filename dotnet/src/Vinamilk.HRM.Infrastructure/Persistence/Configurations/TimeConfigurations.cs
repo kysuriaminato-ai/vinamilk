@@ -409,6 +409,7 @@ public class AttendancePolicyConfiguration : IEntityTypeConfiguration<Attendance
         builder.Property(x => x.AnnualLeaveCarryForwardCapDays).HasColumnType("decimal(5,2)").HasDefaultValue(5m);
         builder.Property(x => x.MaxAdvanceAnnualLeaveDays).HasColumnType("decimal(5,2)").HasDefaultValue(3m);
         builder.Property(x => x.OtReconciliationMode).HasColumnType("varchar(40)").HasDefaultValue("MinOfApprovedAndActual");
+        builder.Property(x => x.AllowPayableWorkdaysExceedStandard).HasDefaultValue(false);
 
         builder.HasIndex(x => x.PolicyGroupId)
             .IsUnique()

@@ -130,7 +130,18 @@ public class ShiftsController : Controller
         int EmployeeId,
         string WorkDate,
         int? WorkShiftId,
-        bool IsDayOff);
+        bool IsDayOff,
+        string? Action = null,
+        string? Notes = null);
+
+    public record BulkCellItemRequest(int EmployeeId, string WorkDate);
+
+    public record BulkAssignCellsAjaxRequest(
+        List<BulkCellItemRequest> Cells,
+        int? WorkShiftId,
+        bool IsDayOff,
+        bool DeleteSchedule,
+        string? Notes = null);
 
     [HttpPost]
     public async Task<IActionResult> AssignCellAjax(
@@ -140,21 +151,126 @@ public class ShiftsController : Controller
         if (!DateOnly.TryParse(req.WorkDate, out var workDate))
             return BadRequest(new { success = false, message = "Ngày phân ca không hợp lệ." });
 
-        var result = await _sender.Send(new AssignShiftScheduleDetailedCommand(
-            req.EmployeeId,
-            null,
-            workDate,
-            workDate,
-            req.WorkShiftId,
-            req.IsDayOff,
-            "Kéo-thả trực tiếp trên Lịch phân ca"), cancellationToken);
-
-        return Ok(new
+        try
         {
-            success = true,
-            message = $"Đã cập nhật ca làm việc ngày {workDate:dd/MM/yyyy}!",
-            warnings = result.Warnings.Select(w => w.Message).ToList()
-        });
+            var action = (req.Action ?? (req.IsDayOff ? "Off" : "Assign")).Trim();
+            AssignScheduleResultDto result;
+
+            if (string.Equals(action, "Delete", StringComparison.OrdinalIgnoreCase))
+            {
+                result = await _sender.Send(new DeleteShiftScheduleCommand(
+                    req.EmployeeId,
+                    workDate,
+                    req.Notes), cancellationToken);
+            }
+            else
+            {
+                bool isOff = string.Equals(action, "Off", StringComparison.OrdinalIgnoreCase) || req.IsDayOff;
+                result = await _sender.Send(new AssignShiftScheduleDetailedCommand(
+                    req.EmployeeId,
+                    null,
+                    workDate,
+                    workDate,
+                    req.WorkShiftId,
+                    isOff,
+                    string.IsNullOrWhiteSpace(req.Notes) ? "Phân ca trực tiếp trên Lịch phân ca" : req.Notes.Trim()), cancellationToken);
+            }
+
+            var cellWarn = string.Join(" | ", result.Warnings
+                .Where(w => w.EmployeeId == req.EmployeeId && (w.WorkDate == workDate || w.ConflictType == "WeeklyHoursExceeded"))
+                .Select(w => w.Message)
+                .Distinct());
+
+            return Ok(new
+            {
+                success = true,
+                deleted = string.Equals(action, "Delete", StringComparison.OrdinalIgnoreCase),
+                message = string.Equals(action, "Delete", StringComparison.OrdinalIgnoreCase)
+                    ? $"Đã xóa phân ca ngày {workDate:dd/MM/yyyy}!"
+                    : $"Đã cập nhật ca làm việc ngày {workDate:dd/MM/yyyy}!",
+                cellWarning = cellWarn,
+                warnings = result.Warnings.Select(w => new
+                {
+                    w.EmployeeId,
+                    w.EmployeeCode,
+                    w.EmployeeName,
+                    workDate = w.WorkDate.ToString("dd/MM"),
+                    w.ConflictType,
+                    w.Message,
+                    w.LegalReference
+                }).ToList()
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> BulkAssignCellsAjax(
+        [FromBody] BulkAssignCellsAjaxRequest req,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var targets = new List<ShiftCellTargetDto>();
+            foreach (var item in req.Cells ?? new List<BulkCellItemRequest>())
+            {
+                if (DateOnly.TryParse(item.WorkDate, out var dt))
+                {
+                    targets.Add(new ShiftCellTargetDto(item.EmployeeId, dt));
+                }
+            }
+
+            if (targets.Count == 0)
+                return BadRequest(new { success = false, message = "Chưa có ô lịch nào được chọn." });
+
+            var result = await _sender.Send(new BulkAssignShiftCellsCommand(
+                targets,
+                req.WorkShiftId,
+                req.IsDayOff,
+                req.DeleteSchedule,
+                req.Notes), cancellationToken);
+
+            return Ok(new
+            {
+                success = true,
+                affected = result.AffectedCount,
+                message = req.DeleteSchedule
+                    ? $"Đã xóa phân ca cho {result.AffectedCount} ô lịch!"
+                    : $"Đã cập nhật ca làm việc cho {result.AffectedCount} ô lịch!",
+                warnings = result.Warnings.Select(w => w.Message).Distinct().ToList()
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CopyPreviousWeek(
+        DateOnly targetWeekStart,
+        int? unitId = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await _sender.Send(new CopyPreviousWeekScheduleCommand(targetWeekStart, unitId), cancellationToken);
+            TempData["SuccessMessage"] = $"Đã sao chép {result.AffectedCount} lượt phân ca từ tuần trước sang tuần {targetWeekStart:dd/MM/yyyy}.";
+            if (result.Warnings.Count > 0)
+            {
+                TempData["WarningMessage"] = $"Cảnh báo xếp ca ({result.Warnings.Count}): {string.Join("; ", result.Warnings.Take(3).Select(w => w.Message))}";
+            }
+        }
+        catch (Exception ex)
+        {
+            TempData["ErrorMessage"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index), new { weekStart = targetWeekStart, unitId });
     }
 
     [HttpPost]

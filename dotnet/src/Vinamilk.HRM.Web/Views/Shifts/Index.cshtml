@@ -125,32 +125,46 @@
         <!-- Thanh công cụ lọc tuần + Bảng mẫu Ca kéo-thả -->
         <div class="vnm-card p-3 mb-3">
             <div class="row g-3 align-items-center justify-content-between">
-                <div class="col-lg-5">
-                    <form method="get" class="d-flex flex-wrap gap-2 align-items-center">
-                        <a href="/Shifts?weekStart=@prevWeek&unitId=@Model.SelectedUnitId" class="btn btn-sm btn-outline-secondary">
-                            <i class="ti ti-chevron-left"></i> Tuần trước
-                        </a>
-                        <span class="fw-bold px-2">
-                            Tuần: @Model.WeekStartDate.ToString("dd/MM/yyyy") — @Model.WeekEndDate.ToString("dd/MM/yyyy")
-                        </span>
-                        <a href="/Shifts?weekStart=@nextWeek&unitId=@Model.SelectedUnitId" class="btn btn-sm btn-outline-secondary">
-                            Tuần sau <i class="ti ti-chevron-right"></i>
-                        </a>
-                        <select name="unitId" class="form-select form-select-sm" style="width: 210px;" onchange="this.form.submit()">
-                            <option value="">-- Tất cả đơn vị --</option>
-                            @foreach (var u in Model.Units)
-                            {
-                                <option value="@u.Id" selected="@(Model.SelectedUnitId == u.Id)">@u.Name</option>
-                            }
-                        </select>
-                        <input type="hidden" name="weekStart" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
-                    </form>
+                <div class="col-xl-7">
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <form method="get" class="d-flex flex-wrap gap-2 align-items-center">
+                            <a href="/Shifts?weekStart=@prevWeek&unitId=@Model.SelectedUnitId" class="btn btn-sm btn-outline-secondary" title="Tuần trước">
+                                <i class="ti ti-chevron-left"></i> Tuần trước
+                            </a>
+                            <div class="input-group input-group-sm" style="width: auto;">
+                                <span class="input-group-text bg-light fw-semibold">Tuần</span>
+                                <input type="date" name="weekStart" class="form-control form-control-sm" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" onchange="this.form.submit()" title="Chọn ngày để xem tuần chứa ngày đó" />
+                                <span class="input-group-text bg-white font-monospace fs-7">@Model.WeekStartDate.ToString("dd/MM") — @Model.WeekEndDate.ToString("dd/MM")</span>
+                            </div>
+                            <a href="/Shifts?weekStart=@nextWeek&unitId=@Model.SelectedUnitId" class="btn btn-sm btn-outline-secondary" title="Tuần sau">
+                                Tuần sau <i class="ti ti-chevron-right"></i>
+                            </a>
+                            <select name="unitId" class="form-select form-select-sm" style="width: 195px;" onchange="this.form.submit()">
+                                <option value="">-- Tất cả đơn vị --</option>
+                                @foreach (var u in Model.Units)
+                                {
+                                    <option value="@u.Id" selected="@(Model.SelectedUnitId == u.Id)">@u.Name</option>
+                                }
+                            </select>
+                        </form>
+                        <form asp-action="CopyPreviousWeek" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="targetWeekStart" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
+                            <input type="hidden" name="unitId" value="@Model.SelectedUnitId" />
+                            <button type="submit" class="btn btn-sm btn-outline-info" onclick="return confirm('Sao chép toàn bộ lịch phân ca từ tuần trước sang tuần này?');">
+                                <i class="ti ti-copy me-1"></i>Sao chép tuần trước
+                            </button>
+                        </form>
+                        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalApplyRotationQuick">
+                            <i class="ti ti-rotate me-1"></i>Áp mẫu xoay ca cho nhóm
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Palette các thẻ Ca làm việc có thể kéo thả -->
-                <div class="col-lg-7">
-                    <div class="d-flex flex-wrap align-items-center justify-content-lg-end gap-2">
-                        <span class="fs-7 text-muted fw-semibold"><i class="ti ti-hand-grab me-1"></i>Kéo thẻ Ca thả vào lịch:</span>
+                <div class="col-xl-5">
+                    <div class="d-flex flex-wrap align-items-center justify-content-xl-end gap-2">
+                        <span class="fs-7 text-muted fw-semibold"><i class="ti ti-click me-1"></i>Nhấp ô để gán/sửa/xóa • Shift+Click hoặc kéo quét để chọn nhiều ô:</span>
                         @foreach (var s in Model.WorkShifts)
                         {
                             <div draggable="true"
@@ -175,20 +189,76 @@
 
         @if (Model.ConflictWarnings is { Count: > 0 })
         {
-            <div class="alert alert-warning border-warning mb-3" role="alert">
-                <div class="fw-bold mb-1"><i class="ti ti-alert-triangle me-1"></i>Phát hiện @Model.ConflictWarnings.Count cảnh báo xếp ca / giờ làm việc:</div>
-                <ul class="mb-0 ps-3 fs-7">
-                    @foreach (var w in Model.ConflictWarnings.Take(8))
-                    {
-                        <li><strong>@w.EmployeeCode - @w.EmployeeName (@w.WorkDate.ToString("dd/MM")):</strong> @w.Message</li>
-                    }
-                </ul>
+            var groupedWarnings = Model.ConflictWarnings
+                .GroupBy(w => new { w.EmployeeId, w.EmployeeCode, w.EmployeeName })
+                .ToList();
+            var statutoryLegalRef = Model.ConflictWarnings.Select(w => w.LegalReference).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
+                ?? Model.StatutoryParameter?.LegalReference
+                ?? "BLLĐ 45/2019/QH14";
+
+            <div class="alert alert-warning border-warning mb-3 py-2" id="shiftConflictPanel" role="alert">
+                <div class="d-flex align-items-center justify-content-between gap-2">
+                    <div class="fw-semibold fs-7">
+                        <i class="ti ti-alert-triangle me-1"></i>
+                        <span>Phát hiện <strong>@Model.ConflictWarnings.Count</strong> cảnh báo xếp ca ở <strong>@groupedWarnings.Count</strong> nhân viên</span>
+                        <span class="ms-2 text-muted" title="Căn cứ pháp lý: @statutoryLegalRef" data-bs-toggle="tooltip">
+                            <i class="ti ti-info-circle"></i> Căn cứ pháp lý
+                        </span>
+                    </div>
+                    <button class="btn btn-sm btn-outline-warning text-dark py-0 px-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapseShiftWarnings" aria-expanded="false">
+                        <i class="ti ti-chevron-down me-1"></i>Xem chi tiết (@groupedWarnings.Count NV)
+                    </button>
+                </div>
+                <div class="collapse mt-2" id="collapseShiftWarnings">
+                    <div class="list-group list-group-flush rounded border">
+                        @foreach (var grp in groupedWarnings)
+                        {
+                            <div class="list-group-item py-2 px-3 bg-white">
+                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                    <div class="fw-semibold fs-7">@grp.Key.EmployeeCode — @grp.Key.EmployeeName</div>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        @foreach (var item in grp.OrderBy(x => x.WorkDate))
+                                        {
+                                            <span class="badge bg-warning-subtle text-dark border border-warning-subtle fw-normal">@item.WorkDate.ToString("dd/MM"): @item.Message</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
             </div>
         }
 
+        <!-- Floating Toolbar chọn nhiều ô -->
+        <div id="bulkCellSelectionToolbar" class="vnm-card p-2 mb-3 border border-primary bg-primary-subtle d-none">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div class="fw-bold text-primary fs-7">
+                    <i class="ti ti-select me-1"></i>Đã chọn <span id="selectedCellCount">0</span> ô lịch
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <select id="bulkCellShiftAction" class="form-select form-select-sm" style="width: 240px;">
+                        @foreach (var s in Model.WorkShifts)
+                        {
+                            <option value="assign:@s.Id:@s.ShiftCode:@s.StartTime.ToString("HH:mm")-@s.EndTime.ToString("HH:mm"):@s.BadgeColorClass">
+                                Gán ca @s.ShiftCode — @s.ShiftName (@s.StartTime.ToString("HH:mm")-@s.EndTime.ToString("HH:mm"))
+                            </option>
+                        }
+                        <option value="off">Đánh dấu OFF (Nghỉ tuần)</option>
+                        <option value="delete">Xóa phân ca đã chọn</option>
+                    </select>
+                    <input type="text" id="bulkCellNotes" class="form-control form-control-sm" style="width: 200px;" placeholder="Ghi chú (tùy chọn)..." />
+                    <button type="button" class="btn btn-sm btn-primary" onclick="applyBulkCellSelection()">
+                        <i class="ti ti-check me-1"></i>Áp dụng hàng loạt
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearCellSelection()">Bỏ chọn</button>
+                </div>
+            </div>
+        </div>
+
         <div class="vnm-card overflow-hidden">
             <div class="table-responsive">
-                <table class="table table-bordered align-middle mb-0 text-center">
+                <table class="table table-bordered align-middle mb-0 text-center" id="shiftRosterTable" style="user-select: none;">
                     <thead class="table-light">
                         <tr>
                             <th class="text-start" style="min-width: 230px;">Nhân viên & Đơn vị</th>
@@ -213,10 +283,20 @@
                                 @foreach (var cell in row.DayCells)
                                 {
                                     <td class="p-2 shift-drop-zone"
+                                        data-emp-id="@row.EmployeeId"
+                                        data-emp-code="@row.EmployeeCode"
+                                        data-emp-name="@row.FullName"
+                                        data-date="@cell.WorkDate.ToString("yyyy-MM-dd")"
+                                        data-date-vi="@cell.WorkDate.ToString("dd/MM/yyyy")"
+                                        data-shift-id="@(cell.WorkShiftId?.ToString() ?? "")"
+                                        data-shift-code="@cell.ShiftCode"
+                                        data-is-off="@(cell.IsDayOff ? "true" : "false")"
+                                        data-has-schedule="@(cell.ScheduleId.HasValue ? "true" : "false")"
+                                        data-notes="@(cell.Notes ?? "")"
                                         ondragover="onShiftDragOver(event)"
                                         ondragleave="onShiftDragLeave(event)"
                                         ondrop="onShiftDrop(event, @row.EmployeeId, '@cell.WorkDate.ToString("yyyy-MM-dd")')"
-                                        style="transition: background 0.15s ease;">
+                                        style="transition: background 0.15s ease; cursor: pointer;">
                                         @if (cell.IsHoliday)
                                         {
                                             <div class="badge bg-danger text-white w-100 py-1 mb-1" title="@cell.HolidayName">
@@ -226,10 +306,9 @@
                                         <div class="shift-cell-badge badge border w-100 py-2 @cell.BadgeColorClass @(string.IsNullOrEmpty(cell.ConflictWarning) ? "" : "border-danger border-2")">
                                             <div class="fw-bold fs-6 shift-code-label">@cell.ShiftCode</div>
                                             <div class="fs-7 fw-normal mt-1 shift-time-label">@cell.TimeRangeText</div>
-                                            @if (!string.IsNullOrEmpty(cell.ConflictWarning))
-                                            {
-                                                <div class="text-danger fs-7 mt-1" title="@cell.ConflictWarning"><i class="ti ti-alert-triangle"></i> Cảnh báo</div>
-                                            }
+                                            <div class="text-danger fs-7 mt-1 shift-warn-label @(string.IsNullOrEmpty(cell.ConflictWarning) ? "d-none" : "")" title="@cell.ConflictWarning">
+                                                <i class="ti ti-alert-triangle"></i> Cảnh báo
+                                            </div>
                                         </div>
                                     </td>
                                 }
@@ -913,9 +992,347 @@
     </div>
 </div>
 
+<!-- Modal Xếp / Sửa / Xóa ca 1 ô -->
+<div class="modal fade" id="modalCellShift" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="ti ti-calendar-event text-primary me-2"></i>Cập nhật Ca làm việc</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="cellEmpId" />
+                <input type="hidden" id="cellWorkDate" />
+                <div class="p-2 rounded bg-light border mb-3 fs-7">
+                    <div><strong>Nhân viên:</strong> <span id="cellEmpLabel"></span></div>
+                    <div><strong>Ngày làm việc:</strong> <span id="cellDateLabel"></span></div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Thao tác</label>
+                    <div class="d-flex gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="cellActionType" id="cellActionAssign" value="Assign" checked onchange="toggleCellShiftSelect()" />
+                            <label class="form-check-label" for="cellActionAssign">Gán ca làm việc</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="cellActionType" id="cellActionOff" value="Off" onchange="toggleCellShiftSelect()" />
+                            <label class="form-check-label" for="cellActionOff">Ngày nghỉ tuần (OFF)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="cellActionType" id="cellActionDelete" value="Delete" onchange="toggleCellShiftSelect()" />
+                            <label class="form-check-label text-danger" for="cellActionDelete">Xóa phân ca</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3" id="cellShiftSelectWrap">
+                    <label class="form-label fw-semibold">Chọn Ca làm việc</label>
+                    <select id="cellWorkShiftId" class="form-select">
+                        @foreach (var s in Model.WorkShifts)
+                        {
+                            <option value="@s.Id" data-code="@s.ShiftCode" data-time="@s.StartTime.ToString("HH:mm")-@s.EndTime.ToString("HH:mm")" data-badge="@s.BadgeColorClass">
+                                @s.ShiftCode — @s.ShiftName (@s.StartTime.ToString("HH:mm") - @s.EndTime.ToString("HH:mm"))
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Ghi chú / Lý do điều chỉnh</label>
+                    <input type="text" id="cellNotes" class="form-control" placeholder="VD: Bù ca, thay đổi lịch trực..." />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="button" class="btn btn-primary" onclick="saveCellShiftModal()">
+                    <i class="ti ti-device-floppy me-1"></i>Lưu lịch ca
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Áp mẫu xoay ca nhanh từ Lịch tuần -->
+<div class="modal fade" id="modalApplyRotationQuick" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="GenerateRotation" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="ti ti-rotate text-primary me-2"></i>Áp mẫu xoay ca cho Nhóm / Đơn vị</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Mẫu xoay ca (*)</label>
+                    <select name="patternId" class="form-select" required>
+                        @foreach (var p in (Model.RotationPatterns ?? Array.Empty<Vinamilk.HRM.Application.TimeAttendance.ShiftRotationPatternDto>()))
+                        {
+                            <option value="@p.Id">@p.PatternName (@p.ShiftSequenceCsv)</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Đơn vị áp dụng</label>
+                    <select name="organizationUnitId" class="form-select">
+                        <option value="">Tất cả nhân viên đang làm việc</option>
+                        @foreach (var u in Model.Units)
+                        {
+                            <option value="@u.Id" selected="@(Model.SelectedUnitId == u.Id)">@u.Name (@u.Code)</option>
+                        }
+                    </select>
+                </div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Từ ngày (*)</label>
+                        <input type="date" name="startDate" class="form-control" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Số tuần áp dụng (*)</label>
+                        <input type="number" name="weeksCount" class="form-control" value="2" min="1" max="52" required />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button>
+                <button type="submit" class="btn btn-primary"><i class="ti ti-sparkles me-1"></i>Áp mẫu xoay ca</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 @section Scripts {
+    <style>
+        .shift-cell-selected {
+            outline: 2px solid #0d6efd !important;
+            background-color: rgba(13, 110, 253, 0.08) !important;
+        }
+    </style>
     <script>
         let draggedShiftPayload = null;
+        let isSelectingCells = false;
+        let dragSelectionMoved = false;
+        let anchorCell = null;
+        const selectedCellKeys = new Set();
+
+        function cellKey(td) {
+            return td.dataset.empId + '|' + td.dataset.date;
+        }
+
+        function refreshSelectionToolbar() {
+            const bar = document.getElementById('bulkCellSelectionToolbar');
+            const cnt = document.getElementById('selectedCellCount');
+            if (!bar || !cnt) return;
+            cnt.textContent = selectedCellKeys.size;
+            bar.classList.toggle('d-none', selectedCellKeys.size === 0);
+        }
+
+        function clearCellSelection() {
+            selectedCellKeys.clear();
+            document.querySelectorAll('.shift-drop-zone.shift-cell-selected').forEach(el => el.classList.remove('shift-cell-selected'));
+            refreshSelectionToolbar();
+        }
+
+        function toggleCellSelected(td, forceOn) {
+            const k = cellKey(td);
+            const on = forceOn !== undefined ? forceOn : !selectedCellKeys.has(k);
+            if (on) {
+                selectedCellKeys.add(k);
+                td.classList.add('shift-cell-selected');
+            } else {
+                selectedCellKeys.delete(k);
+                td.classList.remove('shift-cell-selected');
+            }
+            refreshSelectionToolbar();
+        }
+
+        function selectRangeToCell(targetTd) {
+            if (!anchorCell) {
+                toggleCellSelected(targetTd, true);
+                return;
+            }
+            const rows = Array.from(document.querySelectorAll('#shiftRosterTable tbody tr'));
+            const r1 = rows.indexOf(anchorCell.closest('tr'));
+            const r2 = rows.indexOf(targetTd.closest('tr'));
+            const c1 = Array.from(anchorCell.closest('tr').children).indexOf(anchorCell);
+            const c2 = Array.from(targetTd.closest('tr').children).indexOf(targetTd);
+            const rMin = Math.min(r1, r2), rMax = Math.max(r1, r2);
+            const cMin = Math.min(c1, c2), cMax = Math.max(c1, c2);
+            clearCellSelection();
+            for (let r = rMin; r <= rMax; r++) {
+                const tds = rows[r].children;
+                for (let c = cMin; c <= cMax; c++) {
+                    if (tds[c] && tds[c].classList.contains('shift-drop-zone')) {
+                        toggleCellSelected(tds[c], true);
+                    }
+                }
+            }
+        }
+
+        document.querySelectorAll('#shiftRosterTable .shift-drop-zone').forEach(td => {
+            td.addEventListener('mousedown', ev => {
+                if (ev.button !== 0) return;
+                if (ev.shiftKey) {
+                    ev.preventDefault();
+                    if (!anchorCell) anchorCell = td;
+                    selectRangeToCell(td);
+                    return;
+                }
+                isSelectingCells = true;
+                dragSelectionMoved = false;
+                anchorCell = td;
+            });
+            td.addEventListener('mouseenter', () => {
+                if (!isSelectingCells || !anchorCell) return;
+                if (cellKey(td) !== cellKey(anchorCell)) {
+                    dragSelectionMoved = true;
+                    selectRangeToCell(td);
+                }
+            });
+            td.addEventListener('click', ev => {
+                if (ev.shiftKey || dragSelectionMoved) {
+                    dragSelectionMoved = false;
+                    return;
+                }
+                clearCellSelection();
+                openCellShiftModal(td);
+            });
+        });
+
+        document.addEventListener('mouseup', () => {
+            isSelectingCells = false;
+        });
+
+        function toggleCellShiftSelect() {
+            const action = document.querySelector('input[name="cellActionType"]:checked')?.value || 'Assign';
+            const wrap = document.getElementById('cellShiftSelectWrap');
+            if (wrap) wrap.classList.toggle('d-none', action !== 'Assign');
+        }
+
+        function openCellShiftModal(td) {
+            document.getElementById('cellEmpId').value = td.dataset.empId;
+            document.getElementById('cellWorkDate').value = td.dataset.date;
+            document.getElementById('cellEmpLabel').textContent = `${td.dataset.empCode} — ${td.dataset.empName}`;
+            document.getElementById('cellDateLabel').textContent = td.dataset.dateVi;
+            document.getElementById('cellNotes').value = td.dataset.notes || '';
+
+            const isOff = td.dataset.isOff === 'true';
+            document.getElementById(isOff ? 'cellActionOff' : 'cellActionAssign').checked = true;
+            const sel = document.getElementById('cellWorkShiftId');
+            if (td.dataset.shiftId && sel.querySelector(`option[value="${td.dataset.shiftId}"]`)) {
+                sel.value = td.dataset.shiftId;
+            }
+            toggleCellShiftSelect();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalCellShift')).show();
+        }
+
+        function applyCellVisual(td, code, timeText, badgeClass, shiftId, isOff, notes, cellWarning) {
+            const badge = td.querySelector('.shift-cell-badge');
+            const codeLbl = td.querySelector('.shift-code-label');
+            const timeLbl = td.querySelector('.shift-time-label');
+            const warnLbl = td.querySelector('.shift-warn-label');
+            if (badge && codeLbl && timeLbl) {
+                badge.className = 'shift-cell-badge badge border w-100 py-2 ' + badgeClass + (cellWarning ? ' border-danger border-2' : '');
+                codeLbl.textContent = code;
+                timeLbl.textContent = timeText;
+            }
+            if (warnLbl) {
+                warnLbl.classList.toggle('d-none', !cellWarning);
+                warnLbl.title = cellWarning || '';
+            }
+            td.dataset.shiftId = shiftId || '';
+            td.dataset.shiftCode = code;
+            td.dataset.isOff = isOff ? 'true' : 'false';
+            td.dataset.notes = notes || '';
+        }
+
+        async function saveCellShiftModal() {
+            const empId = parseInt(document.getElementById('cellEmpId').value, 10);
+            const workDate = document.getElementById('cellWorkDate').value;
+            const action = document.querySelector('input[name="cellActionType"]:checked')?.value || 'Assign';
+            const sel = document.getElementById('cellWorkShiftId');
+            const opt = sel.options[sel.selectedIndex];
+            const workShiftId = action === 'Assign' ? parseInt(sel.value, 10) : null;
+            const isDayOff = action === 'Off';
+            const notes = document.getElementById('cellNotes').value;
+
+            const resp = await fetch('/Shifts/AssignCellAjax', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ employeeId: empId, workDate, workShiftId, isDayOff, action, notes })
+            });
+            const json = await resp.json();
+            if (!resp.ok || !json.success) {
+                window.VnmUI?.toast(json.message || 'Không thể lưu lịch ca.', 'error');
+                return;
+            }
+
+            const td = document.querySelector(`#shiftRosterTable .shift-drop-zone[data-emp-id="${empId}"][data-date="${workDate}"]`);
+            if (td) {
+                if (action === 'Delete') {
+                    const isWeekend = [0, 6].includes(new Date(workDate + 'T00:00:00').getDay());
+                    applyCellVisual(td, isWeekend ? 'OFF' : 'Mặc định', isWeekend ? 'Nghỉ' : 'Theo ca chuẩn', 'bg-light text-muted border-dashed', '', isWeekend, '', '');
+                } else if (action === 'Off') {
+                    applyCellVisual(td, 'OFF', 'Nghỉ', 'bg-secondary-subtle text-secondary border-secondary-subtle', '', true, notes, json.cellWarning);
+                } else {
+                    applyCellVisual(td, opt.dataset.code, opt.dataset.time, opt.dataset.badge, sel.value, false, notes, json.cellWarning);
+                }
+            }
+
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalCellShift')).hide();
+            window.VnmUI?.toast(json.message || 'Đã cập nhật lịch phân ca!', 'success');
+            if (json.warnings && json.warnings.length > 0) {
+                window.VnmUI?.toast('Cảnh báo xếp ca: ' + json.warnings.map(w => w.message).slice(0, 2).join('; '), 'warning');
+            }
+        }
+
+        async function applyBulkCellSelection() {
+            const cells = Array.from(selectedCellKeys).map(k => {
+                const [empId, workDate] = k.split('|');
+                return { employeeId: parseInt(empId, 10), workDate };
+            });
+            if (cells.length === 0) return;
+
+            const actionVal = document.getElementById('bulkCellShiftAction').value;
+            const notes = document.getElementById('bulkCellNotes').value;
+            let payload = { cells, workShiftId: null, isDayOff: false, deleteSchedule: false, notes };
+            let visual = null;
+
+            if (actionVal === 'delete') {
+                payload.deleteSchedule = true;
+            } else if (actionVal === 'off') {
+                payload.isDayOff = true;
+                visual = { code: 'OFF', time: 'Nghỉ', badge: 'bg-secondary-subtle text-secondary border-secondary-subtle', shiftId: '', isOff: true };
+            } else if (actionVal.startsWith('assign:')) {
+                const [, shiftId, code, time, badge] = actionVal.split(':');
+                payload.workShiftId = parseInt(shiftId, 10);
+                visual = { code, time, badge, shiftId, isOff: false };
+            }
+
+            const resp = await fetch('/Shifts/BulkAssignCellsAjax', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const json = await resp.json();
+            if (!resp.ok || !json.success) {
+                window.VnmUI?.toast(json.message || 'Không thể áp dụng hàng loạt.', 'error');
+                return;
+            }
+
+            cells.forEach(c => {
+                const td = document.querySelector(`#shiftRosterTable .shift-drop-zone[data-emp-id="${c.employeeId}"][data-date="${c.workDate}"]`);
+                if (!td) return;
+                if (payload.deleteSchedule) {
+                    applyCellVisual(td, 'Mặc định', 'Theo chính sách', 'bg-light text-muted border-dashed', '', false, '', '');
+                } else if (visual) {
+                    applyCellVisual(td, visual.code, visual.time, visual.badge, visual.shiftId, visual.isOff, notes, '');
+                }
+            });
+
+            clearCellSelection();
+            window.VnmUI?.toast(json.message || 'Đã cập nhật hàng loạt!', 'success');
+            if (json.warnings && json.warnings.length > 0) {
+                window.VnmUI?.toast('Cảnh báo xếp ca: ' + json.warnings.slice(0, 2).join('; '), 'warning');
+            }
+        }
 
         function onShiftDragStart(ev, shiftId, shiftCode, timeText, isDayOff, badgeClass) {
             draggedShiftPayload = {
@@ -943,16 +1360,6 @@
             td.style.background = '';
             if (!draggedShiftPayload) return;
 
-            const badge = td.querySelector('.shift-cell-badge');
-            const codeLbl = td.querySelector('.shift-code-label');
-            const timeLbl = td.querySelector('.shift-time-label');
-
-            if (badge && codeLbl && timeLbl) {
-                badge.className = 'shift-cell-badge badge border w-100 py-2 ' + draggedShiftPayload.badgeClass;
-                codeLbl.textContent = draggedShiftPayload.shiftCode;
-                timeLbl.textContent = draggedShiftPayload.timeText;
-            }
-
             try {
                 const resp = await fetch('/Shifts/AssignCellAjax', {
                     method: 'POST',
@@ -961,20 +1368,31 @@
                         employeeId: employeeId,
                         workDate: workDateStr,
                         workShiftId: draggedShiftPayload.workShiftId,
-                        isDayOff: draggedShiftPayload.isDayOff
+                        isDayOff: draggedShiftPayload.isDayOff,
+                        action: draggedShiftPayload.isDayOff ? 'Off' : 'Assign'
                     })
                 });
                 const json = await resp.json();
-                if (window.VnmUI && window.VnmUI.toast) {
-                    window.VnmUI.toast(json.message || 'Đã cập nhật lịch phân ca!', 'success');
-                    if (json.warnings && json.warnings.length > 0) {
-                        window.VnmUI.toast('Cảnh báo xếp ca: ' + json.warnings.join('; '), 'warning');
-                    }
+                if (!resp.ok || !json.success) {
+                    window.VnmUI?.toast(json.message || 'Không thể lưu lịch phân ca.', 'error');
+                    return;
+                }
+                applyCellVisual(
+                    td,
+                    draggedShiftPayload.shiftCode,
+                    draggedShiftPayload.timeText,
+                    draggedShiftPayload.badgeClass,
+                    draggedShiftPayload.workShiftId,
+                    draggedShiftPayload.isDayOff,
+                    'Kéo-thả trực tiếp trên Lịch phân ca',
+                    json.cellWarning);
+
+                window.VnmUI?.toast(json.message || 'Đã cập nhật lịch phân ca!', 'success');
+                if (json.warnings && json.warnings.length > 0) {
+                    window.VnmUI?.toast('Cảnh báo xếp ca: ' + json.warnings.map(w => w.message).slice(0, 2).join('; '), 'warning');
                 }
             } catch (err) {
-                if (window.VnmUI && window.VnmUI.toast) {
-                    window.VnmUI.toast('Lỗi khi lưu lịch phân ca.', 'error');
-                }
+                window.VnmUI?.toast('Lỗi khi lưu lịch phân ca.', 'error');
             }
         }
     </script>

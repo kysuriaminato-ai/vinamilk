@@ -69,14 +69,32 @@
         }
         else
         {
-            <div class="small text-muted mb-2">@Model.LatestPayslip.PeriodTitle (@Model.LatestPayslip.PeriodCode)</div>
+            <div class="small text-muted mb-2">
+                @Model.LatestPayslip.PeriodTitle (@Model.LatestPayslip.PeriodCode) • Công @Model.LatestPayslip.PayableWorkdays.ToString("0.##")/@Model.LatestPayslip.StandardWorkdays.ToString("0.##")
+                @if (Model.LatestPayslip.IsRecomputedReference)
+                {
+                    <span class="badge bg-warning text-dark ms-1">Tính lại tham chiếu</span>
+                }
+            </div>
             <div class="d-flex justify-content-between py-1 border-bottom small">
-                <span>Thu nhập Gross</span>
+                <span>Lương theo công chuẩn</span>
+                <span>@Model.LatestPayslip.ActualBaseSalary.ToString("N0") đ</span>
+            </div>
+            <div class="d-flex justify-content-between py-1 border-bottom small">
+                <span>Phụ cấp / OT / Thưởng</span>
+                <span>@((Model.LatestPayslip.AllowanceTotal + Model.LatestPayslip.OvertimePay + Model.LatestPayslip.BonusTotal).ToString("N0")) đ</span>
+            </div>
+            <div class="d-flex justify-content-between py-1 border-bottom small bg-light-subtle px-1 rounded">
+                <span class="fw-semibold">Tổng thu nhập (Gross)</span>
                 <strong>@Model.LatestPayslip.GrossIncome.ToString("N0") đ</strong>
             </div>
             <div class="d-flex justify-content-between py-1 border-bottom small">
-                <span>BHXH/BHYT/BHTN</span>
+                <span>BHXH/BHYT/BHTN (10.5%)</span>
                 <span class="text-danger">-@Model.LatestPayslip.TotalEmployeeInsurance.ToString("N0") đ</span>
+            </div>
+            <div class="d-flex justify-content-between py-1 border-bottom small text-muted">
+                <span>Giảm trừ gia cảnh / TN tính thuế</span>
+                <span>@Model.LatestPayslip.FamilyDeductionTotal.ToString("N0") / @Model.LatestPayslip.AssessableIncome.ToString("N0") đ</span>
             </div>
             <div class="d-flex justify-content-between py-1 border-bottom small">
                 <span>Thuế TNCN</span>
@@ -86,6 +104,36 @@
                 <span class="fw-bold">Thực nhận (Net)</span>
                 <span class="fw-extrabold text-success fs-5">@Model.LatestPayslip.NetSalary.ToString("N0") đ</span>
             </div>
+            @if (Model.LatestPayslip.CondensedSteps is { Count: > 0 })
+            {
+                <details class="mb-2">
+                    <summary class="small text-primary fw-semibold" style="cursor:pointer;">
+                        <i class="ti ti-list-numbers me-1"></i>Xem diễn giải công thức tính (@Model.LatestPayslip.CondensedSteps.Count bước)
+                    </summary>
+                    <div class="table-responsive mt-2">
+                        <table class="table table-sm table-bordered mb-0" style="font-size:0.74rem;">
+                            <thead class="table-light">
+                                <tr><th>Bước</th><th>Khoản mục &amp; Công thức</th><th class="text-end">Số tiền</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var step in Model.LatestPayslip.CondensedSteps)
+                                {
+                                    <tr>
+                                        <td class="text-center fw-bold">@step.StepOrder</td>
+                                        <td>
+                                            <div class="fw-semibold">@step.ItemName</div>
+                                            <div class="text-muted">@step.VariablesSummary</div>
+                                        </td>
+                                        <td class="text-end fw-semibold text-nowrap">
+                                            @((step.StepOrder == 15 && step.SecondaryAmount.HasValue ? step.SecondaryAmount.Value : step.ResultAmount).ToString("N0")) đ
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            }
             <div class="d-flex justify-content-between align-items-center pt-2 border-top">
                 <span class="text-muted" style="font-size: 0.78rem;">
                     <i class="ti ti-lock me-1"></i>Mật khẩu PDF: 6 số cuối CCCD

@@ -1,0 +1,318 @@
+@model Vinamilk.HRM.Application.Payroll.AdhocPayrollCalculatorResultDto
+@{
+    var input = ViewBag.CalculatorInput as Vinamilk.HRM.Application.Payroll.AdhocPayrollCalculatorInput
+        ?? new Vinamilk.HRM.Application.Payroll.AdhocPayrollCalculatorInput(EffectiveDate: Model.EffectiveDate);
+    var stat = Model.StatutoryParameter;
+    var b = Model.Breakdown;
+    var trace = Model.Trace;
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Payroll" class="btn btn-outline-primary btn-sm">
+            <i class="ti ti-arrow-left me-1"></i>Quay lại Bảng lương
+        </a>
+        <a href="/Payroll/Parameters" class="btn btn-outline-secondary btn-sm">
+            <i class="ti ti-adjustments me-1"></i>Tham số lương &amp; Thuế TNCN
+        </a>
+        <a href="/Payroll/Operations" class="btn btn-outline-secondary btn-sm">
+            <i class="ti ti-wallet me-1"></i>Tạm ứng / Vay / Net→Gross
+        </a>
+    </div>
+    <span class="vnm-badge vnm-badge-info">
+        <span class="vnm-badge-dot"></span>Đang tính theo @stat.LegalReference (Hiệu lực @Model.EffectiveDate.ToString("dd/MM/yyyy"))
+    </span>
+</div>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-4">
+        <div class="vnm-card p-3">
+            <h5 class="fw-bold mb-3"><i class="ti ti-calculator text-primary me-2"></i>Thông số đầu vào (Gross ↔ Net)</h5>
+            <form method="post" action="/Payroll/Calculator" id="calcForm">
+                @Html.AntiForgeryToken()
+
+                <div class="mb-2">
+                    <label class="form-label fs-7 fw-semibold">Ngày áp dụng tham số luật</label>
+                    <input type="date" name="EffectiveDate" value="@input.EffectiveDate?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" />
+                    <div class="form-text small">Tự động chọn LCS, LTTV vùng, giảm trừ gia cảnh &amp; biểu thuế có hiệu lực tại ngày này.</div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label fs-7 fw-semibold">Chế độ tính</label>
+                    <select name="IsNetToGross" id="isNetSelect" class="form-select form-select-sm" onchange="toggleNetMode()">
+                        @if (!input.IsNetToGross)
+                        {
+                            <option value="false" selected>Gross → Net (Từ Lương HĐ tính Thực lĩnh)</option>
+                            <option value="true">Net → Gross (Từ Thực lĩnh mục tiêu tìm Lương HĐ)</option>
+                        }
+                        else
+                        {
+                            <option value="false">Gross → Net (Từ Lương HĐ tính Thực lĩnh)</option>
+                            <option value="true" selected>Net → Gross (Từ Thực lĩnh mục tiêu tìm Lương HĐ)</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mb-2" id="grossSalaryBox">
+                    <label class="form-label fs-7 fw-semibold">Lương cơ bản hợp đồng (VNĐ)</label>
+                    <input type="number" name="ContractBaseSalary" value="@input.ContractBaseSalary.ToString("0")" min="0" step="100000" class="form-control form-control-sm" />
+                </div>
+
+                <div class="mb-2 d-none" id="targetNetBox">
+                    <label class="form-label fs-7 fw-semibold text-success">Lương Thực lĩnh (Net) mong muốn (VNĐ)</label>
+                    <input type="number" name="TargetNetSalary" value="@((input.TargetNetSalary > 0 ? input.TargetNetSalary : 25000000m).ToString("0"))" min="0" step="100000" class="form-control form-control-sm border-success" />
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label fs-7 fw-semibold">PC chức vụ</label>
+                        <input type="number" name="PositionAllowance" value="@input.PositionAllowance.ToString("0")" min="0" step="100000" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fs-7 fw-semibold">PC khác</label>
+                        <input type="number" name="OtherAllowance" value="@input.OtherAllowance.ToString("0")" min="0" step="100000" class="form-control form-control-sm" />
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label fs-7 fw-semibold">Công chuẩn</label>
+                        <input type="number" name="StandardWorkdays" value="@input.StandardWorkdays.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" min="1" max="31" step="0.5" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fs-7 fw-semibold">Công hưởng lương</label>
+                        <input type="number" name="PayableWorkdays" value="@input.PayableWorkdays.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" min="0" max="31" step="0.5" class="form-control form-control-sm" />
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-4">
+                        <label class="form-label fs-7 fw-semibold">OT 150% (h)</label>
+                        <input type="number" name="OtHours150" value="@input.OtHours150.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" min="0" step="0.5" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label fs-7 fw-semibold">OT 200% (h)</label>
+                        <input type="number" name="OtHours200" value="@input.OtHours200.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" min="0" step="0.5" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label fs-7 fw-semibold">OT 300% (h)</label>
+                        <input type="number" name="OtHours300" value="@input.OtHours300.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" min="0" step="0.5" class="form-control form-control-sm" />
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label fs-7 fw-semibold">Thưởng KPI / Khác</label>
+                        <input type="number" name="KpiBonus" value="@input.KpiBonus.ToString("0")" min="0" step="100000" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fs-7 fw-semibold">Phụ cấp miễn thuế</label>
+                        <input type="number" name="ExtraTaxExemptAmount" value="@input.ExtraTaxExemptAmount.ToString("0")" min="0" step="50000" class="form-control form-control-sm" />
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-4">
+                        <label class="form-label fs-7 fw-semibold">Số NPT</label>
+                        <input type="number" name="DependentCount" value="@input.DependentCount" min="0" max="20" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label fs-7 fw-semibold">Vùng BHTN</label>
+                        <select name="WageRegion" class="form-select form-select-sm">
+                            @for (int r = 1; r <= 4; r++)
+                            {
+                                if (input.WageRegion == r)
+                                {
+                                    <option value="@r" selected>Vùng @r</option>
+                                }
+                                else
+                                {
+                                    <option value="@r">Vùng @r</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label fs-7 fw-semibold">Đoàn phí CĐ</label>
+                        <select name="IsUnionMember" class="form-select form-select-sm">
+                            @if (input.IsUnionMember)
+                            {
+                                <option value="true" selected>Có (1%)</option>
+                                <option value="false">Không</option>
+                            }
+                            else
+                            {
+                                <option value="true">Có (1%)</option>
+                                <option value="false" selected>Không</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label fs-7 fw-semibold">Chế độ cư trú thuế</label>
+                        <select name="TaxResidencyMode" class="form-select form-select-sm">
+                            @if (input.TaxResidencyMode == "NonResident")
+                            {
+                                <option value="ResidentStandard">Cư trú (Lũy tiến)</option>
+                                <option value="NonResident" selected>Không cư trú (20%)</option>
+                                <option value="ResidentShortTerm">HĐ &lt;3 tháng (10%)</option>
+                            }
+                            else if (input.TaxResidencyMode == "ResidentShortTerm")
+                            {
+                                <option value="ResidentStandard">Cư trú (Lũy tiến)</option>
+                                <option value="NonResident">Không cư trú (20%)</option>
+                                <option value="ResidentShortTerm" selected>HĐ &lt;3 tháng (10%)</option>
+                            }
+                            else
+                            {
+                                <option value="ResidentStandard" selected>Cư trú (Lũy tiến)</option>
+                                <option value="NonResident">Không cư trú (20%)</option>
+                                <option value="ResidentShortTerm">HĐ &lt;3 tháng (10%)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fs-7 fw-semibold">Khấu trừ kỷ luật</label>
+                        <input type="number" name="DisciplineDeduction" value="@input.DisciplineDeduction.ToString("0")" min="0" step="50000" class="form-control form-control-sm" />
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary fw-semibold">
+                        <i class="ti ti-player-play me-1"></i>Tính toán &amp; Diễn giải 15 bước
+                    </button>
+                    <button type="submit" formaction="/Payroll/DownloadCalculatorTracePdf" class="btn btn-outline-danger btn-sm">
+                        <i class="ti ti-file-type-pdf me-1"></i>Xuất PDF Diễn giải
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-8">
+        <div class="row g-2 mb-3">
+            <div class="col-6 col-md-3">
+                <div class="vnm-card p-3 border-start border-4 border-primary h-100">
+                    <div class="small text-muted">Tổng thu nhập (Gross)</div>
+                    <div class="fs-5 fw-bold text-primary">@b.GrossIncome.ToString("N0") đ</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="vnm-card p-3 border-start border-4 border-warning h-100">
+                    <div class="small text-muted">BH NLĐ (10.5%)</div>
+                    <div class="fs-5 fw-bold text-dark">-@b.TotalEmployeeInsurance.ToString("N0") đ</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="vnm-card p-3 border-start border-4 border-danger h-100">
+                    <div class="small text-muted">Thuế TNCN</div>
+                    <div class="fs-5 fw-bold text-danger">-@b.PersonalIncomeTax.ToString("N0") đ</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="vnm-card p-3 border-start border-4 border-success h-100">
+                    <div class="small text-muted">Thực lĩnh (Net)</div>
+                    <div class="fs-5 fw-bold text-success">@b.NetSalary.ToString("N0") đ</div>
+                    <div class="small text-muted">CP DN: @b.TotalCompanyCost.ToString("N0") đ</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="vnm-card p-3 mb-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+                <h6 class="fw-bold mb-0"><i class="ti ti-list-numbers text-primary me-1"></i>Diễn giải chi tiết 15 bước (Chia sẻ Engine với Bảng lương)</h6>
+                <span class="small text-muted">LCS: @stat.StatutoryBaseSalary.ToString("N0") đ | Bản thân: @stat.SelfDeduction.ToString("N0") đ | NPT: @stat.DependentDeduction.ToString("N0") đ</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-center" style="width:55px;">Bước</th>
+                            <th style="width:200px;">Nội dung</th>
+                            <th>Công thức &amp; Tham số thay số</th>
+                            <th class="text-end" style="width:155px;">Kết quả</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in trace.Steps.OrderBy(x => x.StepOrder))
+                        {
+                            <tr>
+                                <td class="text-center"><span class="badge bg-primary-subtle text-primary">@s.StepOrder</span></td>
+                                <td class="fw-semibold">@s.ItemName<div class="small text-muted">@s.Category</div></td>
+                                <td>
+                                    <div><code class="small">@s.Formula</code></div>
+                                    <div class="small text-dark mt-1">@s.VariablesSummary</div>
+                                    @if (!string.IsNullOrWhiteSpace(s.LegalReference))
+                                    {
+                                        <div class="small text-primary mt-1"><i class="ti ti-scale me-1"></i>@s.LegalReference</div>
+                                    }
+                                </td>
+                                <td class="text-end fw-bold text-nowrap">
+                                    @if (s.StepOrder == 15 && s.SecondaryAmount.HasValue)
+                                    {
+                                        <div class="text-success">Net: @s.SecondaryAmount.Value.ToString("N0") đ</div>
+                                        <div class="text-primary small">CP DN: @s.ResultAmount.ToString("N0") đ</div>
+                                    }
+                                    else if (s.StepOrder == 8 && s.SecondaryAmount.HasValue)
+                                    {
+                                        <div>BHXH: @s.ResultAmount.ToString("N0") đ</div>
+                                        <div class="text-muted small">BHTN: @s.SecondaryAmount.Value.ToString("N0") đ</div>
+                                    }
+                                    else
+                                    {
+                                        @:@s.ResultAmount.ToString("N0") đ
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        @if (trace.PitBrackets.Count > 0)
+        {
+            <div class="vnm-card p-3">
+                <h6 class="fw-bold mb-2"><i class="ti ti-stairs-up text-primary me-1"></i>Chi tiết thuế TNCN lũy tiến từng bậc (@trace.PitBrackets.Count bậc hiệu lực)</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Bậc</th>
+                                <th>Khoảng thu nhập tính thuế</th>
+                                <th class="text-end">Thuế suất</th>
+                                <th class="text-end">TN trong bậc</th>
+                                <th class="text-end">Tiền thuế (VNĐ)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var slice in trace.PitBrackets)
+                            {
+                                <tr>
+                                    <td>Bậc @slice.BracketLevel</td>
+                                    <td>@(slice.UpperBound.HasValue ? $"Trên {slice.LowerBound:N0} đến {slice.UpperBound.Value:N0} đ" : $"Trên {slice.LowerBound:N0} đ")</td>
+                                    <td class="text-end">@((slice.TaxRate * 100m).ToString("0.#"))%</td>
+                                    <td class="text-end">@slice.IncomeInBracket.ToString("N0") đ</td>
+                                    <td class="text-end fw-bold">@slice.TaxAmount.ToString("N0") đ</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function toggleNetMode() {
+        const isNet = document.getElementById('isNetSelect').value === 'true';
+        document.getElementById('grossSalaryBox').classList.toggle('d-none', isNet);
+        document.getElementById('targetNetBox').classList.toggle('d-none', !isNet);
+    }
+    toggleNetMode();
+</script>
+}

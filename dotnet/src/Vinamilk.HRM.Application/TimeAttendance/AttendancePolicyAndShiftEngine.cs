@@ -17,7 +17,8 @@ public sealed record ShiftConflictWarningDto(
     string EmployeeName,
     DateOnly WorkDate,
     string ConflictType, // Overlap | InsufficientRest | WeeklyHoursExceeded
-    string Message);
+    string Message,
+    string? LegalReference = null);
 
 public sealed record CalculatedAttendanceResultDto(
     DateOnly AttributedWorkDate,
@@ -496,7 +497,8 @@ public static class AttendancePolicyAndShiftEngine
                         firstEmp.FullName,
                         curr.WorkDate,
                         "Overlap",
-                        $"Trùng ca giữa {prev.WorkShift.ShiftCode} ({prev.Start:dd/MM HH:mm}-{prev.End:dd/MM HH:mm}) và {curr.WorkShift.ShiftCode} ({curr.Start:dd/MM HH:mm}-{curr.End:dd/MM HH:mm})."));
+                        $"Trùng ca {prev.WorkShift.ShiftCode} ({prev.Start:dd/MM HH:mm}-{prev.End:dd/MM HH:mm}) & {curr.WorkShift.ShiftCode} ({curr.Start:dd/MM HH:mm}-{curr.End:dd/MM HH:mm})",
+                        statutory.LegalReference));
                 }
                 else
                 {
@@ -509,7 +511,8 @@ public static class AttendancePolicyAndShiftEngine
                             firstEmp.FullName,
                             curr.WorkDate,
                             "InsufficientRest",
-                            $"Thời gian nghỉ giữa {prev.WorkShift.ShiftCode} và {curr.WorkShift.ShiftCode} chỉ {restHours:0.##}h (< tối thiểu {statutory.MinInterShiftRestHours:0.##}h theo {statutory.LegalReference})."));
+                            $"Nghỉ giữa ca {restHours:0.##}h < {statutory.MinInterShiftRestHours:0.##}h ({prev.WorkShift.ShiftCode}→{curr.WorkShift.ShiftCode})",
+                            statutory.LegalReference));
                     }
                 }
             }
@@ -534,7 +537,8 @@ public static class AttendancePolicyAndShiftEngine
                         firstEmp.FullName,
                         weekStart,
                         "WeeklyHoursExceeded",
-                        $"Tổng giờ làm tuần ({weekStart:dd/MM}–{weekEnd:dd/MM}) là {totalWeeklyHours:0.##}h, vượt giới hạn {effectiveMaxWeekly:0.##}h/tuần."));
+                        $"Tổng giờ tuần {totalWeeklyHours:0.##}h > {effectiveMaxWeekly:0.##}h",
+                        statutory.LegalReference));
                 }
             }
         }

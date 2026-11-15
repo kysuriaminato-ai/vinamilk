@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Vinamilk.HRM.Application.CoreHR.Organization;
@@ -40,21 +40,46 @@ public class OrganizationController : Controller
         int plannedHeadcount,
         int sortOrder,
         string? address,
-        CancellationToken cancellationToken)
+        int wageRegion = 1,
+        CancellationToken cancellationToken = default)
     {
-        await _sender.Send(new SaveOrganizationUnitCommand(
-            id,
-            unitCode,
-            unitName,
-            unitType,
-            parentUnitId,
-            managerEmployeeId,
-            costCenterCode,
-            plannedHeadcount,
-            sortOrder,
-            address), cancellationToken);
+        try
+        {
+            await _sender.Send(new SaveOrganizationUnitCommand(
+                id,
+                unitCode,
+                unitName,
+                unitType,
+                parentUnitId,
+                managerEmployeeId,
+                costCenterCode,
+                plannedHeadcount,
+                sortOrder,
+                address,
+                wageRegion), cancellationToken);
 
-        TempData["CoreHrSuccess"] = $"Đã lưu đơn vị tổ chức [{unitCode.ToUpperInvariant()} - {unitName}] và cập nhật cây phân cấp TreePath!";
+            TempData["CoreHrSuccess"] = $"Đã lưu đơn vị tổ chức [{unitCode.ToUpperInvariant()} - {unitName}] và cập nhật cây phân cấp TreePath!";
+        }
+        catch (Exception ex)
+        {
+            TempData["CoreHrError"] = ex.Message;
+        }
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost("DeleteUnit")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteUnit(int id, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var msg = await _sender.Send(new DeleteOrganizationUnitCommand(id), cancellationToken);
+            TempData["CoreHrSuccess"] = msg;
+        }
+        catch (Exception ex)
+        {
+            TempData["CoreHrError"] = ex.Message;
+        }
         return RedirectToAction(nameof(Index));
     }
 

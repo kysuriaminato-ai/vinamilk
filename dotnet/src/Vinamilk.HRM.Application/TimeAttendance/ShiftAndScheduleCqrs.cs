@@ -62,7 +62,8 @@ public record ShiftCellDto(
     bool IsHoliday,
     string? HolidayName,
     string BadgeColorClass,
-    string? ConflictWarning = null);
+    string? ConflictWarning = null,
+    string? Notes = null);
 
 public record EmployeeShiftRowDto(
     int EmployeeId,
@@ -254,8 +255,34 @@ public static class ShiftAndHolidaySeeder
         }
 
         var weekEnd = weekStart.AddDays(6);
-        if (!await context.ShiftSchedules.AnyAsync(s => s.WorkDate >= weekStart && s.WorkDate <= weekEnd, cancellationToken))
+        var existingWeekSchedules = await context.ShiftSchedules
+            .Include(s => s.WorkShift)
+            .Include(s => s.Employee).ThenInclude(e => e.OrganizationUnit)
+            .Where(s => s.WorkDate >= weekStart && s.WorkDate <= weekEnd)
+            .ToListAsync(cancellationToken);
+
+        bool hasUntouchedBrokenSeed = existingWeekSchedules.Count > 0 && existingWeekSchedules
+            .All(s => s.Notes is "Lịch phân ca tiêu chuẩn" or "Nghỉ cuối tuần") &&
+            (existingWeekSchedules.Any(s =>
+                s.Employee.OrganizationUnit.UnitType is not ("Factory" or "Farm")
+                && s.WorkDate.DayOfWeek == DayOfWeek.Saturday
+                && !s.IsDayOff)
+             || existingWeekSchedules
+                .Where(s => !s.IsDayOff && s.WorkShift.ShiftCode == "CA3")
+                .Any(ca3 => existingWeekSchedules.Any(next =>
+                    next.EmployeeId == ca3.EmployeeId
+                    && !next.IsDayOff
+                    && next.WorkDate == ca3.WorkDate.AddDays(1)
+                    && next.WorkShift.ShiftCode == "CA1")));
+
+        if (existingWeekSchedules.Count == 0 || hasUntouchedBrokenSeed)
         {
+            if (hasUntouchedBrokenSeed)
+            {
+                context.ShiftSchedules.RemoveRange(existingWeekSchedules);
+                await context.SaveChangesAsync(cancellationToken);
+            }
+
             var shifts = await context.WorkShifts.AsNoTracking().ToListAsync(cancellationToken);
             if (shifts.Count == 0)
                 return;
@@ -273,40 +300,61 @@ public static class ShiftAndHolidaySeeder
                 .Take(25)
                 .ToListAsync(cancellationToken);
 
+            // Chu kỳ xoay 3 ca 4 kíp an toàn >= 12h nghỉ giữa ca: CA1->CA1->CA2->CA2->CA3->CA3->OFF->OFF
+            var safeFactoryCycle = new[] { "CA1", "CA1", "CA2", "CA2", "CA3", "CA3", "OFF", "OFF" };
+
             var newSchedules = new List<ShiftSchedule>();
-            int empIdx = 0;
+            int factoryIdx = 0;
 
             foreach (var emp in employees)
             {
                 bool isFactoryOrFarm = emp.OrganizationUnit.UnitType is "Factory" or "Farm";
+                var resolved = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(context, emp.Id, weekStart, cancellationToken);
+                var workdays = AttendancePolicyAndShiftEngine.ParseWorkdaysMask(resolved.Policy.WeeklyWorkdaysMask);
+                int crewOffset = (factoryIdx % 4) * 2;
 
                 for (int d = 0; d < 7; d++)
                 {
                     var date = weekStart.AddDays(d);
-                    bool isSunday = date.DayOfWeek == DayOfWeek.Sunday;
 
-                    int shiftId = hcShift.Id;
                     if (isFactoryOrFarm)
                     {
-                        var rotation = (empIdx + d) % 3;
-                        shiftId = rotation switch
+                        var token = safeFactoryCycle[(d + crewOffset) % safeFactoryCycle.Length];
+                        bool isOff = token == "OFF";
+                        int shiftId = token switch
                         {
-                            0 => ca1Shift.Id,
-                            1 => ca2Shift.Id,
-                            _ => ca3Shift.Id
+                            "CA1" => ca1Shift.Id,
+                            "CA2" => ca2Shift.Id,
+                            "CA3" => ca3Shift.Id,
+                            _ => ca1Shift.Id
                         };
+                        newSchedules.Add(new ShiftSchedule
+                        {
+                            EmployeeId = emp.Id,
+                            WorkShiftId = shiftId,
+                            WorkDate = date,
+                            IsDayOff = isOff,
+                            Notes = isOff ? "Nghỉ cuối tuần" : "Lịch phân ca tiêu chuẩn"
+                        });
                     }
-
-                    newSchedules.Add(new ShiftSchedule
+                    else
                     {
-                        EmployeeId = emp.Id,
-                        WorkShiftId = shiftId,
-                        WorkDate = date,
-                        IsDayOff = isSunday,
-                        Notes = isSunday ? "Nghỉ cuối tuần" : "Lịch phân ca tiêu chuẩn"
-                    });
+                        bool isOff = !workdays.Contains(date.DayOfWeek);
+                        newSchedules.Add(new ShiftSchedule
+                        {
+                            EmployeeId = emp.Id,
+                            WorkShiftId = hcShift.Id,
+                            WorkDate = date,
+                            IsDayOff = isOff,
+                            Notes = isOff ? "Nghỉ cuối tuần" : "Lịch phân ca tiêu chuẩn"
+                        });
+                    }
                 }
-                empIdx++;
+
+                if (isFactoryOrFarm)
+                {
+                    factoryIdx++;
+                }
             }
 
             await context.ShiftSchedules.AddRangeAsync(newSchedules, cancellationToken);
@@ -488,6 +536,8 @@ public class GetShiftAndScheduleOverviewQueryHandler : IRequestHandler<GetShiftA
 
         foreach (var emp in employees)
         {
+            var resolvedEmpPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(_context, emp.Id, weekStart, cancellationToken);
+            var empWorkdays = AttendancePolicyAndShiftEngine.ParseWorkdaysMask(resolvedEmpPolicy.Policy.WeeklyWorkdaysMask);
             var cells = new List<ShiftCellDto>();
             foreach (var dt in weekDates)
             {
@@ -514,14 +564,15 @@ public class GetShiftAndScheduleOverviewQueryHandler : IRequestHandler<GetShiftA
                         isHoliday,
                         holidayName,
                         ShiftAndHolidaySeeder.GetShiftBadgeColor(code, sched.IsDayOff),
-                        sched.ConflictWarning));
+                        sched.ConflictWarning,
+                        sched.Notes));
                 }
                 else
                 {
-                    bool isSun = dt.DayOfWeek == DayOfWeek.Sunday;
-                    var code = isSun ? "OFF" : (defaultShift?.ShiftCode ?? "HC");
-                    var name = isSun ? "Nghỉ tuần (OFF)" : (defaultShift?.ShiftName ?? "Ca Hành chính");
-                    var timeText = isSun ? "Nghỉ" : $"{defaultShift?.StartTime:HH\\:mm}-{defaultShift?.EndTime:HH\\:mm}";
+                    bool isOff = !empWorkdays.Contains(dt.DayOfWeek);
+                    var code = isOff ? "OFF" : (defaultShift?.ShiftCode ?? "HC");
+                    var name = isOff ? "Nghỉ tuần (OFF)" : (defaultShift?.ShiftName ?? "Ca Hành chính");
+                    var timeText = isOff ? "Nghỉ" : $"{defaultShift?.StartTime:HH\\:mm}-{defaultShift?.EndTime:HH\\:mm}";
 
                     cells.Add(new ShiftCellDto(
                         null,
@@ -530,10 +581,10 @@ public class GetShiftAndScheduleOverviewQueryHandler : IRequestHandler<GetShiftA
                         code,
                         name,
                         timeText,
-                        isSun,
+                        isOff,
                         isHoliday,
                         holidayName,
-                        ShiftAndHolidaySeeder.GetShiftBadgeColor(code, isSun)));
+                        ShiftAndHolidaySeeder.GetShiftBadgeColor(code, isOff)));
                 }
             }
 
@@ -732,15 +783,112 @@ public record AssignShiftScheduleDetailedCommand(
     string? Notes = null,
     bool ReplaceExisting = true) : IRequest<AssignScheduleResultDto>;
 
+internal static class ShiftScheduleValidationHelper
+{
+    public static async Task EnsureAttendanceMonthsUnlockedAsync(
+        IApplicationDbContext context,
+        IReadOnlyList<int> employeeIds,
+        IReadOnlyList<(int Year, int Month)> months,
+        CancellationToken cancellationToken)
+    {
+        if (employeeIds.Count == 0 || months.Count == 0)
+            return;
+
+        var monthPairs = months.Distinct().ToList();
+        var years = monthPairs.Select(m => m.Year).Distinct().ToList();
+
+        var lockedRows = await context.MonthlyAttendanceSummaries
+            .AsNoTracking()
+            .Where(m => m.IsLocked && employeeIds.Contains(m.EmployeeId) && years.Contains(m.Year))
+            .Select(m => new { m.EmployeeId, m.Year, m.Month })
+            .ToListAsync(cancellationToken);
+
+        var conflictMonth = lockedRows.FirstOrDefault(r => monthPairs.Contains((r.Year, r.Month)));
+        if (conflictMonth != null)
+        {
+            throw new InvalidOperationException(
+                $"Bảng công tháng {conflictMonth.Month:00}/{conflictMonth.Year} đã khóa, không thể thêm/sửa/xóa lịch phân ca.");
+        }
+    }
+
+    public static async Task<IReadOnlyList<ShiftConflictWarningDto>> EvaluateAndStampConflictsAsync(
+        IApplicationDbContext context,
+        IReadOnlyList<int> empIds,
+        DateOnly fromDate,
+        DateOnly toDate,
+        CancellationToken cancellationToken)
+    {
+        if (empIds.Count == 0 || !await context.AttendanceStatutoryParameters.AnyAsync(cancellationToken))
+            return Array.Empty<ShiftConflictWarningDto>();
+
+        var warnings = await AttendancePolicyAndShiftEngine.EvaluateScheduleConflictsAsync(
+            context, empIds, fromDate, toDate, cancellationToken);
+
+        var windowStart = fromDate.AddDays(-1);
+        var windowEnd = toDate.AddDays(1);
+        var schedules = await context.ShiftSchedules
+            .Where(s => empIds.Contains(s.EmployeeId) && s.WorkDate >= windowStart && s.WorkDate <= windowEnd)
+            .ToListAsync(cancellationToken);
+
+        foreach (var sched in schedules)
+        {
+            if (sched.IsDayOff)
+            {
+                sched.ConflictWarning = null;
+                continue;
+            }
+
+            var msgs = warnings
+                .Where(w => w.EmployeeId == sched.EmployeeId && (w.WorkDate == sched.WorkDate || w.ConflictType == "WeeklyHoursExceeded"))
+                .Select(w => w.Message)
+                .Distinct()
+                .ToList();
+            sched.ConflictWarning = msgs.Count > 0 ? string.Join(" | ", msgs) : null;
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+        return warnings;
+    }
+
+    public static async Task WriteScheduleAuditAsync(
+        IApplicationDbContext context,
+        ICurrentUserService? currentUser,
+        string actionType,
+        string entityId,
+        string summaryJson,
+        CancellationToken cancellationToken)
+    {
+        if (currentUser?.UserId is not int uid)
+            return;
+
+        await context.AuditLogs.AddAsync(new Domain.Entities.SystemEntities.AuditLog
+        {
+            UserId = uid,
+            Username = currentUser.Username ?? "hr.admin",
+            ActionType = actionType,
+            ModuleName = "TimeAttendance",
+            EntityName = "ShiftSchedule",
+            EntityId = entityId,
+            NewValuesJson = summaryJson,
+            IpAddress = currentUser.IpAddress,
+            UserAgent = currentUser.UserAgent,
+            CreatedAt = DateTime.UtcNow
+        }, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+    }
+}
+
 public class AssignShiftScheduleCommandHandler :
     IRequestHandler<AssignShiftScheduleCommand, int>,
     IRequestHandler<AssignShiftScheduleDetailedCommand, AssignScheduleResultDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
 
-    public AssignShiftScheduleCommandHandler(IApplicationDbContext context)
+    public AssignShiftScheduleCommandHandler(IApplicationDbContext context, ICurrentUserService? currentUser = null)
     {
         _context = context;
+        _currentUser = currentUser;
     }
 
     public async Task<int> Handle(AssignShiftScheduleCommand request, CancellationToken cancellationToken)
@@ -787,6 +935,15 @@ public class AssignShiftScheduleCommandHandler :
 
         if (empIds.Count == 0)
             return new AssignScheduleResultDto(0, Array.Empty<ShiftConflictWarningDto>());
+
+        var coveredMonths = new List<(int Year, int Month)>();
+        for (var dt = fromDate; dt <= toDate; dt = dt.AddDays(1))
+        {
+            var pair = (dt.Year, dt.Month);
+            if (!coveredMonths.Contains(pair))
+                coveredMonths.Add(pair);
+        }
+        await ShiftScheduleValidationHelper.EnsureAttendanceMonthsUnlockedAsync(_context, empIds, coveredMonths, cancellationToken);
 
         var existingSchedules = await _context.ShiftSchedules
             .Where(s => empIds.Contains(s.EmployeeId) && s.WorkDate >= fromDate && s.WorkDate <= toDate)
@@ -859,23 +1016,291 @@ public class AssignShiftScheduleCommandHandler :
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        var warnings = await _context.AttendanceStatutoryParameters.AnyAsync(cancellationToken)
-            ? await AttendancePolicyAndShiftEngine.EvaluateScheduleConflictsAsync(_context, empIds, fromDate, toDate, cancellationToken)
-            : Array.Empty<ShiftConflictWarningDto>();
+        var warnings = await ShiftScheduleValidationHelper.EvaluateAndStampConflictsAsync(
+            _context, empIds, fromDate, toDate, cancellationToken);
 
-        if (warnings.Count > 0)
-        {
-            foreach (var sched in touched)
+        await ShiftScheduleValidationHelper.WriteScheduleAuditAsync(
+            _context,
+            _currentUser,
+            "AssignShiftSchedule",
+            employeeId?.ToString() ?? $"unit:{organizationUnitId}",
+            System.Text.Json.JsonSerializer.Serialize(new
             {
-                var msgs = warnings
-                    .Where(w => w.EmployeeId == sched.EmployeeId && (w.WorkDate == sched.WorkDate || w.ConflictType == "WeeklyHoursExceeded"))
-                    .Select(w => w.Message)
-                    .Distinct()
-                    .ToList();
-                sched.ConflictWarning = msgs.Count > 0 ? string.Join(" | ", msgs) : null;
-            }
-            await _context.SaveChangesAsync(cancellationToken);
+                employees = empIds.Count,
+                from = fromDate.ToString("yyyy-MM-dd"),
+                to = toDate.ToString("yyyy-MM-dd"),
+                workShiftId = targetShiftId,
+                isDayOff,
+                notes
+            }),
+            cancellationToken);
+
+        return new AssignScheduleResultDto(affected, warnings);
+    }
+}
+
+public record ShiftCellTargetDto(int EmployeeId, DateOnly WorkDate);
+
+public record DeleteShiftScheduleCommand(
+    int EmployeeId,
+    DateOnly WorkDate,
+    string? Reason = null) : IRequest<AssignScheduleResultDto>;
+
+public class DeleteShiftScheduleCommandHandler : IRequestHandler<DeleteShiftScheduleCommand, AssignScheduleResultDto>
+{
+    private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
+
+    public DeleteShiftScheduleCommandHandler(IApplicationDbContext context, ICurrentUserService? currentUser = null)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
+
+    public async Task<AssignScheduleResultDto> Handle(DeleteShiftScheduleCommand request, CancellationToken cancellationToken)
+    {
+        var empIds = new[] { request.EmployeeId };
+        await ShiftScheduleValidationHelper.EnsureAttendanceMonthsUnlockedAsync(
+            _context, empIds, new[] { (request.WorkDate.Year, request.WorkDate.Month) }, cancellationToken);
+
+        var existing = await _context.ShiftSchedules
+            .Where(s => s.EmployeeId == request.EmployeeId && s.WorkDate == request.WorkDate)
+            .ToListAsync(cancellationToken);
+
+        if (existing.Count == 0)
+        {
+            var emptyWarnings = await ShiftScheduleValidationHelper.EvaluateAndStampConflictsAsync(
+                _context, empIds, request.WorkDate, request.WorkDate, cancellationToken);
+            return new AssignScheduleResultDto(0, emptyWarnings);
         }
+
+        foreach (var item in existing)
+            item.IsDeleted = true;
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        var warnings = await ShiftScheduleValidationHelper.EvaluateAndStampConflictsAsync(
+            _context, empIds, request.WorkDate, request.WorkDate, cancellationToken);
+
+        await ShiftScheduleValidationHelper.WriteScheduleAuditAsync(
+            _context,
+            _currentUser,
+            "DeleteShiftSchedule",
+            $"{request.EmployeeId}:{request.WorkDate:yyyy-MM-dd}",
+            System.Text.Json.JsonSerializer.Serialize(new
+            {
+                employeeId = request.EmployeeId,
+                workDate = request.WorkDate.ToString("yyyy-MM-dd"),
+                removedCount = existing.Count,
+                reason = request.Reason
+            }),
+            cancellationToken);
+
+        return new AssignScheduleResultDto(existing.Count, warnings);
+    }
+}
+
+public record BulkAssignShiftCellsCommand(
+    IReadOnlyList<ShiftCellTargetDto> Cells,
+    int? WorkShiftId,
+    bool IsDayOff = false,
+    bool DeleteSchedule = false,
+    string? Notes = null) : IRequest<AssignScheduleResultDto>;
+
+public class BulkAssignShiftCellsCommandHandler : IRequestHandler<BulkAssignShiftCellsCommand, AssignScheduleResultDto>
+{
+    private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
+
+    public BulkAssignShiftCellsCommandHandler(IApplicationDbContext context, ICurrentUserService? currentUser = null)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
+
+    public async Task<AssignScheduleResultDto> Handle(BulkAssignShiftCellsCommand request, CancellationToken cancellationToken)
+    {
+        var cells = (request.Cells ?? Array.Empty<ShiftCellTargetDto>()).Distinct().ToList();
+        if (cells.Count == 0)
+            return new AssignScheduleResultDto(0, Array.Empty<ShiftConflictWarningDto>());
+
+        var empIds = cells.Select(c => c.EmployeeId).Distinct().ToList();
+        var months = cells.Select(c => (c.WorkDate.Year, c.WorkDate.Month)).Distinct().ToList();
+        await ShiftScheduleValidationHelper.EnsureAttendanceMonthsUnlockedAsync(_context, empIds, months, cancellationToken);
+
+        var minDate = cells.Min(c => c.WorkDate);
+        var maxDate = cells.Max(c => c.WorkDate);
+        var defaultShift = await _context.WorkShifts.AsNoTracking().FirstAsync(cancellationToken);
+        int targetShiftId = request.WorkShiftId ?? defaultShift.Id;
+
+        var existing = await _context.ShiftSchedules
+            .Where(s => empIds.Contains(s.EmployeeId) && s.WorkDate >= minDate && s.WorkDate <= maxDate)
+            .ToListAsync(cancellationToken);
+
+        int affected = 0;
+        foreach (var cell in cells)
+        {
+            var onDay = existing.Where(s => s.EmployeeId == cell.EmployeeId && s.WorkDate == cell.WorkDate).ToList();
+            if (request.DeleteSchedule)
+            {
+                foreach (var item in onDay)
+                {
+                    item.IsDeleted = true;
+                    affected++;
+                }
+                continue;
+            }
+
+            var primary = onDay.FirstOrDefault();
+            if (primary != null)
+            {
+                primary.WorkShiftId = targetShiftId;
+                primary.IsDayOff = request.IsDayOff;
+                primary.Notes = request.Notes ?? "Cập nhật hàng loạt trên Lịch phân ca";
+                primary.ConflictWarning = null;
+                foreach (var extra in onDay.Where(x => x.Id != primary.Id))
+                    extra.IsDeleted = true;
+            }
+            else
+            {
+                await _context.ShiftSchedules.AddAsync(new ShiftSchedule
+                {
+                    EmployeeId = cell.EmployeeId,
+                    WorkShiftId = targetShiftId,
+                    WorkDate = cell.WorkDate,
+                    IsDayOff = request.IsDayOff,
+                    Notes = request.Notes ?? "Phân ca hàng loạt trên Lịch phân ca"
+                }, cancellationToken);
+            }
+            affected++;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        var warnings = await ShiftScheduleValidationHelper.EvaluateAndStampConflictsAsync(
+            _context, empIds, minDate, maxDate, cancellationToken);
+
+        await ShiftScheduleValidationHelper.WriteScheduleAuditAsync(
+            _context,
+            _currentUser,
+            request.DeleteSchedule ? "BulkDeleteShiftCells" : "BulkAssignShiftCells",
+            $"{cells.Count}cells",
+            System.Text.Json.JsonSerializer.Serialize(new
+            {
+                cellCount = cells.Count,
+                from = minDate.ToString("yyyy-MM-dd"),
+                to = maxDate.ToString("yyyy-MM-dd"),
+                request.DeleteSchedule,
+                request.IsDayOff,
+                workShiftId = targetShiftId
+            }),
+            cancellationToken);
+
+        return new AssignScheduleResultDto(affected, warnings);
+    }
+}
+
+public record CopyPreviousWeekScheduleCommand(
+    DateOnly TargetWeekStart,
+    int? OrganizationUnitId = null) : IRequest<AssignScheduleResultDto>;
+
+public class CopyPreviousWeekScheduleCommandHandler : IRequestHandler<CopyPreviousWeekScheduleCommand, AssignScheduleResultDto>
+{
+    private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
+
+    public CopyPreviousWeekScheduleCommandHandler(IApplicationDbContext context, ICurrentUserService? currentUser = null)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
+
+    public async Task<AssignScheduleResultDto> Handle(CopyPreviousWeekScheduleCommand request, CancellationToken cancellationToken)
+    {
+        var targetEnd = request.TargetWeekStart.AddDays(6);
+        var prevStart = request.TargetWeekStart.AddDays(-7);
+        var prevEnd = request.TargetWeekStart.AddDays(-1);
+
+        var empQuery = _context.Employees.AsNoTracking()
+            .Where(e => e.WorkStatus == "Official" || e.WorkStatus == "Probation");
+        if (request.OrganizationUnitId.HasValue && request.OrganizationUnitId.Value > 0)
+        {
+            var unit = await _context.OrganizationUnits.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == request.OrganizationUnitId.Value, cancellationToken);
+            if (unit != null && !string.IsNullOrEmpty(unit.TreePath))
+                empQuery = empQuery.Where(e => e.OrganizationUnit.TreePath!.StartsWith(unit.TreePath));
+            else
+                empQuery = empQuery.Where(e => e.OrganizationUnitId == request.OrganizationUnitId.Value);
+        }
+
+        var empIds = await empQuery.Select(e => e.Id).ToListAsync(cancellationToken);
+        if (empIds.Count == 0)
+            return new AssignScheduleResultDto(0, Array.Empty<ShiftConflictWarningDto>());
+
+        var coveredMonths = Enumerable.Range(0, 7)
+            .Select(i => request.TargetWeekStart.AddDays(i))
+            .Select(d => (d.Year, d.Month))
+            .Distinct()
+            .ToList();
+        await ShiftScheduleValidationHelper.EnsureAttendanceMonthsUnlockedAsync(_context, empIds, coveredMonths, cancellationToken);
+
+        var prevSchedules = await _context.ShiftSchedules.AsNoTracking()
+            .Where(s => empIds.Contains(s.EmployeeId) && s.WorkDate >= prevStart && s.WorkDate <= prevEnd)
+            .OrderBy(s => s.Id)
+            .ToListAsync(cancellationToken);
+
+        if (prevSchedules.Count == 0)
+            throw new InvalidOperationException($"Tuần trước ({prevStart:dd/MM/yyyy} - {prevEnd:dd/MM/yyyy}) chưa có dữ liệu phân ca để sao chép.");
+
+        var existingTarget = await _context.ShiftSchedules
+            .Where(s => empIds.Contains(s.EmployeeId) && s.WorkDate >= request.TargetWeekStart && s.WorkDate <= targetEnd)
+            .ToListAsync(cancellationToken);
+
+        int affected = 0;
+        foreach (var prev in prevSchedules)
+        {
+            var targetDate = prev.WorkDate.AddDays(7);
+            var onDay = existingTarget.Where(s => s.EmployeeId == prev.EmployeeId && s.WorkDate == targetDate).ToList();
+            var primary = onDay.FirstOrDefault();
+            if (primary != null)
+            {
+                primary.WorkShiftId = prev.WorkShiftId;
+                primary.IsDayOff = prev.IsDayOff;
+                primary.Notes = $"Sao chép từ {prev.WorkDate:dd/MM/yyyy}";
+                primary.ConflictWarning = null;
+                foreach (var extra in onDay.Where(e => e.Id != primary.Id))
+                    extra.IsDeleted = true;
+            }
+            else
+            {
+                await _context.ShiftSchedules.AddAsync(new ShiftSchedule
+                {
+                    EmployeeId = prev.EmployeeId,
+                    WorkShiftId = prev.WorkShiftId,
+                    WorkDate = targetDate,
+                    IsDayOff = prev.IsDayOff,
+                    Notes = $"Sao chép từ {prev.WorkDate:dd/MM/yyyy}"
+                }, cancellationToken);
+            }
+            affected++;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        var warnings = await ShiftScheduleValidationHelper.EvaluateAndStampConflictsAsync(
+            _context, empIds, request.TargetWeekStart, targetEnd, cancellationToken);
+
+        await ShiftScheduleValidationHelper.WriteScheduleAuditAsync(
+            _context,
+            _currentUser,
+            "CopyPreviousWeekSchedule",
+            request.TargetWeekStart.ToString("yyyy-MM-dd"),
+            System.Text.Json.JsonSerializer.Serialize(new
+            {
+                targetWeekStart = request.TargetWeekStart.ToString("yyyy-MM-dd"),
+                unitId = request.OrganizationUnitId,
+                affected
+            }),
+            cancellationToken);
 
         return new AssignScheduleResultDto(affected, warnings);
     }
@@ -1159,10 +1584,12 @@ public record GenerateRotationScheduleCommand(
 public class GenerateRotationScheduleCommandHandler : IRequestHandler<GenerateRotationScheduleCommand, AssignScheduleResultDto>
 {
     private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService? _currentUser;
 
-    public GenerateRotationScheduleCommandHandler(IApplicationDbContext context)
+    public GenerateRotationScheduleCommandHandler(IApplicationDbContext context, ICurrentUserService? currentUser = null)
     {
         _context = context;
+        _currentUser = currentUser;
     }
 
     public async Task<AssignScheduleResultDto> Handle(GenerateRotationScheduleCommand request, CancellationToken cancellationToken)
@@ -1203,7 +1630,12 @@ public class GenerateRotationScheduleCommandHandler : IRequestHandler<GenerateRo
 
             if (request.OrganizationUnitId.HasValue && request.OrganizationUnitId.Value > 0)
             {
-                empQuery = empQuery.Where(e => e.OrganizationUnitId == request.OrganizationUnitId.Value);
+                var unit = await _context.OrganizationUnits.AsNoTracking()
+                    .FirstOrDefaultAsync(u => u.Id == request.OrganizationUnitId.Value, cancellationToken);
+                if (unit != null && !string.IsNullOrEmpty(unit.TreePath))
+                    empQuery = empQuery.Where(e => e.OrganizationUnit.TreePath!.StartsWith(unit.TreePath));
+                else
+                    empQuery = empQuery.Where(e => e.OrganizationUnitId == request.OrganizationUnitId.Value);
             }
 
             var unitEmpIds = await empQuery.OrderBy(e => e.EmployeeCode).Select(e => e.Id).ToListAsync(cancellationToken);
@@ -1218,6 +1650,15 @@ public class GenerateRotationScheduleCommandHandler : IRequestHandler<GenerateRo
 
         int totalDays = request.WeeksCount * 7;
         var endDate = request.StartDate.AddDays(totalDays - 1);
+
+        var coveredMonths = new List<(int Year, int Month)>();
+        for (var dt = request.StartDate; dt <= endDate; dt = dt.AddDays(1))
+        {
+            var pair = (dt.Year, dt.Month);
+            if (!coveredMonths.Contains(pair))
+                coveredMonths.Add(pair);
+        }
+        await ShiftScheduleValidationHelper.EnsureAttendanceMonthsUnlockedAsync(_context, allEmpIds, coveredMonths, cancellationToken);
 
         var existing = await _context.ShiftSchedules
             .Where(s => allEmpIds.Contains(s.EmployeeId) && s.WorkDate >= request.StartDate && s.WorkDate <= endDate)
@@ -1274,23 +1715,23 @@ public class GenerateRotationScheduleCommandHandler : IRequestHandler<GenerateRo
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        var warnings = await _context.AttendanceStatutoryParameters.AnyAsync(cancellationToken)
-            ? await AttendancePolicyAndShiftEngine.EvaluateScheduleConflictsAsync(_context, allEmpIds, request.StartDate, endDate, cancellationToken)
-            : Array.Empty<ShiftConflictWarningDto>();
+        var warnings = await ShiftScheduleValidationHelper.EvaluateAndStampConflictsAsync(
+            _context, allEmpIds, request.StartDate, endDate, cancellationToken);
 
-        if (warnings.Count > 0)
-        {
-            foreach (var sched in touched)
+        await ShiftScheduleValidationHelper.WriteScheduleAuditAsync(
+            _context,
+            _currentUser,
+            "GenerateRotationSchedule",
+            pattern.PatternCode,
+            System.Text.Json.JsonSerializer.Serialize(new
             {
-                var msgs = warnings
-                    .Where(w => w.EmployeeId == sched.EmployeeId && (w.WorkDate == sched.WorkDate || w.ConflictType == "WeeklyHoursExceeded"))
-                    .Select(w => w.Message)
-                    .Distinct()
-                    .ToList();
-                sched.ConflictWarning = msgs.Count > 0 ? string.Join(" | ", msgs) : null;
-            }
-            await _context.SaveChangesAsync(cancellationToken);
-        }
+                pattern = pattern.PatternCode,
+                startDate = request.StartDate.ToString("yyyy-MM-dd"),
+                weeksCount = request.WeeksCount,
+                unitId = request.OrganizationUnitId,
+                affected
+            }),
+            cancellationToken);
 
         return new AssignScheduleResultDto(affected, warnings);
     }

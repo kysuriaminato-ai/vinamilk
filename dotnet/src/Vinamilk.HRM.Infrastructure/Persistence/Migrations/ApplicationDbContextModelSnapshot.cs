@@ -254,8 +254,8 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Gender")
                         .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("HealthInsuranceNumber")
                         .HasColumnType("varchar(30)");
@@ -4654,7 +4654,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("ActionType")
                         .IsRequired()
-                        .HasColumnType("varchar(30)");
+                        .HasColumnType("varchar(60)");
 
                     b.Property<string>("AffectedColumns")
                         .HasMaxLength(500)
@@ -4674,7 +4674,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("EntityId")
                         .IsRequired()
-                        .HasColumnType("varchar(50)");
+                        .HasColumnType("varchar(80)");
 
                     b.Property<string>("EntityName")
                         .IsRequired()
@@ -5301,8 +5301,8 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Gender")
                         .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -5493,7 +5493,8 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("RatingGrade")
                         .IsRequired()
-                        .HasColumnType("varchar(10)");
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<string>("ReviewerComment")
                         .HasMaxLength(1000)
@@ -5738,7 +5739,7 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("CycleType")
                         .IsRequired()
-                        .HasColumnType("varchar(20)");
+                        .HasColumnType("varchar(30)");
 
                     b.Property<DateOnly>("EndDate")
                         .HasColumnType("date");
@@ -6714,6 +6715,11 @@ namespace Vinamilk.HRM.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("AllowCompensatoryLeaveForOt")
                         .HasColumnType("bit");
+
+                    b.Property<bool>("AllowPayableWorkdaysExceedStandard")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<decimal>("AnnualLeaveCarryForwardCapDays")
                         .ValueGeneratedOnAdd()

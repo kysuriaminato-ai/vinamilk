@@ -702,3 +702,506 @@ public class UpsertManualAttendanceLogCommandHandler : IRequestHandler<UpsertMan
         return daily.Id;
     }
 }
+
+public static class AttendanceCellEditHelper
+{
+    public static (string NormalizedSymbol, decimal WorkdayCount, decimal PaidLeaveDays, decimal UnpaidLeaveDays, decimal WorkingHours) MapSymbolValues(
+        string rawSymbol,
+        decimal standardHours = 8m)
+    {
+        var s = (rawSymbol ?? "X").Trim();
+        var upper = s.ToUpperInvariant();
+        return upper switch
+        {
+            "X" => ("X", 1.0m, 0m, 0m, standardHours),
+            "CT" => ("CT", 1.0m, 0m, 0m, standardHours),
+            "L" => ("L", 1.0m, 0m, 0m, standardHours),
+            "P" => ("P", 1.0m, 1.0m, 0m, 0m),
+            "R" => ("R", 1.0m, 1.0m, 0m, 0m),
+            "½" or "1/2" or "X/2" => ("½", 0.5m, 0m, 0m, Math.Round(standardHours / 2m, 2)),
+            "P/2" => ("P/2", 0.5m, 0.5m, 0m, 0m),
+            "RO" => ("Ro", 0m, 0m, 1.0m, 0m),
+            "KL" or "V" => (upper, 0m, 0m, 1.0m, 0m),
+            "OFF" => ("OFF", 0m, 0m, 0m, 0m),
+            "Ô" or "OM" or "TS" => (upper == "OM" ? "Ô" : upper, 0m, 0m, 0m, 0m),
+            _ => (s, 1.0m, 0m, 0m, standardHours)
+        };
+    }
+
+    public static async Task RecalculateEmployeeSingleDayAsync(
+        IApplicationDbContext context,
+        int employeeId,
+        DateOnly workDate,
+        bool markManualEdited,
+        string? notePrefix,
+        CancellationToken cancellationToken)
+    {
+        var emp = await context.Employees
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == employeeId, cancellationToken)
+            ?? throw new KeyNotFoundException("Không tìm thấy nhân viên.");
+
+        var resolvedPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(context, employeeId, workDate, cancellationToken);
+        var statutory = await AttendancePolicyAndShiftEngine.ResolveStatutoryParameterAsync(context, workDate, cancellationToken);
+        var symbolDefs = await context.AttendanceSymbolDefinitions.AsNoTracking().Where(s => s.IsActive).ToListAsync(cancellationToken);
+        var symbolCatalog = symbolDefs.Count > 0
+            ? new AttendanceSymbolCatalog(symbolDefs)
+            : AttendanceSymbolCatalog.CreateDefault();
+
+        var defaultShift = await context.WorkShifts.AsNoTracking().FirstOrDefaultAsync(s => s.ShiftCode == "HC", cancellationToken);
+        var sched = await context.ShiftSchedules.AsNoTracking()
+            .Include(s => s.WorkShift)
+            .FirstOrDefaultAsync(s => s.EmployeeId == employeeId && s.WorkDate == workDate, cancellationToken);
+        var shift = sched?.WorkShift ?? defaultShift;
+
+        var workdaysMask = AttendancePolicyAndShiftEngine.ParseWorkdaysMask(resolvedPolicy.Policy.WeeklyWorkdaysMask);
+        bool isWeeklyOff = sched?.IsDayOff == true || !workdaysMask.Contains(workDate.DayOfWeek);
+
+        var (winStart, winEnd) = shift != null
+            ? AttendancePolicyAndShiftEngine.GetPrimaryShiftWindow(workDate, shift)
+            : (workDate.ToDateTime(new TimeOnly(8, 0)), workDate.ToDateTime(new TimeOnly(17, 0)));
+        var earlyBuf = Math.Max(120, shift?.MaxEarlyCheckInMinutes ?? 120);
+        var lateBuf = Math.Max(360, shift?.MaxLateCheckOutMinutes ?? 180);
+
+        var dayPunches = await context.AttendanceLogs
+            .AsNoTracking()
+            .Where(l => l.EmployeeId == employeeId && l.PunchTime >= winStart.AddMinutes(-earlyBuf) && l.PunchTime <= winEnd.AddMinutes(lateBuf))
+            .OrderBy(l => l.PunchTime)
+            .Select(l => new AttendancePunchInput(l.PunchTime, l.PunchType, l.SourceType, l.GeofenceStatus))
+            .ToListAsync(cancellationToken);
+
+        var dayLeavesRaw = await context.LeaveRequests
+            .AsNoTracking()
+            .Include(l => l.LeaveType)
+            .Where(l => l.EmployeeId == employeeId && l.Status == "Approved" && l.StartDate <= workDate && l.EndDate >= workDate)
+            .ToListAsync(cancellationToken);
+
+        var dayLeaves = dayLeavesRaw.Select(l => new AttendanceApprovedLeaveInput(
+            l.LeaveType.LeaveTypeCode,
+            l.LeaveType.AttendanceSymbol,
+            l.StartSession,
+            l.StartDate == l.EndDate && l.TotalDays < 1.0m ? l.TotalDays : 1.0m,
+            l.LeaveType.IsPaidByCompany,
+            l.LeaveType.IsPaidBySocialInsurance,
+            string.Equals(l.LeaveType.LeaveTypeCode, "BUSINESS_TRIP", StringComparison.OrdinalIgnoreCase),
+            l.Reason)).ToList();
+
+        var dayOts = await context.OvertimeRequests
+            .AsNoTracking()
+            .Where(o => o.EmployeeId == employeeId && o.Status == "Approved" && o.OvertimeDate == workDate)
+            .Select(o => new AttendanceApprovedOvertimeInput(o.StartTime, o.EndTime, o.ApprovedHours, o.OvertimeRateType, o.CompensationMode))
+            .ToListAsync(cancellationToken);
+
+        var holidaysRaw = await context.Holidays.AsNoTracking().Where(h => h.HolidayDate == workDate).ToListAsync(cancellationToken);
+        var empHolidays = AttendancePolicyAndShiftEngine.FilterHolidaysForPolicyGroup(holidaysRaw, resolvedPolicy.PolicyGroupId);
+        bool outsideEmployment = workDate < emp.HireDate || (emp.TerminationDate.HasValue && workDate >= emp.TerminationDate.Value);
+        var dayHoliday = outsideEmployment ? null : empHolidays.GetValueOrDefault(workDate);
+
+        var calc = AttendanceCalculationEngine.CalculateDaily(new AttendanceDailyCalculationInput(
+            workDate,
+            shift,
+            sched?.IsDayOff == true || outsideEmployment,
+            isWeeklyOff || outsideEmployment,
+            dayHoliday,
+            outsideEmployment ? Array.Empty<AttendancePunchInput>() : dayPunches,
+            outsideEmployment ? Array.Empty<AttendanceApprovedLeaveInput>() : dayLeaves,
+            outsideEmployment ? Array.Empty<AttendanceApprovedOvertimeInput>() : dayOts,
+            null,
+            resolvedPolicy.Policy,
+            statutory,
+            symbolCatalog));
+
+        var daily = await context.DailyAttendances
+            .FirstOrDefaultAsync(d => d.EmployeeId == employeeId && d.AttendanceDate == workDate, cancellationToken);
+        if (daily == null)
+        {
+            daily = new DailyAttendance { EmployeeId = employeeId, AttendanceDate = workDate };
+            await context.DailyAttendances.AddAsync(daily, cancellationToken);
+        }
+
+        daily.WorkShiftId = calc.WorkShiftId;
+        daily.CheckInTime = calc.ActualCheckIn;
+        daily.CheckOutTime = calc.ActualCheckOut;
+        daily.AttendanceSymbol = calc.StatusCode;
+        daily.StandardHours = calc.StandardHours;
+        daily.WorkingHours = calc.WorkingHours;
+        daily.WorkdayCount = calc.WorkdayCount;
+        daily.PaidLeaveDays = calc.PaidLeaveDays;
+        daily.UnpaidLeaveDays = calc.UnpaidLeaveDays;
+        daily.LateMinutes = calc.LateMinutes;
+        daily.EarlyLeaveMinutes = calc.EarlyLeaveMinutes;
+        daily.OvertimeHours150 = calc.OvertimeHours150;
+        daily.OvertimeHours200 = calc.OvertimeHours200;
+        daily.OvertimeHours300 = calc.OvertimeHours300;
+        daily.OvertimeHours150Day = calc.OvertimeHours150Day;
+        daily.OvertimeHours150Night = calc.OvertimeHours150Night;
+        daily.OvertimeHours200Day = calc.OvertimeHours200Day;
+        daily.OvertimeHours200Night = calc.OvertimeHours200Night;
+        daily.OvertimeHours300Day = calc.OvertimeHours300Day;
+        daily.OvertimeHours300Night = calc.OvertimeHours300Night;
+        daily.NightShiftHours = calc.NightShiftHours;
+        daily.IsMissedPunch = calc.IsMissedPunch;
+        daily.IsManualEdited = markManualEdited;
+        daily.EditReason = string.IsNullOrWhiteSpace(notePrefix) ? calc.CalculationNotes : $"{notePrefix} | {calc.CalculationNotes}";
+
+        await context.SaveChangesAsync(cancellationToken);
+        await AttendanceBoardSeeder.RecalculateSummariesInternalAsync(context, workDate.Month, workDate.Year, cancellationToken);
+    }
+}
+
+public record SaveCellAttendancePunchLogCommand(
+    long? LogId,
+    int EmployeeId,
+    DateOnly WorkDate,
+    TimeOnly? PunchTime,
+    string PunchType,
+    string Reason,
+    bool DeleteLog = false) : IRequest<long>;
+
+public class SaveCellAttendancePunchLogCommandHandler : IRequestHandler<SaveCellAttendancePunchLogCommand, long>
+{
+    private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUser;
+
+    public SaveCellAttendancePunchLogCommandHandler(IApplicationDbContext context, ICurrentUserService currentUser)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
+
+    public async Task<long> Handle(SaveCellAttendancePunchLogCommand request, CancellationToken cancellationToken)
+    {
+        var userId = _currentUser.RequireUserId();
+        var username = _currentUser.RequireUsername();
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+            throw new InvalidOperationException("Thao tác thêm/sửa/xóa log chấm công bắt buộc phải nhập lý do.");
+
+        var isLocked = await _context.MonthlyAttendanceSummaries.AsNoTracking()
+            .AnyAsync(m => m.EmployeeId == request.EmployeeId && m.Month == request.WorkDate.Month && m.Year == request.WorkDate.Year && m.IsLocked, cancellationToken);
+        if (isLocked)
+            throw new InvalidOperationException($"Bảng công tháng {request.WorkDate.Month:D2}/{request.WorkDate.Year} đã khóa, không thể sửa log quét thẻ trực tiếp.");
+
+        var reason = request.Reason.Trim();
+        var dailyBefore = await _context.DailyAttendances.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.EmployeeId == request.EmployeeId && d.AttendanceDate == request.WorkDate, cancellationToken);
+
+        AttendanceLog? targetLog = null;
+        if (request.LogId.HasValue && request.LogId.Value > 0)
+        {
+            targetLog = await _context.AttendanceLogs
+                .FirstOrDefaultAsync(l => l.Id == request.LogId.Value && l.EmployeeId == request.EmployeeId, cancellationToken)
+                ?? throw new KeyNotFoundException("Không tìm thấy log chấm công cần sửa/xóa.");
+        }
+
+        string? oldJson = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            logId = targetLog?.Id,
+            punchTime = targetLog?.PunchTime.ToString("yyyy-MM-dd HH:mm:ss"),
+            punchType = targetLog?.PunchType,
+            daySymbol = dailyBefore?.AttendanceSymbol,
+            workday = dailyBefore?.WorkdayCount
+        });
+
+        long returnedId = 0;
+        if (request.DeleteLog)
+        {
+            if (targetLog == null)
+                throw new InvalidOperationException("Cần chọn log cần xóa.");
+            targetLog.IsDeleted = true;
+            targetLog.ManualReason = $"[Xóa bởi {username}]: {reason}";
+            returnedId = targetLog.Id;
+        }
+        else
+        {
+            if (!request.PunchTime.HasValue)
+                throw new InvalidOperationException("Vui lòng nhập giờ chấm công.");
+            var punchDt = request.WorkDate.ToDateTime(request.PunchTime.Value);
+            var normalizedType = string.Equals(request.PunchType, "CheckOut", StringComparison.OrdinalIgnoreCase) ? "CheckOut" : "CheckIn";
+
+            if (targetLog != null)
+            {
+                targetLog.PunchTime = punchDt;
+                targetLog.PunchType = normalizedType;
+                targetLog.SourceType = "ManualHr";
+                targetLog.EnteredByUserId = userId;
+                targetLog.EnteredByUsername = username;
+                targetLog.ManualReason = reason;
+                targetLog.IsManualOverride = true;
+                returnedId = targetLog.Id;
+            }
+            else
+            {
+                var created = new AttendanceLog
+                {
+                    EmployeeId = request.EmployeeId,
+                    PunchTime = punchDt,
+                    PunchType = normalizedType,
+                    SourceType = "ManualHr",
+                    DeviceId = "HR-CELL-LOG-EDIT",
+                    LocationAddress = "HR chỉnh sửa chi tiết ô công",
+                    IpAddress = _currentUser.IpAddress,
+                    EnteredByUserId = userId,
+                    EnteredByUsername = username,
+                    ManualReason = reason,
+                    GeofenceStatus = "NotApplicable",
+                    IsManualOverride = true
+                };
+                await _context.AttendanceLogs.AddAsync(created, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+                returnedId = created.Id;
+            }
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        await AttendanceCellEditHelper.RecalculateEmployeeSingleDayAsync(
+            _context,
+            request.EmployeeId,
+            request.WorkDate,
+            markManualEdited: true,
+            notePrefix: $"[HR sửa log ({username}): {reason}]",
+            cancellationToken);
+
+        var dailyAfter = await _context.DailyAttendances.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.EmployeeId == request.EmployeeId && d.AttendanceDate == request.WorkDate, cancellationToken);
+
+        await _context.AuditLogs.AddAsync(new AuditLog
+        {
+            UserId = userId,
+            Username = username,
+            ActionType = request.DeleteLog ? "DeleteAttendanceLog" : (request.LogId.HasValue ? "UpdateAttendanceLog" : "AddAttendanceLog"),
+            ModuleName = "TimeAttendance",
+            EntityName = "AttendanceLog",
+            EntityId = returnedId.ToString(),
+            OldValuesJson = oldJson,
+            NewValuesJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                empId = request.EmployeeId,
+                date = request.WorkDate.ToString("yyyy-MM-dd"),
+                punchTime = request.PunchTime?.ToString("HH:mm"),
+                request.PunchType,
+                request.DeleteLog,
+                reason,
+                daySymbol = dailyAfter?.AttendanceSymbol,
+                workday = dailyAfter?.WorkdayCount
+            }),
+            IpAddress = _currentUser.IpAddress,
+            UserAgent = _currentUser.UserAgent,
+            CreatedAt = DateTime.UtcNow
+        }, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return returnedId;
+    }
+}
+
+public record UpdateAttendanceDaySymbolCommand(
+    int EmployeeId,
+    DateOnly WorkDate,
+    string AttendanceSymbol,
+    string Reason) : IRequest<long>;
+
+public class UpdateAttendanceDaySymbolCommandHandler : IRequestHandler<UpdateAttendanceDaySymbolCommand, long>
+{
+    private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUser;
+
+    public UpdateAttendanceDaySymbolCommandHandler(IApplicationDbContext context, ICurrentUserService currentUser)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
+
+    public async Task<long> Handle(UpdateAttendanceDaySymbolCommand request, CancellationToken cancellationToken)
+    {
+        var userId = _currentUser.RequireUserId();
+        var username = _currentUser.RequireUsername();
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+            throw new InvalidOperationException("Chỉnh sửa ký hiệu công bắt buộc phải nhập lý do.");
+
+        var isLocked = await _context.MonthlyAttendanceSummaries.AsNoTracking()
+            .AnyAsync(m => m.EmployeeId == request.EmployeeId && m.Month == request.WorkDate.Month && m.Year == request.WorkDate.Year && m.IsLocked, cancellationToken);
+        if (isLocked)
+            throw new InvalidOperationException($"Bảng công tháng {request.WorkDate.Month:D2}/{request.WorkDate.Year} đã khóa, không thể sửa ký hiệu công.");
+
+        var daily = await _context.DailyAttendances
+            .FirstOrDefaultAsync(d => d.EmployeeId == request.EmployeeId && d.AttendanceDate == request.WorkDate, cancellationToken);
+
+        string oldJson = daily == null
+            ? "null"
+            : System.Text.Json.JsonSerializer.Serialize(new
+            {
+                symbol = daily.AttendanceSymbol,
+                workday = daily.WorkdayCount,
+                paidLeave = daily.PaidLeaveDays,
+                unpaidLeave = daily.UnpaidLeaveDays
+            });
+
+        var mapped = AttendanceCellEditHelper.MapSymbolValues(request.AttendanceSymbol, daily?.StandardHours > 0 ? daily.StandardHours : 8m);
+        var reason = request.Reason.Trim();
+
+        if (daily == null)
+        {
+            daily = new DailyAttendance
+            {
+                EmployeeId = request.EmployeeId,
+                AttendanceDate = request.WorkDate,
+                StandardHours = 8m
+            };
+            await _context.DailyAttendances.AddAsync(daily, cancellationToken);
+        }
+
+        daily.AttendanceSymbol = mapped.NormalizedSymbol;
+        daily.WorkdayCount = mapped.WorkdayCount;
+        daily.PaidLeaveDays = mapped.PaidLeaveDays;
+        daily.UnpaidLeaveDays = mapped.UnpaidLeaveDays;
+        daily.WorkingHours = mapped.WorkingHours;
+        daily.IsManualEdited = true;
+        daily.EditReason = $"[HR sửa ký hiệu ({username})]: {reason}";
+        await _context.SaveChangesAsync(cancellationToken);
+
+        await AttendanceBoardSeeder.RecalculateSummariesInternalAsync(_context, request.WorkDate.Month, request.WorkDate.Year, cancellationToken);
+
+        await _context.AuditLogs.AddAsync(new AuditLog
+        {
+            UserId = userId,
+            Username = username,
+            ActionType = "UpdateAttendanceDaySymbol",
+            ModuleName = "TimeAttendance",
+            EntityName = "DailyAttendance",
+            EntityId = daily.Id.ToString(),
+            OldValuesJson = oldJson,
+            NewValuesJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                empId = request.EmployeeId,
+                date = request.WorkDate.ToString("yyyy-MM-dd"),
+                symbol = mapped.NormalizedSymbol,
+                workday = mapped.WorkdayCount,
+                reason
+            }),
+            IpAddress = _currentUser.IpAddress,
+            UserAgent = _currentUser.UserAgent,
+            CreatedAt = DateTime.UtcNow
+        }, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return daily.Id;
+    }
+}
+
+public record BulkSetAttendanceSymbolCommand(
+    IReadOnlyList<int> EmployeeIds,
+    DateOnly FromDate,
+    DateOnly ToDate,
+    string AttendanceSymbol,
+    string Reason) : IRequest<int>;
+
+public class BulkSetAttendanceSymbolCommandHandler : IRequestHandler<BulkSetAttendanceSymbolCommand, int>
+{
+    private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUser;
+
+    public BulkSetAttendanceSymbolCommandHandler(IApplicationDbContext context, ICurrentUserService currentUser)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
+
+    public async Task<int> Handle(BulkSetAttendanceSymbolCommand request, CancellationToken cancellationToken)
+    {
+        var userId = _currentUser.RequireUserId();
+        var username = _currentUser.RequireUsername();
+
+        var empIds = (request.EmployeeIds ?? Array.Empty<int>()).Where(id => id > 0).Distinct().ToList();
+        if (empIds.Count == 0)
+            throw new InvalidOperationException("Vui lòng chọn ít nhất 1 nhân viên.");
+        if (request.ToDate < request.FromDate)
+            throw new InvalidOperationException("Ngày kết thúc phải >= ngày bắt đầu.");
+        if (string.IsNullOrWhiteSpace(request.Reason))
+            throw new InvalidOperationException("Nhập nhanh hàng loạt ký hiệu công bắt buộc phải nhập lý do.");
+
+        var months = new List<(int Year, int Month)>();
+        for (var d = request.FromDate; d <= request.ToDate; d = d.AddDays(1))
+        {
+            var pair = (d.Year, d.Month);
+            if (!months.Contains(pair)) months.Add(pair);
+        }
+
+        var years = months.Select(m => m.Year).Distinct().ToList();
+        var locked = await _context.MonthlyAttendanceSummaries.AsNoTracking()
+            .Where(m => m.IsLocked && empIds.Contains(m.EmployeeId) && years.Contains(m.Year))
+            .Select(m => new { m.Month, m.Year })
+            .ToListAsync(cancellationToken);
+        var lockedPair = locked.FirstOrDefault(l => months.Contains((l.Year, l.Month)));
+        if (lockedPair != null)
+            throw new InvalidOperationException($"Bảng công tháng {lockedPair.Month:D2}/{lockedPair.Year} đã khóa, không thể nhập hàng loạt.");
+
+        var mapped = AttendanceCellEditHelper.MapSymbolValues(request.AttendanceSymbol);
+        var reason = request.Reason.Trim();
+
+        var existingDailies = await _context.DailyAttendances
+            .Where(d => empIds.Contains(d.EmployeeId) && d.AttendanceDate >= request.FromDate && d.AttendanceDate <= request.ToDate)
+            .ToListAsync(cancellationToken);
+
+        int count = 0;
+        foreach (var empId in empIds)
+        {
+            for (var dt = request.FromDate; dt <= request.ToDate; dt = dt.AddDays(1))
+            {
+                var daily = existingDailies.FirstOrDefault(d => d.EmployeeId == empId && d.AttendanceDate == dt);
+                if (daily == null)
+                {
+                    daily = new DailyAttendance
+                    {
+                        EmployeeId = empId,
+                        AttendanceDate = dt,
+                        StandardHours = 8m
+                    };
+                    await _context.DailyAttendances.AddAsync(daily, cancellationToken);
+                }
+
+                daily.AttendanceSymbol = mapped.NormalizedSymbol;
+                daily.WorkdayCount = mapped.WorkdayCount;
+                daily.PaidLeaveDays = mapped.PaidLeaveDays;
+                daily.UnpaidLeaveDays = mapped.UnpaidLeaveDays;
+                daily.WorkingHours = mapped.WorkingHours;
+                daily.IsManualEdited = true;
+                daily.EditReason = $"[HR nhập nhanh ({username})]: {reason}";
+                count++;
+            }
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        foreach (var (yr, mo) in months)
+        {
+            await AttendanceBoardSeeder.RecalculateSummariesInternalAsync(_context, mo, yr, cancellationToken);
+        }
+
+        await _context.AuditLogs.AddAsync(new AuditLog
+        {
+            UserId = userId,
+            Username = username,
+            ActionType = "BulkSetAttendanceSymbol",
+            ModuleName = "TimeAttendance",
+            EntityName = "DailyAttendance",
+            EntityId = $"{empIds.Count}NV",
+            NewValuesJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                empIds,
+                from = request.FromDate.ToString("yyyy-MM-dd"),
+                to = request.ToDate.ToString("yyyy-MM-dd"),
+                symbol = mapped.NormalizedSymbol,
+                count,
+                reason
+            }),
+            IpAddress = _currentUser.IpAddress,
+            UserAgent = _currentUser.UserAgent,
+            CreatedAt = DateTime.UtcNow
+        }, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return count;
+    }
+}

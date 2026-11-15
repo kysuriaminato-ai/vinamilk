@@ -298,7 +298,6 @@ public static class AttendanceBoardSeeder
                 .AsNoTracking()
                 .Where(h => h.HolidayDate >= monthStart && h.HolidayDate <= monthEnd)
                 .ToListAsync(cancellationToken);
-            var holidays = AttendancePolicyAndShiftEngine.FilterHolidaysForPolicyGroup(holidaysRaw, null);
 
             var dailyList = new List<DailyAttendance>();
             var logsList = new List<AttendanceLog>();
@@ -306,22 +305,12 @@ public static class AttendanceBoardSeeder
 
             foreach (var emp in employees)
             {
+                var resolvedPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(context, emp.Id, monthStart, cancellationToken);
+                var workdays = AttendancePolicyAndShiftEngine.ParseWorkdaysMask(resolvedPolicy.Policy.WeeklyWorkdaysMask);
+                var holidays = AttendancePolicyAndShiftEngine.FilterHolidaysForPolicyGroup(holidaysRaw, resolvedPolicy.PolicyGroupId);
+
                 for (var dt = monthStart; dt <= monthEnd; dt = dt.AddDays(1))
                 {
-                    if (dt.DayOfWeek == DayOfWeek.Sunday)
-                    {
-                        dailyList.Add(new DailyAttendance
-                        {
-                            EmployeeId = emp.Id,
-                            AttendanceDate = dt,
-                            WorkShiftId = hcShift?.Id,
-                            AttendanceSymbol = "OFF",
-                            WorkingHours = 0m,
-                            WorkdayCount = 0m
-                        });
-                        continue;
-                    }
-
                     if (holidays.TryGetValue(dt, out var hol))
                     {
                         dailyList.Add(new DailyAttendance
@@ -337,12 +326,26 @@ public static class AttendanceBoardSeeder
                         continue;
                     }
 
+                    if (!workdays.Contains(dt.DayOfWeek))
+                    {
+                        dailyList.Add(new DailyAttendance
+                        {
+                            EmployeeId = emp.Id,
+                            AttendanceDate = dt,
+                            WorkShiftId = hcShift?.Id,
+                            AttendanceSymbol = "OFF",
+                            WorkingHours = 0m,
+                            WorkdayCount = 0m
+                        });
+                        continue;
+                    }
+
                     int dayNum = dt.Day;
                     string symbol = "X";
                     int lateMins = 0;
                     int earlyMins = 0;
                     decimal ot150 = 0m;
-                    decimal workdays = 1.0m;
+                    decimal workdaysVal = 1.0m;
                     string? reason = null;
 
                     if ((empIdx + dayNum) % 29 == 0)
@@ -377,7 +380,7 @@ public static class AttendanceBoardSeeder
                         CheckOutTime = symbol == "X" ? checkOut : null,
                         AttendanceSymbol = symbol,
                         WorkingHours = symbol == "X" ? 8.0m : 0m,
-                        WorkdayCount = workdays,
+                        WorkdayCount = workdaysVal,
                         LateMinutes = lateMins,
                         EarlyLeaveMinutes = earlyMins,
                         OvertimeHours150 = ot150,
@@ -411,6 +414,10 @@ public static class AttendanceBoardSeeder
 
             // Tổng hợp lên MonthlyAttendanceSummaries
             await RecalculateSummariesInternalAsync(context, month, year, cancellationToken);
+        }
+        else
+        {
+            await RepairStaleWeeklyOffSeedRowsAsync(context, month, year, cancellationToken);
         }
 
         // Seed một số đơn OT mẫu nếu chưa có
@@ -448,6 +455,92 @@ public static class AttendanceBoardSeeder
                 }, cancellationToken);
                 await context.SaveChangesAsync(cancellationToken);
             }
+        }
+    }
+
+    private static async Task RepairStaleWeeklyOffSeedRowsAsync(
+        IApplicationDbContext context,
+        int month,
+        int year,
+        CancellationToken cancellationToken)
+    {
+        var monthStart = new DateOnly(year, month, 1);
+        var monthEnd = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
+
+        var lockedEmpIds = await context.MonthlyAttendanceSummaries
+            .AsNoTracking()
+            .Where(m => m.Month == month && m.Year == year && m.IsLocked)
+            .Select(m => m.EmployeeId)
+            .ToListAsync(cancellationToken);
+
+        var candidates = await context.DailyAttendances
+            .Where(d => d.AttendanceDate >= monthStart
+                && d.AttendanceDate <= monthEnd
+                && !d.IsManualEdited
+                && !lockedEmpIds.Contains(d.EmployeeId)
+                && (d.AttendanceSymbol == "X" || d.AttendanceSymbol == "CT" || d.AttendanceSymbol == "P")
+                && (d.EditReason == null
+                    || d.EditReason == "Đi công tác làm việc với nhà phân phối khu vực"
+                    || d.EditReason == "Nghỉ phép năm có kế hoạch"
+                    || d.EditReason == "Kẹt xe đường Nguyễn Văn Linh (Chờ giải trình)"))
+            .ToListAsync(cancellationToken);
+
+        var saturdayRows = candidates.Where(d => d.AttendanceDate.DayOfWeek == DayOfWeek.Saturday).ToList();
+        if (saturdayRows.Count == 0)
+            return;
+
+        var empWorkdaysCache = new Dictionary<int, IReadOnlyList<DayOfWeek>>();
+        var otEmpDates = await context.OvertimeRequests
+            .AsNoTracking()
+            .Where(o => o.OvertimeDate >= monthStart && o.OvertimeDate <= monthEnd)
+            .Select(o => new { o.EmployeeId, o.OvertimeDate })
+            .ToListAsync(cancellationToken);
+        var otSet = otEmpDates.Select(x => (x.EmployeeId, x.OvertimeDate)).ToHashSet();
+
+        var punchDates = await context.AttendanceLogs
+            .AsNoTracking()
+            .Where(l => l.PunchTime >= monthStart.ToDateTime(TimeOnly.MinValue)
+                     && l.PunchTime <= monthEnd.ToDateTime(TimeOnly.MaxValue))
+            .Select(l => new { l.EmployeeId, Date = DateOnly.FromDateTime(l.PunchTime) })
+            .ToListAsync(cancellationToken);
+        var punchSet = punchDates.Select(x => (x.EmployeeId, x.Date)).ToHashSet();
+
+        bool touched = false;
+        foreach (var row in saturdayRows)
+        {
+            if (otSet.Contains((row.EmployeeId, row.AttendanceDate))
+                || punchSet.Contains((row.EmployeeId, row.AttendanceDate)))
+            {
+                continue;
+            }
+
+            if (!empWorkdaysCache.TryGetValue(row.EmployeeId, out var workdays))
+            {
+                var resolved = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(context, row.EmployeeId, monthStart, cancellationToken);
+                workdays = AttendancePolicyAndShiftEngine.ParseWorkdaysMask(resolved.Policy.WeeklyWorkdaysMask);
+                empWorkdaysCache[row.EmployeeId] = workdays;
+            }
+
+            if (!workdays.Contains(row.AttendanceDate.DayOfWeek))
+            {
+                row.AttendanceSymbol = "OFF";
+                row.CheckInTime = null;
+                row.CheckOutTime = null;
+                row.WorkingHours = 0m;
+                row.WorkdayCount = 0m;
+                row.PaidLeaveDays = 0m;
+                row.LateMinutes = 0;
+                row.EarlyLeaveMinutes = 0;
+                row.OvertimeHours150 = 0m;
+                row.EditReason = null;
+                touched = true;
+            }
+        }
+
+        if (touched)
+        {
+            await context.SaveChangesAsync(cancellationToken);
+            await RecalculateSummariesInternalAsync(context, month, year, cancellationToken);
         }
     }
 
@@ -538,10 +631,13 @@ public static class AttendanceBoardSeeder
             decimal ot200 = group.Sum(x => x.OvertimeHours200);
             decimal ot300 = group.Sum(x => x.OvertimeHours300);
             decimal nightHours = group.Sum(x => x.NightShiftHours);
-            decimal payable = actualDays + paidLeave + paidPersonal + holidayDays;
+            decimal rawPayable = actualDays + paidLeave + paidPersonal + holidayDays;
 
             var resolvedPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(context, empId, monthStart, cancellationToken);
             decimal empStandardDays = CalculateStandardWorkdays(year, month, resolvedPolicy.Policy.WeeklyWorkdaysMask);
+            decimal payable = resolvedPolicy.Policy.AllowPayableWorkdaysExceedStandard
+                ? rawPayable
+                : Math.Min(rawPayable, empStandardDays);
             int missedPunchCount = group.Count(x => !string.IsNullOrEmpty(x.EditReason) && x.EditReason.Contains("Đề xuất giờ:", StringComparison.OrdinalIgnoreCase));
             int overQuotaCount = Math.Max(0, missedPunchCount - resolvedPolicy.Policy.MaxMissedPunchExplanationsPerMonth);
             decimal missedPunchPenalty = string.Equals(resolvedPolicy.Policy.MissedPunchOverQuotaAction, "FixedFine", StringComparison.OrdinalIgnoreCase)
@@ -735,6 +831,8 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
 
         foreach (var sum in summaries)
         {
+            var resolvedEmpPolicy = await AttendancePolicyAndShiftEngine.ResolveAttendancePolicyAsync(_context, sum.EmployeeId, monthStart, cancellationToken);
+            var empWorkdays = AttendancePolicyAndShiftEngine.ParseWorkdaysMask(resolvedEmpPolicy.Policy.WeeklyWorkdaysMask);
             var dayCells = new List<DailyCellSummaryDto>();
             for (int day = 1; day <= daysInMonth; day++)
             {
@@ -761,8 +859,8 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
                 }
                 else
                 {
-                    var isSun = date.DayOfWeek == DayOfWeek.Sunday;
-                    var sym = isSun ? "OFF" : "-";
+                    var isOff = !empWorkdays.Contains(date.DayOfWeek);
+                    var sym = isOff ? "OFF" : "-";
                     dayCells.Add(new DailyCellSummaryDto(
                         null,
                         day,
@@ -997,11 +1095,17 @@ public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyA
             .Select(h => h.NeedsHrVerification)
             .ToListAsync(cancellationToken);
 
+        var defaultPolicyMask = await _context.PolicyGroups
+            .AsNoTracking()
+            .Where(g => g.IsActive && g.IsCompanyDefault)
+            .SelectMany(g => g.AttendancePolicies.Select(p => p.WeeklyWorkdaysMask))
+            .FirstOrDefaultAsync(cancellationToken) ?? "Mon,Tue,Wed,Thu,Fri";
+
         return new MonthlyAttendanceBoardDto(
             month,
             year,
             daysInMonth,
-            AttendanceBoardSeeder.CalculateStandardWorkdays(year, month),
+            AttendanceBoardSeeder.CalculateStandardWorkdays(year, month, defaultPolicyMask),
             firstLocked != null,
             firstLocked?.LockedBy,
             firstLocked?.LockedAt,

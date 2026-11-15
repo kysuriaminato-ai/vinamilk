@@ -258,8 +258,8 @@ public sealed class AttendanceRecalculationService : IAttendanceRecalculationJob
 
                         var sched = schedules.FirstOrDefault(s => s.EmployeeId == emp.Id && s.WorkDate == date);
                         var shift = sched?.WorkShift ?? defaultShift;
-                        bool isWeeklyOff = sched?.IsDayOff == true
-                            || (sched == null && !workdaysMask.Contains(date.DayOfWeek.ToString()[..3]));
+                        bool outsideWeeklyMask = !workdaysMask.Contains(date.DayOfWeek.ToString()[..3]);
+                        bool isWeeklyOff = sched?.IsDayOff == true || outsideWeeklyMask;
 
                         // Gom punch cho ngày làm việc (bao gồm đầu sáng hôm sau nếu ca qua đêm)
                         var (winStart, winEnd) = shift != null

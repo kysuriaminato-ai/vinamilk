@@ -116,7 +116,8 @@ public sealed record CalculationTraceStepDto(
     string Formula,
     string VariablesSummary,
     decimal ResultAmount,
-    string? LegalReference = null);
+    string? LegalReference = null,
+    decimal? SecondaryAmount = null);
 
 public sealed record NetToGrossInput(
     decimal TargetNetSalary,
@@ -1004,160 +1005,259 @@ public static class VietnamPayrollEngine
         NetToGrossSolution? netToGross = null,
         string? segmentNote = null)
     {
-        var steps = new List<CalculationTraceStepDto>();
-        int idx = 1;
+        var steps = new List<CalculationTraceStepDto>(15);
 
-        if (netToGross != null)
-        {
-            steps.Add(new CalculationTraceStepDto(
-                idx++,
-                "NetToGross",
-                "Quy đổi Net → Gross (Binary Search)",
-                $"Tìm LCB sao cho Net(LCB) = TargetNet ({netToGross.TargetNetSalary:N0} đ)",
-                $"TargetNet={netToGross.TargetNetSalary:N0}, Lần lặp={netToGross.IterationsUsed}, SolvedLCB={netToGross.SolvedContractBaseSalary:N0}, NetĐạt={netToGross.AchievedNetSalary:N0}",
-                netToGross.SolvedContractBaseSalary,
-                "Hợp đồng lương Net"));
-        }
+        decimal allowanceTotal = input.IsBonusPeriodOnly
+            ? 0m
+            : input.PositionAllowance + input.OtherAllowance + input.ExtraTemplateEarnings;
+        decimal missingWorkdays = !input.IsBonusPeriodOnly && input.StandardWorkdays > input.PayableWorkdays
+            ? input.StandardWorkdays - input.PayableWorkdays
+            : 0m;
+        decimal missingWorkDeduction = missingWorkdays > 0m && input.StandardWorkdays > 0m
+            ? Math.Round(input.ContractBaseSalary * (missingWorkdays / input.StandardWorkdays), 0, MidpointRounding.AwayFromZero)
+            : 0m;
+        decimal bonusTotal = input.KpiBonus + input.CommissionBonus + input.ThirteenthMonthBonus
+            + input.UnusedLeavePayout + input.RetroEarningAmount;
+        decimal siCap = parameter.StatutoryBaseSalary * parameter.SocialInsuranceCapMultiplier;
+        decimal regionalMinWage = parameter.GetRegionalMinWage(input.WageRegion);
+        decimal uiCap = regionalMinWage * parameter.UnemploymentInsuranceCapMultiplier;
+        decimal exemptTotal = breakdown.OtTaxExemptAmount + input.ExtraTaxExemptAmount;
+        decimal familyDeduction = breakdown.SelfDeductionAmount + breakdown.DependentDeductionAmount;
+        decimal otherDed = input.DisciplineDeduction + input.SalaryAdvanceDeduction + input.LoanInstallmentDeduction
+            + input.RetroDeductionAmount + input.CustomDeductions + breakdown.EmployeeUnionFee;
 
-        if (!input.IsBonusPeriodOnly)
-        {
-            steps.Add(new CalculationTraceStepDto(
-                idx++,
-                "Income",
-                "Lương cơ bản theo ngày công thực tế",
-                "LCB × (Công thực tế / Công chuẩn)",
-                $"LCB={input.ContractBaseSalary:N0}, Công={input.PayableWorkdays:0.##}/{input.StandardWorkdays:0.##}" + (string.IsNullOrWhiteSpace(segmentNote) ? "" : $" [{segmentNote}]"),
-                breakdown.ActualBaseSalary,
-                "Điều 90 BLLĐ 2019"));
-
-            if (input.PositionAllowance > 0m || input.OtherAllowance > 0m || input.ExtraTemplateEarnings > 0m)
-            {
-                steps.Add(new CalculationTraceStepDto(
-                    idx++,
-                    "Allowance",
-                    "Phụ cấp & thành phần thu nhập theo mẫu",
-                    "PCCV + PC Khác + Thành phần công thức khác",
-                    $"PCCV={input.PositionAllowance:N0}, PCKhác={input.OtherAllowance:N0}, ExtraTemplate={input.ExtraTemplateEarnings:N0}",
-                    input.PositionAllowance + input.OtherAllowance + input.ExtraTemplateEarnings,
-                    null));
-            }
-
-            if (breakdown.OvertimePay > 0m)
-            {
-                steps.Add(new CalculationTraceStepDto(
-                    idx++,
-                    "Overtime",
-                    "Làm thêm giờ (Ngày/Đêm) & Phụ cấp ca đêm",
-                    "Đơn giá giờ × (OT Ngày × hệ số + OT Đêm × hệ số đêm + Giờ đêm × +30%)",
-                    $"OT150D={input.OtHours150:0.##}h, OT150Đ={input.OtHours150Night:0.##}h, OT200D={input.OtHours200:0.##}h, OT200Đ={input.OtHours200Night:0.##}h, OT300D={input.OtHours300:0.##}h, OT300Đ={input.OtHours300Night:0.##}h, CaĐêm={input.RegularNightHours:0.##}h (Thưởng đêm={breakdown.OtNightExtraPay:N0})",
-                    breakdown.OvertimePay,
-                    parameter.LegalReference));
-            }
-        }
-
-        if (input.KpiBonus > 0m || input.CommissionBonus > 0m || input.ThirteenthMonthBonus > 0m || input.UnusedLeavePayout > 0m || input.RetroEarningAmount > 0m)
-        {
-            steps.Add(new CalculationTraceStepDto(
-                idx++,
-                "Bonus",
-                "Thưởng KPI, Hoa hồng, Tháng 13, Phép tồn & Truy lĩnh",
-                "KPI + Hoa hồng + Thưởng T13 + Thanh toán phép năm + Truy lĩnh",
-                $"KPI={input.KpiBonus:N0}, HoaHồng={input.CommissionBonus:N0}, T13={input.ThirteenthMonthBonus:N0}, PhépTồn={input.UnusedLeavePayout:N0}, TruyLĩnh={input.RetroEarningAmount:N0}",
-                input.KpiBonus + input.CommissionBonus + input.ThirteenthMonthBonus + input.UnusedLeavePayout + input.RetroEarningAmount,
-                null));
-        }
-
+        // 1. Lương cơ bản hợp đồng (kèm quy đổi Net -> Gross nếu có)
         steps.Add(new CalculationTraceStepDto(
-            idx++,
+            1,
+            "Contract",
+            "Lương cơ bản hợp đồng",
+            netToGross != null
+                ? $"Quy đổi Net → Gross (Binary Search): Tìm LCB sao cho Net(LCB) = TargetNet ({netToGross.TargetNetSalary:N0}đ)"
+                : "Lương cơ bản thỏa thuận theo hợp đồng lao động",
+            (netToGross != null
+                ? $"TargetNet={netToGross.TargetNetSalary:N0}đ → SolvedLCB={netToGross.SolvedContractBaseSalary:N0}đ (Net đạt {netToGross.AchievedNetSalary:N0}đ sau {netToGross.IterationsUsed} vòng) | "
+                : string.Empty)
+            + $"LCB={input.ContractBaseSalary:N0}đ, Công chuẩn={input.StandardWorkdays:0.##}, Công hưởng lương={input.PayableWorkdays:0.##}"
+            + (string.IsNullOrWhiteSpace(segmentNote) ? string.Empty : $" [{segmentNote}]"),
+            input.ContractBaseSalary,
+            "Điều 90 BLLĐ 2019",
+            netToGross?.TargetNetSalary));
+
+        // 2. Lương theo công chuẩn
+        steps.Add(new CalculationTraceStepDto(
+            2,
+            "Income",
+            "Lương theo ngày công chuẩn",
+            "LCB × (Công hưởng lương / Công chuẩn)",
+            input.IsBonusPeriodOnly
+                ? $"Kỳ thưởng/chi trả bổ sung (không tính lương công) = {breakdown.ActualBaseSalary:N0}đ"
+                : $"{input.ContractBaseSalary:N0} × ({input.PayableWorkdays:0.##} / {input.StandardWorkdays:0.##}) = {breakdown.ActualBaseSalary:N0}đ"
+                  + (string.IsNullOrWhiteSpace(segmentNote) ? string.Empty : $" [{segmentNote}]"),
+            breakdown.ActualBaseSalary,
+            "Điều 90 BLLĐ 2019"));
+
+        // 3. Phụ cấp chức vụ & phụ cấp khác
+        steps.Add(new CalculationTraceStepDto(
+            3,
+            "Allowance",
+            "Phụ cấp chức vụ & phụ cấp khác",
+            "Phụ cấp chức vụ + Phụ cấp khác + Thành phần công thức khác",
+            input.IsBonusPeriodOnly
+                ? "Kỳ thưởng/bổ sung: Phụ cấp = 0đ"
+                : $"{input.PositionAllowance:N0} + {input.OtherAllowance:N0} + {input.ExtraTemplateEarnings:N0} = {allowanceTotal:N0}đ",
+            allowanceTotal,
+            null));
+
+        // 4. Khấu trừ công thiếu / nghỉ không lương
+        steps.Add(new CalculationTraceStepDto(
+            4,
+            "DeductionInfo",
+            "Khấu trừ công thiếu / nghỉ không lương",
+            "max(0, Công chuẩn - Công hưởng lương) × (LCB / Công chuẩn) [Đã khấu trừ vào Bước 2]",
+            missingWorkdays > 0m
+                ? $"Thiếu {missingWorkdays:0.##} công × ({input.ContractBaseSalary:N0} / {input.StandardWorkdays:0.##}) = {missingWorkDeduction:N0}đ (đã trừ ở Bước 2)"
+                : "Đủ hoặc vượt công chuẩn (0 ngày thiếu) = 0đ",
+            missingWorkDeduction,
+            "Điều 115 BLLĐ 2019"));
+
+        // 5. OT (150%/200%/300%) & Phụ cấp ca đêm
+        decimal ot150All = input.OtHours150 + input.OtHours150Night;
+        decimal ot200All = input.OtHours200 + input.OtHours200Night;
+        decimal ot300All = input.OtHours300 + input.OtHours300Night;
+        steps.Add(new CalculationTraceStepDto(
+            5,
+            "Overtime",
+            "Làm thêm giờ (150% / 200% / 300%) & Phụ cấp ca đêm",
+            "Đơn giá giờ × (OT Ngày×1.5/2.0/3.0 + OT Đêm×2.0/2.7/3.9 + Giờ đêm×0.3)",
+            input.IsBonusPeriodOnly
+                ? "Kỳ thưởng/bổ sung: OT = 0đ"
+                : $"OT150={ot150All:0.##}h (đêm {input.OtHours150Night:0.##}h), OT200={ot200All:0.##}h (đêm {input.OtHours200Night:0.##}h), OT300={ot300All:0.##}h (đêm {input.OtHours300Night:0.##}h), CaĐêm={input.RegularNightHours:0.##}h → {breakdown.OvertimePay:N0}đ (thưởng đêm {breakdown.OtNightExtraPay:N0}đ)",
+            breakdown.OvertimePay,
+            "Điều 98 BLLĐ 2019",
+            breakdown.OtNightExtraPay));
+
+        // 6. Thưởng KPI / Hoa hồng / Tháng 13 / Phép tồn / Truy lĩnh
+        steps.Add(new CalculationTraceStepDto(
+            6,
+            "Bonus",
+            "Thưởng KPI, Hoa hồng, Tháng 13, Phép tồn & Truy lĩnh",
+            "KPI + Hoa hồng + Tháng 13 + Phép tồn + Truy lĩnh",
+            $"{input.KpiBonus:N0} + {input.CommissionBonus:N0} + {input.ThirteenthMonthBonus:N0} + {input.UnusedLeavePayout:N0} + {input.RetroEarningAmount:N0} = {bonusTotal:N0}đ",
+            bonusTotal,
+            "Điều 104 BLLĐ 2019"));
+
+        // 7. Tổng thu nhập (Gross)
+        steps.Add(new CalculationTraceStepDto(
+            7,
             "Income",
             "Tổng thu nhập (Gross)",
-            "Lương công + Phụ cấp + OT/Đêm + Thưởng + Phép tồn + Truy lĩnh",
-            $"Gross = {breakdown.GrossIncome:N0}",
+            "Lương công + Phụ cấp + OT/Đêm + Thưởng/Phép tồn/Truy lĩnh",
+            $"{breakdown.ActualBaseSalary:N0} + {allowanceTotal:N0} + {breakdown.OvertimePay:N0} + {bonusTotal:N0} = {breakdown.GrossIncome:N0}đ",
             breakdown.GrossIncome,
             null));
 
-        if (!input.IsBonusPeriodOnly)
-        {
-            steps.Add(new CalculationTraceStepDto(
-                idx++,
-                "Insurance",
-                "Bảo hiểm bắt buộc NLĐ (BHXH/BHYT/BHTN)",
-                $"BHXH ({parameter.EmployeeSiRate:P1}) + BHYT ({parameter.EmployeeHiRate:P1}) trên min(LươngBH, 20×LCS) + BHTN ({parameter.EmployeeUiRate:P1}) trên min(LươngBH, 20×LTTV)",
-                $"Nền BHXH={breakdown.SocialInsuranceBase:N0}, Nền BHTN={breakdown.UnemploymentInsuranceBase:N0} (Vùng {input.WageRegion}), BHXH={breakdown.EmployeeSocialInsurance:N0}, BHYT={breakdown.EmployeeHealthInsurance:N0}, BHTN={breakdown.EmployeeUnemploymentInsurance:N0}",
-                breakdown.TotalEmployeeInsurance,
-                parameter.LegalReference));
-        }
+        // 8. Nền đóng bảo hiểm (trần 20xLCS & 20xLTTV vùng)
+        decimal insContractSalary = input.IsBonusPeriodOnly
+            ? 0m
+            : Math.Max(0m, input.InsuranceContractSalaryOverride ?? (input.ContractBaseSalary + input.PositionAllowance));
+        steps.Add(new CalculationTraceStepDto(
+            8,
+            "InsuranceBase",
+            "Nền đóng bảo hiểm (Trần 20×LCS & 20×LTTV vùng)",
+            "Nền BHXH/BHYT = min(LươngBH, 20×LCS); Nền BHTN = min(LươngBH, 20×LTTV vùng)",
+            input.IsBonusPeriodOnly
+                ? "Kỳ thưởng/bổ sung: Nền đóng BH = 0đ"
+                : $"LươngBH={insContractSalary:N0}đ | Trần BHXH (20×{parameter.StatutoryBaseSalary:N0})={siCap:N0}đ → BHXH/BHYT={breakdown.SocialInsuranceBase:N0}đ | Trần BHTN Vùng {input.WageRegion} (20×{regionalMinWage:N0})={uiCap:N0}đ → BHTN={breakdown.UnemploymentInsuranceBase:N0}đ",
+            breakdown.SocialInsuranceBase,
+            parameter.LegalReference,
+            breakdown.UnemploymentInsuranceBase));
 
-        if (breakdown.OtTaxExemptAmount > 0m || input.ExtraTaxExemptAmount > 0m)
-        {
-            steps.Add(new CalculationTraceStepDto(
-                idx++,
-                "Tax",
-                "Khoản thu nhập được miễn thuế TNCN",
-                "Phần trả thêm OT/Làm đêm >100% + Phụ cấp miễn thuế (ăn ca, độc hại...)",
-                $"MiễnOT/Đêm={breakdown.OtTaxExemptAmount:N0}, MiễnPhụCấp={input.ExtraTaxExemptAmount:N0}",
-                breakdown.OtTaxExemptAmount + input.ExtraTaxExemptAmount,
-                "Điều 3 Thông tư 111/2013/TT-BTC"));
-        }
+        // 9. Bảo hiểm NLĐ (BHXH 8% + BHYT 1.5% + BHTN 1%)
+        steps.Add(new CalculationTraceStepDto(
+            9,
+            "Insurance",
+            "Bảo hiểm bắt buộc NLĐ (BHXH 8% + BHYT 1.5% + BHTN 1%)",
+            $"Nền BHXH × ({parameter.EmployeeSiRate:P1} + {parameter.EmployeeHiRate:P1}) + Nền BHTN × {parameter.EmployeeUiRate:P1}",
+            $"BHXH({parameter.EmployeeSiRate:P1})={breakdown.EmployeeSocialInsurance:N0} + BHYT({parameter.EmployeeHiRate:P1})={breakdown.EmployeeHealthInsurance:N0} + BHTN({parameter.EmployeeUiRate:P1})={breakdown.EmployeeUnemploymentInsurance:N0} = {breakdown.TotalEmployeeInsurance:N0}đ",
+            breakdown.TotalEmployeeInsurance,
+            parameter.LegalReference));
 
+        // 10. Khoản thu nhập miễn thuế (OT >100% & phụ cấp miễn thuế)
+        steps.Add(new CalculationTraceStepDto(
+            10,
+            "TaxExempt",
+            "Khoản thu nhập miễn thuế (OT >100% & Phụ cấp miễn thuế)",
+            "Phần trả thêm OT/Làm đêm vượt 100% + Phụ cấp miễn thuế (ăn ca, độc hại...)",
+            $"Miễn OT/Đêm={breakdown.OtTaxExemptAmount:N0} + Phụ cấp miễn thuế={input.ExtraTaxExemptAmount:N0} = {exemptTotal:N0}đ",
+            exemptTotal,
+            "Điều 3 Thông tư 111/2013/TT-BTC"));
+
+        // 11. Thu nhập chịu thuế
+        steps.Add(new CalculationTraceStepDto(
+            11,
+            "TaxableIncome",
+            "Thu nhập chịu thuế TNCN",
+            "max(0, Tổng thu nhập Gross - Khoản miễn thuế)",
+            $"max(0, {breakdown.GrossIncome:N0} - {exemptTotal:N0}) = {breakdown.TaxableIncome:N0}đ",
+            breakdown.TaxableIncome,
+            "Thông tư 111/2013/TT-BTC"));
+
+        // 12. Giảm trừ gia cảnh (bản thân + N người phụ thuộc)
+        steps.Add(new CalculationTraceStepDto(
+            12,
+            "Deduction",
+            "Giảm trừ gia cảnh (Bản thân + Người phụ thuộc)",
+            "Giảm trừ bản thân + (Số người phụ thuộc × Mức giảm trừ mỗi NPT)",
+            string.Equals(breakdown.TaxResidencyMode, "ResidentStandard", StringComparison.OrdinalIgnoreCase)
+                ? $"Bản thân={breakdown.SelfDeductionAmount:N0} + ({input.DependentCount} × {parameter.DependentDeduction:N0} = {breakdown.DependentDeductionAmount:N0}) = {familyDeduction:N0}đ"
+                : $"Không áp dụng giảm trừ gia cảnh ({breakdown.TaxResidencyMode}) = 0đ",
+            familyDeduction,
+            parameter.LegalReference));
+
+        // 13. Thu nhập tính thuế & Thuế TNCN từng bậc
         var taxFormula = breakdown.TaxResidencyMode switch
         {
-            "NonResident" => $"Lao động không cư trú: Thuế suất phẳng {parameter.PitNonResidentRate:P0}",
+            "NonResident" => $"Lao động không cư trú: Thuế suất phẳng {parameter.PitNonResidentRate:P0} × Thu nhập chịu thuế",
             "ResidentShortTerm" => breakdown.UsedCommitment08
                 ? "HĐ <3 tháng có cam kết mẫu 08/CK-TNCN: tạm khấu trừ 0%"
                 : $"HĐ <3 tháng không cam kết 08: {parameter.PitShortTermRate:P0} khi TN chịu thuế >= {parameter.PitShortTermThreshold:N0}",
-            _ => "Lũy tiến từng phần theo biểu thuế hiệu lực"
+            _ => "Thu nhập tính thuế = max(0, TN chịu thuế - BH NLĐ - Giảm trừ); Thuế TNCN lũy tiến từng bậc"
         };
 
-        var activePitText = breakdown.TaxResidencyMode == "ResidentStandard"
-            ? string.Join("; ", pitSlices.Where(s => s.TaxAmount > 0m).Select(s => $"B{s.BracketLevel}({s.TaxRate:P0}): {s.TaxAmount:N0}"))
+        var activePitText = string.Equals(breakdown.TaxResidencyMode, "ResidentStandard", StringComparison.OrdinalIgnoreCase)
+            ? string.Join("; ", pitSlices.Where(s => s.TaxAmount > 0m).Select(s => $"Bậc {s.BracketLevel}({s.TaxRate:P0}): {s.TaxAmount:N0}đ"))
             : taxFormula;
 
         steps.Add(new CalculationTraceStepDto(
-            idx++,
+            13,
             "Tax",
-            "Thuế Thu nhập cá nhân (TNCN)",
+            "Thu nhập tính thuế & Thuế TNCN từng bậc",
             taxFormula,
-            $"TNChịuThuế={breakdown.TaxableIncome:N0}, BảnThân={breakdown.SelfDeductionAmount:N0}, NPT({input.DependentCount})={breakdown.DependentDeductionAmount:N0}, TNTínhThuế={breakdown.AssessableIncome:N0}"
-            + (input.HasPriorMonthlyDisbursement ? $" | Gộp đợt trước trong tháng: TNChịuThuếTrước={input.PriorMonthTaxableIncome:N0}, ThuếĐãKhấuTrừTrước={input.PriorMonthPitWithheld:N0}" : "")
-            + (input.SourcePeriodTaxDelta != 0m ? $" | Điều chỉnh thuế kỳ gốc={input.SourcePeriodTaxDelta:+N0;-N0;0}" : "")
-            + (string.IsNullOrWhiteSpace(activePitText) ? "" : $" | {activePitText}"),
+            $"TNTT = max(0, {breakdown.TaxableIncome:N0} - {breakdown.TotalEmployeeInsurance:N0} - {familyDeduction:N0}) = {breakdown.AssessableIncome:N0}đ"
+            + (input.HasPriorMonthlyDisbursement ? $" | Gộp đợt trước: TNCT={input.PriorMonthTaxableIncome:N0}, Thuế={input.PriorMonthPitWithheld:N0}" : string.Empty)
+            + (input.SourcePeriodTaxDelta != 0m ? $" | Điều chỉnh thuế kỳ gốc={input.SourcePeriodTaxDelta:+N0;-N0;0}" : string.Empty)
+            + (string.IsNullOrWhiteSpace(activePitText) ? " | Không phát sinh thuế" : $" | {activePitText}")
+            + $" → Tổng thuế={breakdown.PersonalIncomeTax:N0}đ",
             breakdown.PersonalIncomeTax,
-            parameter.LegalReference));
+            parameter.LegalReference,
+            breakdown.AssessableIncome));
 
-        decimal otherDed = input.DisciplineDeduction + input.SalaryAdvanceDeduction + input.LoanInstallmentDeduction
-            + input.RetroDeductionAmount + input.CustomDeductions + breakdown.EmployeeUnionFee;
-        if (otherDed > 0m)
-        {
-            steps.Add(new CalculationTraceStepDto(
-                idx++,
-                "Deduction",
-                "Các khoản khấu trừ sau thuế (Tạm ứng, Vay, Kỷ luật, Truy thu, ĐP CĐ)",
-                "Tạm ứng + Trả góp vay + Kỷ luật + Truy thu + Đoàn phí NLĐ",
-                $"TạmỨng={input.SalaryAdvanceDeduction:N0}, TrảGópVay={input.LoanInstallmentDeduction:N0}, KỷLuật={input.DisciplineDeduction:N0}, TruyThu={input.RetroDeductionAmount:N0}, ĐP_NLĐ={breakdown.EmployeeUnionFee:N0}",
-                otherDed,
-                null));
-        }
-
+        // 14. Khấu trừ khác (tạm ứng, vay, kỷ luật, truy thu, ĐP CĐ)
         steps.Add(new CalculationTraceStepDto(
-            idx++,
-            "Net",
-            "Thực lĩnh (Net Salary)",
-            "Gross - BH bắt buộc NLĐ - Thuế TNCN - Các khoản khấu trừ sau thuế",
-            $"{breakdown.GrossIncome:N0} - {breakdown.TotalEmployeeInsurance:N0} - {breakdown.PersonalIncomeTax:N0} - {otherDed:N0}",
-            breakdown.NetSalary,
+            14,
+            "Deduction",
+            "Khấu trừ khác (Tạm ứng, Vay, Kỷ luật, Truy thu, ĐP CĐ)",
+            "Tạm ứng + Trả góp vay + Kỷ luật + Truy thu + Khấu trừ khác + Đoàn phí NLĐ",
+            $"Tạm ứng={input.SalaryAdvanceDeduction:N0} + Vay={input.LoanInstallmentDeduction:N0} + Kỷ luật={input.DisciplineDeduction:N0} + Truy thu={input.RetroDeductionAmount:N0} + Khác={input.CustomDeductions:N0} + ĐP CĐ={breakdown.EmployeeUnionFee:N0} = {otherDed:N0}đ",
+            otherDed,
             null));
 
+        // 15. Thực lĩnh (Net) & Tổng chi phí DN
+        decimal companyInsurance = breakdown.CompanySocialInsurance + breakdown.CompanyHealthInsurance + breakdown.CompanyUnemploymentInsurance;
         steps.Add(new CalculationTraceStepDto(
-            idx++,
+            15,
             "CompanyCost",
-            "Tổng chi phí doanh nghiệp sử dụng lao động",
-            $"Gross + BHXH DN ({parameter.CompanySiRate:P1}) + BHTNLĐ-BNN ({parameter.CompanyOccupationalAccidentRate:P1}) + BHYT DN ({parameter.CompanyHiRate:P1}) + BHTN DN ({parameter.CompanyUiRate:P1}) + KPCĐ ({parameter.CompanyUnionFeeRate:P1})",
-            $"Gross={breakdown.GrossIncome:N0}, BH_DN={breakdown.CompanySocialInsurance + breakdown.CompanyHealthInsurance + breakdown.CompanyUnemploymentInsurance:N0}, BHTNLĐ={breakdown.CompanyOccupationalAccidentInsurance:N0}, KPCĐ={breakdown.CompanyUnionFee:N0}",
+            "Thực lĩnh (Net) & Tổng chi phí doanh nghiệp",
+            $"Net = Gross - BH NLĐ - Thuế TNCN - Khấu trừ khác | Chi phí DN = Gross + BHXH/BHYT/BHTN DN + BHTNLĐ ({parameter.CompanyOccupationalAccidentRate:P1}) + KPCĐ ({parameter.CompanyUnionFeeRate:P1})",
+            $"Net = {breakdown.GrossIncome:N0} - {breakdown.TotalEmployeeInsurance:N0} - {breakdown.PersonalIncomeTax:N0} - {otherDed:N0} = {breakdown.NetSalary:N0}đ | Chi phí DN = {breakdown.GrossIncome:N0} + {companyInsurance:N0} + {breakdown.CompanyOccupationalAccidentInsurance:N0} + {breakdown.CompanyUnionFee:N0} = {breakdown.TotalCompanyCost:N0}đ",
             breakdown.TotalCompanyCost,
-            parameter.LegalReference));
+            parameter.LegalReference,
+            breakdown.NetSalary));
 
         return steps;
+    }
+
+    public static List<PayrollRecordDetail> BuildStandardRecordDetails(
+        PayrollCalculationBreakdown breakdown,
+        decimal positionAllowance,
+        decimal otherAllowance,
+        decimal kpiAndBonusTotal,
+        IReadOnlyDictionary<string, int> componentIdsByCode)
+    {
+        var details = new List<PayrollRecordDetail>();
+
+        void AddIfExists(string code, string fallbackName, decimal amount, string? note = null)
+        {
+            if (amount == 0m) return;
+            if (!componentIdsByCode.TryGetValue(code, out int compId)) return;
+            details.Add(new PayrollRecordDetail
+            {
+                SalaryComponentId = compId,
+                ComponentCode = code,
+                ComponentName = fallbackName,
+                Amount = amount,
+                CalculationNote = note
+            });
+        }
+
+        AddIfExists("BASIC_PAY", "Lương cơ bản theo ngày công (P1)", breakdown.ActualBaseSalary, "Tính theo ngày công hưởng lương");
+        AddIfExists("POS_ALLOWANCE", "Phụ cấp chức vụ", positionAllowance);
+        AddIfExists("OTHER_ALLOWANCE", "Phụ cấp ăn ca, xăng xe, điện thoại (P2)", otherAllowance);
+        AddIfExists("KPI_BONUS", "Thưởng hiệu quả KPI (P3) & thưởng/OT", kpiAndBonusTotal + breakdown.OvertimePay, breakdown.OvertimePay > 0m ? $"Gồm OT {breakdown.OvertimePay:N0}đ" : null);
+        AddIfExists("SI_DEDUCTION", "Khấu trừ BHXH, BHYT, BHTN (10.5%)", -breakdown.TotalEmployeeInsurance, $"BHXH {breakdown.EmployeeSocialInsurance:N0} + BHYT {breakdown.EmployeeHealthInsurance:N0} + BHTN {breakdown.EmployeeUnemploymentInsurance:N0}");
+        AddIfExists("PIT_TAX", "Thuế Thu nhập cá nhân (TNCN)", -breakdown.PersonalIncomeTax, $"TN tính thuế {breakdown.AssessableIncome:N0}đ");
+
+        return details;
     }
 
     /// <summary>

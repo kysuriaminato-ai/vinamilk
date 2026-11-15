@@ -105,6 +105,8 @@ public interface IPayrollDocumentService
     byte[] ExportPitSettlementExcel(PitAnnualFinalizationReportDto report);
 
     byte[] ExportAccountingJournalFile(PayrollAccountingJournalDto journal, string format);
+
+    byte[] GeneratePayrollTracePdf(PayrollRecordTraceDto trace, DateOnly? effectiveDate = null, string? calculatorNote = null);
 }
 
 public interface IBankTransferTemplateFormatter

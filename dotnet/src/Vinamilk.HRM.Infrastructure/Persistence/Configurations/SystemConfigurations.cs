@@ -151,9 +151,9 @@ public class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
 
         builder.Property(x => x.Username).HasMaxLength(100).IsRequired();
         builder.Property(x => x.ModuleName).HasColumnType("varchar(50)").IsRequired();
-        builder.Property(x => x.ActionType).HasColumnType("varchar(30)").IsRequired();
+        builder.Property(x => x.ActionType).HasColumnType("varchar(60)").IsRequired();
         builder.Property(x => x.EntityName).HasColumnType("varchar(100)").IsRequired();
-        builder.Property(x => x.EntityId).HasColumnType("varchar(50)").IsRequired();
+        builder.Property(x => x.EntityId).HasColumnType("varchar(80)").IsRequired();
         builder.Property(x => x.AffectedColumns).HasMaxLength(500);
         builder.Property(x => x.IpAddress).HasColumnType("varchar(64)");
         builder.Property(x => x.UserAgent).HasMaxLength(500);

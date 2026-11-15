@@ -18,7 +18,11 @@ public sealed record OrgUnitNodeDto(
     int PlannedHeadcount,
     int ActualHeadcount,
     int SortOrder,
-    bool IsActive);
+    bool IsActive,
+    int? ManagerEmployeeId = null,
+    int WageRegion = 1,
+    string? Address = null,
+    int ChildCount = 0);
 
 public sealed record OrganizationOverviewDto(
     IReadOnlyList<OrgUnitNodeDto> Units,
@@ -63,9 +67,15 @@ public sealed class GetOrganizationOverviewQueryHandler
 
         var empNameById = employees.ToDictionary(e => e.Id, e => $"{e.EmployeeCode} - {e.FullName}");
 
+        var childCountByParent = units
+            .Where(u => u.ParentUnitId.HasValue)
+            .GroupBy(u => u.ParentUnitId!.Value)
+            .ToDictionary(g => g.Key, g => g.Count());
+
         var unitDtos = units.Select(u =>
         {
             empCountByUnit.TryGetValue(u.Id, out var actualCount);
+            childCountByParent.TryGetValue(u.Id, out var childCount);
             string? managerName = null;
             if (u.ManagerEmployeeId.HasValue && empNameById.TryGetValue(u.ManagerEmployeeId.Value, out var mName))
             {
@@ -85,7 +95,11 @@ public sealed class GetOrganizationOverviewQueryHandler
                 u.PlannedHeadcount,
                 actualCount,
                 u.SortOrder,
-                u.IsActive);
+                u.IsActive,
+                u.ManagerEmployeeId,
+                u.WageRegion,
+                u.Address,
+                childCount);
         }).ToList();
 
         var positions = await _context.Positions
@@ -101,8 +115,8 @@ public sealed class GetOrganizationOverviewQueryHandler
             .ToListAsync(cancellationToken);
 
         var managers = employees
+            .Where(e => e.WorkStatus != "Resigned" && e.WorkStatus != "Terminated")
             .OrderBy(e => e.EmployeeCode)
-            .Take(25)
             .ToList();
 
         return new OrganizationOverviewDto(unitDtos, positions, scales, managers);
@@ -122,7 +136,8 @@ public sealed record SaveOrganizationUnitCommand(
     string? CostCenterCode,
     int PlannedHeadcount,
     int SortOrder,
-    string? Address) : IRequest<int>;
+    string? Address,
+    int WageRegion = 1) : IRequest<int>;
 
 public sealed class SaveOrganizationUnitCommandHandler : IRequestHandler<SaveOrganizationUnitCommand, int>
 {
@@ -135,11 +150,24 @@ public sealed class SaveOrganizationUnitCommandHandler : IRequestHandler<SaveOrg
 
     public async Task<int> Handle(SaveOrganizationUnitCommand request, CancellationToken cancellationToken)
     {
+        var normalizedCode = request.UnitCode.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(normalizedCode) || string.IsNullOrWhiteSpace(request.UnitName))
+            throw new InvalidOperationException("Mã đơn vị và Tên đơn vị không được để trống.");
+
+        var duplicateCode = await _context.OrganizationUnits
+            .AnyAsync(u => u.UnitCode == normalizedCode && (!request.Id.HasValue || u.Id != request.Id.Value), cancellationToken);
+        if (duplicateCode)
+            throw new InvalidOperationException($"Mã đơn vị '{normalizedCode}' đã tồn tại trong hệ thống.");
+
         OrganizationUnit? parent = null;
         if (request.ParentUnitId.HasValue && request.ParentUnitId.Value > 0)
         {
+            if (request.Id.HasValue && request.ParentUnitId.Value == request.Id.Value)
+                throw new InvalidOperationException("Đơn vị không thể chọn chính nó làm đơn vị cấp trên.");
+
             parent = await _context.OrganizationUnits
-                .FirstOrDefaultAsync(u => u.Id == request.ParentUnitId.Value, cancellationToken);
+                .FirstOrDefaultAsync(u => u.Id == request.ParentUnitId.Value, cancellationToken)
+                ?? throw new InvalidOperationException("Không tìm thấy đơn vị cấp trên đã chọn.");
         }
 
         OrganizationUnit unit;
@@ -148,6 +176,9 @@ public sealed class SaveOrganizationUnitCommandHandler : IRequestHandler<SaveOrg
             unit = await _context.OrganizationUnits
                        .FirstOrDefaultAsync(u => u.Id == request.Id.Value, cancellationToken)
                    ?? throw new InvalidOperationException("Không tìm thấy đơn vị cần cập nhật.");
+
+            if (parent != null && !string.IsNullOrEmpty(unit.TreePath) && (parent.TreePath ?? "").StartsWith(unit.TreePath, StringComparison.Ordinal))
+                throw new InvalidOperationException("Không thể chọn đơn vị con làm đơn vị cấp trên (vòng lặp phân cấp).");
         }
         else
         {
@@ -155,27 +186,81 @@ public sealed class SaveOrganizationUnitCommandHandler : IRequestHandler<SaveOrg
             await _context.OrganizationUnits.AddAsync(unit, cancellationToken);
         }
 
-        unit.UnitCode = request.UnitCode.Trim().ToUpperInvariant();
+        var oldTreePath = unit.TreePath;
+
+        unit.UnitCode = normalizedCode;
         unit.UnitName = request.UnitName.Trim();
         unit.UnitType = request.UnitType;
         unit.ParentUnitId = parent?.Id;
         unit.UnitLevel = parent is null ? 1 : parent.UnitLevel + 1;
-        unit.ManagerEmployeeId = request.ManagerEmployeeId;
+        unit.ManagerEmployeeId = request.ManagerEmployeeId is > 0 ? request.ManagerEmployeeId : null;
         unit.CostCenterCode = request.CostCenterCode?.Trim();
         unit.PlannedHeadcount = Math.Max(1, request.PlannedHeadcount);
         unit.SortOrder = request.SortOrder;
         unit.Address = request.Address?.Trim();
+        unit.WageRegion = Math.Clamp(request.WageRegion, 1, 4);
         unit.IsActive = true;
 
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Cập nhật đường dẫn cây phân cấp TreePath (/1/5/12/)
-        unit.TreePath = parent is null
+        // Cập nhật đường dẫn cây phân cấp TreePath (/1/5/12/) cho bản thân và các đơn vị con nếu có
+        var newTreePath = parent is null
             ? $"/{unit.Id}/"
             : $"{(parent.TreePath ?? $"/{parent.Id}/")}{unit.Id}/";
+        unit.TreePath = newTreePath;
+
+        if (!string.IsNullOrEmpty(oldTreePath) && oldTreePath != newTreePath)
+        {
+            var descendants = await _context.OrganizationUnits
+                .Where(u => u.Id != unit.Id && u.TreePath != null && u.TreePath.StartsWith(oldTreePath))
+                .ToListAsync(cancellationToken);
+            foreach (var desc in descendants)
+            {
+                desc.TreePath = string.Concat(newTreePath, desc.TreePath!.AsSpan(oldTreePath.Length));
+                desc.UnitLevel = desc.TreePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Length;
+            }
+        }
 
         await _context.SaveChangesAsync(cancellationToken);
         return unit.Id;
+    }
+}
+
+/* ----------------------------------------------------------------------------
+ * COMMAND: Xóa Đơn vị Tổ chức (Chặn xóa nếu còn nhân sự hoặc đơn vị con)
+ * ---------------------------------------------------------------------------- */
+public sealed record DeleteOrganizationUnitCommand(int Id) : IRequest<string>;
+
+public sealed class DeleteOrganizationUnitCommandHandler : IRequestHandler<DeleteOrganizationUnitCommand, string>
+{
+    private readonly IApplicationDbContext _context;
+
+    public DeleteOrganizationUnitCommandHandler(IApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<string> Handle(DeleteOrganizationUnitCommand request, CancellationToken cancellationToken)
+    {
+        var unit = await _context.OrganizationUnits
+            .FirstOrDefaultAsync(u => u.Id == request.Id, cancellationToken)
+            ?? throw new KeyNotFoundException("Không tìm thấy đơn vị cần xóa.");
+
+        var hasChildren = await _context.OrganizationUnits
+            .AnyAsync(u => u.ParentUnitId == request.Id, cancellationToken);
+        if (hasChildren)
+            throw new InvalidOperationException($"Không thể xóa đơn vị [{unit.UnitCode} - {unit.UnitName}] vì vẫn còn đơn vị con trực thuộc.");
+
+        var empCount = await _context.Employees
+            .CountAsync(e => e.OrganizationUnitId == request.Id, cancellationToken);
+        if (empCount > 0)
+            throw new InvalidOperationException($"Không thể xóa đơn vị [{unit.UnitCode} - {unit.UnitName}] vì đang có {empCount} nhân sự trực thuộc.");
+
+        unit.IsDeleted = true;
+        unit.IsActive = false;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return $"Đã xóa đơn vị [{unit.UnitCode} - {unit.UnitName}].";
     }
 }
 

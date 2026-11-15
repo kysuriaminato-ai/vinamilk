@@ -383,6 +383,7 @@ public class AttendancePolicy : BaseAuditableEntity
     public bool BlockOvertimeWhenExceedingLimit { get; set; } = true;
     public bool AllowCompensatoryLeaveForOt { get; set; } = true;
     public bool UseSpecialIndustry300OtLimit { get; set; } = false;
+    public bool AllowPayableWorkdaysExceedStandard { get; set; } = false;
 
     public PolicyGroup PolicyGroup { get; set; } = null!;
 }

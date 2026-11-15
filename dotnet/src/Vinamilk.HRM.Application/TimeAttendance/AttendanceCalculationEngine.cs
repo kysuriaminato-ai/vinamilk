@@ -282,6 +282,10 @@ public static class AttendanceCalculationEngine
             var offSym = symbols.GetCode("WeeklyOff", "OFF");
             var actualIn = validPunches.FirstOrDefault()?.PunchTime;
             var actualOut = validPunches.Count > 1 ? validPunches.Last().PunchTime : (DateTime?)null;
+            bool hasApprovedOtOnWeeklyOff = (ot200D + ot200N + ot300D + ot300N + ot150D + ot150N) > 0m;
+            string weeklyOffNote = (validPunches.Count > 0 && !hasApprovedOtOnWeeklyOff)
+                ? "Cảnh báo: Làm ngày nghỉ hằng tuần nhưng chưa có đơn OT được duyệt (không cộng công thường)."
+                : $"Ngày nghỉ tuần ({offSym}) (OT 200%: ngày {ot200D:0.##}h, đêm {ot200N:0.##}h).";
 
             return new AttendanceDailyCalculationOutput(
                 input.WorkDate, shift?.Id, shiftCode,
@@ -291,7 +295,7 @@ public static class AttendanceCalculationEngine
                 0, 0, 0, 0, 0m,
                 ot150D, ot150N, ot200D, ot200N, ot300D, ot300N,
                 offSym, false, false,
-                $"Ngày nghỉ tuần ({offSym}) (OT 200%: ngày {ot200D:0.##}h, đêm {ot200N:0.##}h).");
+                weeklyOffNote);
         }
 
         // 3. Ngày làm việc bình thường (có thể kèm nghỉ nửa ngày / công tác nửa ngày)

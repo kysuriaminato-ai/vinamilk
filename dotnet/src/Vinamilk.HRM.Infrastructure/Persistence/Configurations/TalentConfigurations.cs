@@ -76,7 +76,7 @@ public class CandidateConfiguration : IEntityTypeConfiguration<Candidate>
 
         builder.Property(x => x.CandidateCode).HasColumnType("varchar(30)").IsRequired();
         builder.Property(x => x.FullName).HasMaxLength(150).IsRequired();
-        builder.Property(x => x.Gender).HasMaxLength(10);
+        builder.Property(x => x.Gender).HasMaxLength(20);
         builder.Property(x => x.PhoneNumber).HasColumnType("varchar(20)").IsRequired();
         builder.Property(x => x.Email).HasColumnType("varchar(150)").IsRequired();
         builder.Property(x => x.Major).HasMaxLength(150);
@@ -339,7 +339,7 @@ public class EvaluationCycleConfiguration : IEntityTypeConfiguration<EvaluationC
 
         builder.Property(x => x.CycleCode).HasColumnType("varchar(30)").IsRequired();
         builder.Property(x => x.CycleName).HasMaxLength(200).IsRequired();
-        builder.Property(x => x.CycleType).HasColumnType("varchar(20)").IsRequired();
+        builder.Property(x => x.CycleType).HasColumnType("varchar(30)").IsRequired();
         builder.Property(x => x.Status).HasColumnType("varchar(30)").HasDefaultValue("Closed");
 
         builder.HasIndex(x => x.CycleCode)
@@ -359,7 +359,7 @@ public class EmployeeKpiEvaluationConfiguration : IEntityTypeConfiguration<Emplo
         builder.Property(x => x.SelfTotalScore).HasColumnType("decimal(5,2)");
         builder.Property(x => x.ManagerTotalScore).HasColumnType("decimal(5,2)");
         builder.Property(x => x.FinalScore).HasColumnType("decimal(5,2)");
-        builder.Property(x => x.RatingGrade).HasColumnType("varchar(10)").IsRequired();
+        builder.Property(x => x.RatingGrade).HasMaxLength(30).IsRequired();
         builder.Property(x => x.BonusMultiplier).HasColumnType("decimal(5,2)");
         builder.Property(x => x.EmployeeComment).HasMaxLength(1000);
         builder.Property(x => x.ReviewerComment).HasMaxLength(1000);

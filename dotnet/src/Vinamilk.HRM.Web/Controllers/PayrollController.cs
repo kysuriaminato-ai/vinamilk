@@ -647,6 +647,50 @@ public class PayrollController : Controller
         return Json(trace);
     }
 
+    [HttpGet("DownloadTracePdf")]
+    public async Task<IActionResult> DownloadTracePdf(long recordId, CancellationToken cancellationToken = default)
+    {
+        var trace = await _mediator.Send(new GetPayrollRecordTraceQuery(recordId), cancellationToken);
+        var pdfBytes = _documentService.GeneratePayrollTracePdf(trace);
+        return File(pdfBytes, "application/pdf", $"DienGiaiTinhLuong_{trace.EmployeeCode}_{trace.PeriodCode}.pdf");
+    }
+
+    [HttpGet("Calculator")]
+    public async Task<IActionResult> Calculator(CancellationToken cancellationToken = default)
+    {
+        ViewData["Title"] = "Máy tính lương chuẩn pháp lý (Gross ↔ Net & 15 bước)";
+        ViewData["BreadcrumbParent"] = "Chấm công & Tiền lương (C&B)";
+
+        var input = new AdhocPayrollCalculatorInput(EffectiveDate: DateOnly.FromDateTime(DateTime.Today));
+        var result = await _mediator.Send(new CalculateAdhocPayrollQuery(input), cancellationToken);
+        ViewBag.CalculatorInput = input;
+        return View(result);
+    }
+
+    [HttpPost("Calculator")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Calculator(AdhocPayrollCalculatorInput input, CancellationToken cancellationToken = default)
+    {
+        ViewData["Title"] = "Máy tính lương chuẩn pháp lý (Gross ↔ Net & 15 bước)";
+        ViewData["BreadcrumbParent"] = "Chấm công & Tiền lương (C&B)";
+
+        var result = await _mediator.Send(new CalculateAdhocPayrollQuery(input), cancellationToken);
+        ViewBag.CalculatorInput = input;
+        return View(result);
+    }
+
+    [HttpPost("DownloadCalculatorTracePdf")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DownloadCalculatorTracePdf(AdhocPayrollCalculatorInput input, CancellationToken cancellationToken = default)
+    {
+        var result = await _mediator.Send(new CalculateAdhocPayrollQuery(input), cancellationToken);
+        var pdfBytes = _documentService.GeneratePayrollTracePdf(
+            result.Trace,
+            result.EffectiveDate,
+            $"Tính theo Máy tính lương ad-hoc (Tham số hiệu lực ngày {result.EffectiveDate:dd/MM/yyyy}: {result.StatutoryParameter.LegalReference})");
+        return File(pdfBytes, "application/pdf", $"MayTinhLuong_DienGiai_{result.EffectiveDate:yyyyMMdd}.pdf");
+    }
+
     [HttpGet("Operations")]
     [Authorize(Policy = "Payroll.Calculate")]
     public async Task<IActionResult> Operations(CancellationToken cancellationToken = default)

@@ -305,8 +305,11 @@ else if (Model.UnverifiedHolidaysInYear > 0 && !Model.IsMonthLocked)
                         </select>
                         <input type="date" name="fromDate" class="form-control form-control-sm" style="max-width: 125px;" value="@(new DateOnly(Model.Year, Model.Month, 1).ToString("yyyy-MM-dd"))" />
                         <input type="date" name="toDate" class="form-control form-control-sm" style="max-width: 125px;" value="@(new DateOnly(Model.Year, Model.Month, Model.DaysInMonth).ToString("yyyy-MM-dd"))" />
-                        <button type="submit" class="btn btn-sm btn-outline-success fw-semibold" @(Model.IsMonthLocked ? "disabled" : "")>
+                            <button type="submit" class="btn btn-sm btn-outline-success fw-semibold" @(Model.IsMonthLocked ? "disabled" : "")>
                             <i class="ti ti-calculator me-1"></i>Tính lại Engine
+                        </button>
+                        <button type="button" class="btn btn-sm btn-primary fw-semibold" onclick="openBulkSymbolModal()" @(Model.IsMonthLocked ? "disabled" : "")>
+                            <i class="ti ti-list-check me-1"></i>Nhập nhanh hàng loạt
                         </button>
                     </form>
                     @if (Model.RecalculationBatches != null && Model.RecalculationBatches.Count > 0)
@@ -327,7 +330,12 @@ else if (Model.UnverifiedHolidaysInYear > 0 && !Model.IsMonthLocked)
                 <table class="table table-bordered table-sm align-middle mb-0 text-center" style="font-size: 0.78rem;">
                     <thead class="table-light">
                         <tr>
-                            <th class="text-start" style="min-width: 190px; position: sticky; left: 0; z-index: 2; background: var(--vnm-bg-surface);">Nhân sự</th>
+                            <th class="text-start" style="min-width: 215px; position: sticky; left: 0; z-index: 2; background: var(--vnm-bg-surface);">
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="checkbox" id="chkAllMatrixEmps" class="form-check-input mt-0" onchange="toggleAllMatrixEmps(this)" title="Chọn tất cả nhân viên đang hiển thị" />
+                                    <span>Nhân sự</span>
+                                </div>
+                            </th>
                             @for (int d = 1; d <= Model.DaysInMonth; d++)
                             {
                                 var dt = new DateOnly(Model.Year, Model.Month, d);
@@ -349,8 +357,13 @@ else if (Model.UnverifiedHolidaysInYear > 0 && !Model.IsMonthLocked)
                             var totalOt = row.TotalOtHours150 + row.TotalOtHours200 + row.TotalOtHours300;
                             <tr>
                                 <td class="text-start" style="position: sticky; left: 0; z-index: 1; background: var(--vnm-bg-surface);">
-                                    <div class="fw-bold">@row.FullName</div>
-                                    <div class="text-muted" style="font-size: 0.72rem;">@row.EmployeeCode • @row.UnitName</div>
+                                    <div class="d-flex align-items-start gap-2">
+                                        <input type="checkbox" class="att-emp-checkbox form-check-input mt-1" value="@row.EmployeeId" />
+                                        <div>
+                                            <div class="fw-bold">@row.FullName</div>
+                                            <div class="text-muted" style="font-size: 0.72rem;">@row.EmployeeCode • @row.UnitName</div>
+                                        </div>
+                                    </div>
                                 </td>
                                 @foreach (var cell in row.Days)
                                 {
@@ -1085,9 +1098,287 @@ else if (Model.UnverifiedHolidaysInYear > 0 && !Model.IsMonthLocked)
     </div>
 </div>
 
+<!-- Modal Nhập nhanh hàng loạt Ký hiệu công -->
+<div class="modal fade" id="modalBulkSymbol" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="BulkAssignSymbol" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="month" value="@Model.Month" />
+            <input type="hidden" name="year" value="@Model.Year" />
+            <input type="hidden" name="unitId" value="@Model.SelectedUnitId" />
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="ti ti-list-check text-primary me-2"></i>Nhập nhanh Ký hiệu công Hàng loạt</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Nhân viên áp dụng (*) <span class="text-muted fs-7 fw-normal">(Giữ Ctrl để chọn nhiều)</span></label>
+                    <select name="employeeIds" id="bulkAttEmpSelect" class="form-select" multiple size="6" required>
+                        @foreach (var emp in Model.ActiveEmployees)
+                        {
+                            <option value="@emp.Id">@emp.Code — @emp.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Từ ngày (*)</label>
+                        <input type="date" name="fromDate" class="form-control" value="@(new DateOnly(Model.Year, Model.Month, 1).ToString("yyyy-MM-dd"))" required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Đến ngày (*)</label>
+                        <input type="date" name="toDate" class="form-control" value="@(new DateOnly(Model.Year, Model.Month, Model.DaysInMonth).ToString("yyyy-MM-dd"))" required />
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Ký hiệu công (*)</label>
+                    <select name="attendanceSymbol" class="form-select" required>
+                        <option value="X">X — Đi làm đủ công (1.0)</option>
+                        <option value="½">½ — Đi làm nửa công (0.5)</option>
+                        <option value="P">P — Nghỉ phép năm hưởng lương (1.0)</option>
+                        <option value="CT">CT — Đi công tác (1.0)</option>
+                        <option value="R">R — Nghỉ việc riêng có lương (1.0)</option>
+                        <option value="Ro">Ro — Nghỉ việc riêng không lương (0)</option>
+                        <option value="KL">KL — Vắng không phép (0)</option>
+                        <option value="OFF">OFF — Nghỉ tuần (0)</option>
+                        <option value="L">L — Nghỉ Lễ hưởng lương (1.0)</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Lý do nhập / điều chỉnh (*)</label>
+                    <input type="text" name="reason" class="form-control" placeholder="Bắt buộc nhập lý do lưu AuditLog..." required />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button>
+                <button type="submit" class="btn btn-primary fw-semibold"><i class="ti ti-check me-1"></i>Áp dụng hàng loạt</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 @section Scripts {
     <script>
+        let currentCellEmpId = 0;
+        let currentCellDate = '';
+        let cellModalDirty = false;
+
+        function toggleAllMatrixEmps(chk) {
+            document.querySelectorAll('.att-emp-checkbox').forEach(el => { el.checked = chk.checked; });
+        }
+
+        function openBulkSymbolModal() {
+            const checkedIds = new Set(Array.from(document.querySelectorAll('.att-emp-checkbox:checked')).map(el => el.value));
+            const sel = document.getElementById('bulkAttEmpSelect');
+            if (sel) {
+                Array.from(sel.options).forEach(opt => {
+                    opt.selected = checkedIds.size > 0 ? checkedIds.has(opt.value) : false;
+                });
+            }
+            window.bootstrap?.Modal.getOrCreateInstance(document.getElementById('modalBulkSymbol')).show();
+        }
+
+        document.getElementById('modalAttendanceCellDetail')?.addEventListener('hidden.bs.modal', () => {
+            if (cellModalDirty) {
+                cellModalDirty = false;
+                window.location.reload();
+            }
+        });
+
+        function renderAttendanceCellDetail(d) {
+            const bodyEl = document.getElementById('attendanceCellDetailBody');
+            const lockedAttr = d.isMonthLocked ? 'disabled' : '';
+            const lockBanner = d.isMonthLocked
+                ? `<div class="alert alert-danger py-2 fs-7 mb-2"><i class="ti ti-lock me-1"></i>Bảng công tháng đã khóa — Chỉ được phép xem log, không thể sửa/xóa trực tiếp.</div>`
+                : '';
+
+            let logsHtml = d.logs && d.logs.length
+                ? `<div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-0 fs-7">
+                    <thead class="table-light"><tr><th>Thời gian</th><th>Loại</th><th>Nguồn / Thiết bị</th><th>Vị trí / Lý do</th><th class="text-end">Thao tác</th></tr></thead>
+                    <tbody>` + d.logs.map(l => {
+                        const hhmm = (l.punchTime || '').toString().substring(11, 16);
+                        return `<tr>
+                            <td class="font-monospace fw-bold">${(l.punchTime || '').replace('T', ' ').substring(0, 16)}</td>
+                            <td><span class="badge ${l.punchType === 'CheckIn' ? 'bg-success-subtle text-success' : 'bg-info-subtle text-info-emphasis'}">${l.punchType}</span></td>
+                            <td>${l.sourceType || '-'} <span class="text-muted">(${l.deviceId || '-'})</span></td>
+                            <td>${l.locationAddress || ''} ${l.manualReason ? `<div class="text-warning-emphasis">${l.manualReason}</div>` : ''}</td>
+                            <td class="text-end text-nowrap">
+                                <button type="button" class="btn btn-xs btn-outline-primary py-0 px-1" ${lockedAttr} onclick="prepareEditPunchLog(${l.id}, '${hhmm}', '${l.punchType}')">Sửa</button>
+                                <button type="button" class="btn btn-xs btn-outline-danger py-0 px-1" ${lockedAttr} onclick="deletePunchLog(${l.id})">Xóa</button>
+                            </td>
+                        </tr>`;
+                    }).join('') + `</tbody></table></div>`
+                : '<div class="text-muted fs-7 py-2">Không có log quét máy/GPS</div>';
+
+            let reqsHtml = d.relatedRequests && d.relatedRequests.length
+                ? d.relatedRequests.map(r => `<li>${r}</li>`).join('')
+                : '<li class="text-muted">Không có đơn nghỉ / OT liên quan</li>';
+
+            bodyEl.innerHTML = `
+                ${lockBanner}
+                <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
+                    <strong>${d.fullName}</strong> <span class="text-muted">(${d.employeeCode})</span>
+                    • Ngày <strong>${d.workDate}</strong>
+                    • Ca: <span class="badge bg-primary-subtle text-primary">${d.shiftCode || 'HC'}</span>
+                    • Ký hiệu: <span class="badge bg-success">${d.statusCode}${d.isManualEdited ? ' ✎' : ''}</span>
+                </div>
+                <div class="row g-2 mb-3 fs-7">
+                    <div class="col-4 border rounded p-2">Công chuẩn: <b>${d.standardHours}h</b><br/>Giờ làm: <b>${d.workingHours}h</b><br/>Số công: <b>${d.workdayCount}</b></div>
+                    <div class="col-4 border rounded p-2">Đi muộn: <b>${d.lateMinutes}p</b><br/>Về sớm: <b>${d.earlyLeaveMinutes}p</b><br/>Giờ đêm: <b>${d.nightShiftHours}h</b></div>
+                    <div class="col-4 border rounded p-2">OT150: <b>${d.overtimeHours150Day}/${d.overtimeHours150Night}h</b><br/>OT200: <b>${d.overtimeHours200Day}/${d.overtimeHours200Night}h</b><br/>OT300: <b>${d.overtimeHours300Day}/${d.overtimeHours300Night}h</b></div>
+                </div>
+                <div class="mb-3">
+                    <div class="fw-bold mb-1 fs-7"><i class="ti ti-fingerprint me-1"></i>Log chấm công nguồn (máy / GPS / thủ công):</div>
+                    ${logsHtml}
+                </div>
+                <div class="border rounded p-2 bg-light mb-3 ${d.isMonthLocked ? 'd-none' : ''}">
+                    <div class="fw-bold fs-7 mb-2 text-primary" id="punchFormTitle">Thêm log chấm công mới (tự tính lại công ngày)</div>
+                    <input type="hidden" id="editPunchLogId" value="" />
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label fs-7 mb-1">Giờ (HH:mm)</label>
+                            <input type="time" id="cellPunchTimeInput" class="form-control form-control-sm" value="08:00" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fs-7 mb-1">Loại quét</label>
+                            <select id="cellPunchTypeInput" class="form-select form-select-sm">
+                                <option value="CheckIn">CheckIn (Vào)</option>
+                                <option value="CheckOut">CheckOut (Ra)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fs-7 mb-1">Lý do bắt buộc (*)</label>
+                            <input type="text" id="cellPunchReasonInput" class="form-control form-control-sm" placeholder="VD: Quên chấm công ra..." />
+                        </div>
+                        <div class="col-md-2 d-flex gap-1">
+                            <button type="button" class="btn btn-sm btn-primary w-100" onclick="submitPunchLogAjax()">Lưu log</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="border rounded p-2 bg-warning-subtle mb-3 ${d.isMonthLocked ? 'd-none' : ''}">
+                    <div class="fw-bold fs-7 mb-2 text-warning-emphasis"><i class="ti ti-pencil me-1"></i>Sửa nhanh ký hiệu công ngày (đánh dấu ✎ & lưu AuditLog)</div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <select id="cellSymbolSelect" class="form-select form-select-sm">
+                                <option value="X" ${d.statusCode === 'X' ? 'selected' : ''}>X — Đi làm (1.0)</option>
+                                <option value="½" ${d.statusCode === '½' ? 'selected' : ''}>½ — Nửa công (0.5)</option>
+                                <option value="P" ${d.statusCode === 'P' ? 'selected' : ''}>P — Phép năm (1.0)</option>
+                                <option value="CT" ${d.statusCode === 'CT' ? 'selected' : ''}>CT — Công tác (1.0)</option>
+                                <option value="R" ${d.statusCode === 'R' ? 'selected' : ''}>R — Nghỉ riêng có lương (1.0)</option>
+                                <option value="Ro" ${d.statusCode === 'Ro' ? 'selected' : ''}>Ro — Không lương (0)</option>
+                                <option value="KL" ${d.statusCode === 'KL' ? 'selected' : ''}>KL — Vắng không phép (0)</option>
+                                <option value="OFF" ${d.statusCode === 'OFF' ? 'selected' : ''}>OFF — Nghỉ tuần (0)</option>
+                                <option value="L" ${d.statusCode === 'L' ? 'selected' : ''}>L — Nghỉ Lễ (1.0)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <input type="text" id="cellSymbolReasonInput" class="form-control form-control-sm" placeholder="Lý do đổi ký hiệu (bắt buộc)..." />
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-sm btn-warning fw-semibold w-100" onclick="submitDaySymbolAjax()">Lưu công</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-2"><strong>Đơn nghỉ / OT liên quan:</strong><ul class="fs-7 mb-2">${reqsHtml}</ul></div>
+                <div class="text-muted fs-7">Ghi chú tính công: ${d.editReason || '-'}</div>`;
+        }
+
+        function prepareEditPunchLog(logId, hhmm, punchType) {
+            document.getElementById('editPunchLogId').value = logId;
+            document.getElementById('cellPunchTimeInput').value = hhmm || '08:00';
+            document.getElementById('cellPunchTypeInput').value = punchType || 'CheckIn';
+            document.getElementById('punchFormTitle').textContent = `Đang sửa Log #${logId} (bấm Lưu log để tính lại công ngày)`;
+            document.getElementById('cellPunchReasonInput').focus();
+        }
+
+        async function submitPunchLogAjax() {
+            const logIdVal = document.getElementById('editPunchLogId').value;
+            const punchTime = document.getElementById('cellPunchTimeInput').value;
+            const punchType = document.getElementById('cellPunchTypeInput').value;
+            const reason = (document.getElementById('cellPunchReasonInput').value || '').trim();
+            if (!reason) {
+                window.VnmUI?.toast('Vui lòng nhập lý do trước khi lưu log.', 'warning');
+                return;
+            }
+            const resp = await fetch('/Attendance/SaveCellPunchLogAjax', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    logId: logIdVal ? parseInt(logIdVal, 10) : null,
+                    employeeId: currentCellEmpId,
+                    workDate: currentCellDate,
+                    punchTime,
+                    punchType,
+                    reason,
+                    deleteLog: false
+                })
+            });
+            const json = await resp.json();
+            if (!resp.ok || !json.success) {
+                window.VnmUI?.toast(json.message || 'Lỗi lưu log chấm công.', 'error');
+                return;
+            }
+            cellModalDirty = true;
+            window.VnmUI?.toast(json.message, 'success');
+            if (json.detail) renderAttendanceCellDetail(json.detail);
+        }
+
+        async function deletePunchLog(logId) {
+            const reason = window.prompt('Nhập lý do xóa log chấm công (bắt buộc lưu AuditLog):');
+            if (!reason || !reason.trim()) return;
+            const resp = await fetch('/Attendance/SaveCellPunchLogAjax', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    logId,
+                    employeeId: currentCellEmpId,
+                    workDate: currentCellDate,
+                    punchTime: null,
+                    punchType: 'CheckIn',
+                    reason: reason.trim(),
+                    deleteLog: true
+                })
+            });
+            const json = await resp.json();
+            if (!resp.ok || !json.success) {
+                window.VnmUI?.toast(json.message || 'Lỗi xóa log.', 'error');
+                return;
+            }
+            cellModalDirty = true;
+            window.VnmUI?.toast(json.message, 'success');
+            if (json.detail) renderAttendanceCellDetail(json.detail);
+        }
+
+        async function submitDaySymbolAjax() {
+            const symbol = document.getElementById('cellSymbolSelect').value;
+            const reason = (document.getElementById('cellSymbolReasonInput').value || '').trim();
+            if (!reason) {
+                window.VnmUI?.toast('Vui lòng nhập lý do đổi ký hiệu công.', 'warning');
+                return;
+            }
+            const resp = await fetch('/Attendance/UpdateDaySymbolAjax', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    employeeId: currentCellEmpId,
+                    workDate: currentCellDate,
+                    attendanceSymbol: symbol,
+                    reason
+                })
+            });
+            const json = await resp.json();
+            if (!resp.ok || !json.success) {
+                window.VnmUI?.toast(json.message || 'Lỗi cập nhật ký hiệu công.', 'error');
+                return;
+            }
+            cellModalDirty = true;
+            window.VnmUI?.toast(json.message, 'success');
+            if (json.detail) renderAttendanceCellDetail(json.detail);
+        }
+
         async function openAttendanceCellModal(employeeId, dateStr) {
+            currentCellEmpId = employeeId;
+            currentCellDate = dateStr;
             const modalEl = document.getElementById('modalAttendanceCellDetail');
             const bodyEl = document.getElementById('attendanceCellDetailBody');
             bodyEl.innerHTML = '<div class="text-center text-muted py-4">Đang tải chi tiết công & log...</div>';
@@ -1098,22 +1389,7 @@ else if (Model.UnverifiedHolidaysInYear > 0 && !Model.IsMonthLocked)
                 const resp = await fetch(`/Attendance/CellDetails?employeeId=${employeeId}&date=${dateStr}`);
                 if (!resp.ok) throw new Error('Không tải được chi tiết ô công.');
                 const d = await resp.json();
-                let logsHtml = d.logs && d.logs.length
-                    ? d.logs.map(l => `<li><code>${l.punchTime}</code> | <b>${l.punchType}</b> | Nguồn: ${l.sourceType} (${l.deviceId || '-'}) ${l.manualReason ? '— ' + l.manualReason : ''}</li>`).join('')
-                    : '<li class="text-muted">Không có log quét máy/GPS</li>';
-                let reqsHtml = d.relatedRequests && d.relatedRequests.length
-                    ? d.relatedRequests.map(r => `<li>${r}</li>`).join('')
-                    : '<li class="text-muted">Không có đơn nghỉ / OT liên quan</li>';
-                bodyEl.innerHTML = `
-                    <div class="mb-2"><strong>${d.fullName}</strong> (${d.employeeCode}) • Ngày <strong>${d.workDate}</strong> • Ca: <span class="badge bg-primary-subtle text-primary">${d.shiftCode || 'HC'}</span> • Ký hiệu: <span class="badge bg-success">${d.statusCode}</span></div>
-                    <div class="row g-2 mb-3 fs-7">
-                        <div class="col-4 border rounded p-2">Công chuẩn: <b>${d.standardHours}h</b><br/>Giờ làm: <b>${d.workingHours}h</b><br/>Số công: <b>${d.workdayCount}</b></div>
-                        <div class="col-4 border rounded p-2">Đi muộn: <b>${d.lateMinutes}p</b><br/>Về sớm: <b>${d.earlyLeaveMinutes}p</b><br/>Giờ đêm: <b>${d.nightShiftHours}h</b></div>
-                        <div class="col-4 border rounded p-2">OT150: <b>${d.overtimeHours150Day}/${d.overtimeHours150Night}h</b><br/>OT200: <b>${d.overtimeHours200Day}/${d.overtimeHours200Night}h</b><br/>OT300: <b>${d.overtimeHours300Day}/${d.overtimeHours300Night}h</b></div>
-                    </div>
-                    <div class="mb-2"><strong>Nhật ký log nguồn:</strong><ul class="fs-7 mb-2">${logsHtml}</ul></div>
-                    <div class="mb-2"><strong>Đơn nghỉ / OT liên quan:</strong><ul class="fs-7 mb-2">${reqsHtml}</ul></div>
-                    <div class="text-muted fs-7">Ghi chú tính công: ${d.editReason || '-'}</div>`;
+                renderAttendanceCellDetail(d);
             } catch (err) {
                 bodyEl.innerHTML = `<div class="alert alert-danger">${err.message}</div>`;
             }

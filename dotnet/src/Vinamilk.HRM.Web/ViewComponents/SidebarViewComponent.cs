@@ -58,7 +58,8 @@ public class SidebarViewComponent : ViewComponent
             new("payroll", "Tiền lương", "ti-cash", new List<SidebarMenuItem>
             {
                 new("Bảng lương", "ti-cash", "/Payroll", RequiredPermission: "Payroll.View"),
-                new("Tham số lương & thuế", "ti-adjustments-horizontal", "/Payroll/Parameters", RequiredPermission: "Payroll.View")
+                new("Tham số lương & thuế", "ti-adjustments-horizontal", "/Payroll/Parameters", RequiredPermission: "Payroll.View"),
+                new("Máy tính lương", "ti-calculator", "/Payroll/Calculator", RequiredPermission: "Payroll.View")
             }),
             new("talent", "Phát triển nhân tài", "ti-star", new List<SidebarMenuItem>
             {

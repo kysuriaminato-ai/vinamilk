@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -359,29 +360,7 @@ public sealed class ApplicationDbContextInitializer
             var leaveTypes = BuildDefaultLeaveTypes();
             await _context.LeaveTypes.AddRangeAsync(leaveTypes, cancellationToken);
 
-            var payrollParams = new List<PayrollParameter>
-            {
-                new() { ParamCode = "STATUTORY_BASE_SALARY", ParamName = "Mức lương cơ sở Nhà nước", ParamValue = 2340000m, ValueUnit = "VND", EffectiveFrom = new DateOnly(2024, 7, 1), LegalReference = "Nghị định 73/2024/NĐ-CP" },
-                new() { ParamCode = "SI_MAX_SALARY_CAP", ParamName = "Mức trần tiền lương đóng BHXH/BHYT (20 lần lương cơ sở)", ParamValue = 46800000m, ValueUnit = "VND", EffectiveFrom = new DateOnly(2024, 7, 1), LegalReference = "Luật BHXH & NĐ 73/2024/NĐ-CP" },
-                new() { ParamCode = "TAX_SELF_DEDUCTION", ParamName = "Mức giảm trừ gia cảnh bản thân", ParamValue = 11000000m, ValueUnit = "VND", EffectiveFrom = new DateOnly(2020, 7, 1), LegalReference = "Nghị quyết 954/2020/UBTVQH14" },
-                new() { ParamCode = "TAX_DEPENDENT_DEDUCTION", ParamName = "Mức giảm trừ mỗi người phụ thuộc", ParamValue = 4400000m, ValueUnit = "VND", EffectiveFrom = new DateOnly(2020, 7, 1), LegalReference = "Nghị quyết 954/2020/UBTVQH14" },
-                new() { ParamCode = "SI_EMP_RATE", ParamName = "Tỷ lệ BHXH nhân viên đóng (8%)", ParamValue = 8.0m, ValueUnit = "Percent", EffectiveFrom = new DateOnly(2024, 1, 1) },
-                new() { ParamCode = "HI_EMP_RATE", ParamName = "Tỷ lệ BHYT nhân viên đóng (1.5%)", ParamValue = 1.5m, ValueUnit = "Percent", EffectiveFrom = new DateOnly(2024, 1, 1) },
-                new() { ParamCode = "UI_EMP_RATE", ParamName = "Tỷ lệ BHTN nhân viên đóng (1%)", ParamValue = 1.0m, ValueUnit = "Percent", EffectiveFrom = new DateOnly(2024, 1, 1) }
-            };
-            await _context.PayrollParameters.AddRangeAsync(payrollParams, cancellationToken);
-
-            var taxBrackets = new List<TaxBracket>
-            {
-                new() { BracketLevel = 1, FromIncome = 0m, ToIncome = 5000000m, TaxRatePercent = 5m, QuickSubtractionAmount = 0m, EffectiveFrom = new DateOnly(2020, 1, 1) },
-                new() { BracketLevel = 2, FromIncome = 5000000m, ToIncome = 10000000m, TaxRatePercent = 10m, QuickSubtractionAmount = 250000m, EffectiveFrom = new DateOnly(2020, 1, 1) },
-                new() { BracketLevel = 3, FromIncome = 10000000m, ToIncome = 18000000m, TaxRatePercent = 15m, QuickSubtractionAmount = 750000m, EffectiveFrom = new DateOnly(2020, 1, 1) },
-                new() { BracketLevel = 4, FromIncome = 18000000m, ToIncome = 32000000m, TaxRatePercent = 20m, QuickSubtractionAmount = 1650000m, EffectiveFrom = new DateOnly(2020, 1, 1) },
-                new() { BracketLevel = 5, FromIncome = 32000000m, ToIncome = 52000000m, TaxRatePercent = 25m, QuickSubtractionAmount = 3250000m, EffectiveFrom = new DateOnly(2020, 1, 1) },
-                new() { BracketLevel = 6, FromIncome = 52000000m, ToIncome = 80000000m, TaxRatePercent = 30m, QuickSubtractionAmount = 5850000m, EffectiveFrom = new DateOnly(2020, 1, 1) },
-                new() { BracketLevel = 7, FromIncome = 80000000m, ToIncome = null, TaxRatePercent = 35m, QuickSubtractionAmount = 9850000m, EffectiveFrom = new DateOnly(2020, 1, 1) }
-            };
-            await _context.TaxBrackets.AddRangeAsync(taxBrackets, cancellationToken);
+            await _context.PayrollParameters.AddRangeAsync(BuildDefaultTaxExemptPayrollParameters(), cancellationToken);
 
             var salaryComponents = new List<SalaryComponent>
             {
@@ -607,6 +586,9 @@ public sealed class ApplicationDbContextInitializer
             var orgRegionMap = await _context.OrganizationUnits
                 .AsNoTracking()
                 .ToDictionaryAsync(u => u.Id, u => u.WageRegion, cancellationToken);
+            var compIdsByCode = await _context.SalaryComponents
+                .AsNoTracking()
+                .ToDictionaryAsync(c => c.ComponentCode, c => c.Id, StringComparer.OrdinalIgnoreCase, cancellationToken);
 
             foreach (var sp in samplePayrollSpecs)
             {
@@ -630,7 +612,7 @@ public sealed class ApplicationDbContextInitializer
 
                 var depCount = emp.Dependents.Count(d => d.IsTaxDeductible);
                 var wageRegion = emp.WageRegion ?? (orgRegionMap.TryGetValue(emp.OrganizationUnitId, out var r) ? r : 1);
-                var breakdown = VietnamPayrollEngine.Calculate(new PayrollCalculationInput(
+                var calcInput = new PayrollCalculationInput(
                     sp.BasePay,
                     sp.PosAllow,
                     sp.OtherAllow,
@@ -643,7 +625,12 @@ public sealed class ApplicationDbContextInitializer
                     0m,
                     depCount,
                     emp.IsUnionMember,
-                    wageRegion), seedStatutoryContext);
+                    wageRegion);
+                var breakdown = VietnamPayrollEngine.Calculate(calcInput, seedStatutoryContext);
+                var pitSlices = string.Equals(breakdown.TaxResidencyMode, "ResidentStandard", StringComparison.OrdinalIgnoreCase)
+                    ? VietnamPayrollEngine.CalculateProgressivePitBreakdown(breakdown.AssessableIncome, seedStatutoryContext.PitBrackets)
+                    : new List<PitBracketTaxSliceDto>();
+                var traceSteps = VietnamPayrollEngine.BuildCalculationTrace(calcInput, breakdown, seedStatutoryContext.Parameter, pitSlices);
 
                 var record = new PayrollRecord
                 {
@@ -657,10 +644,11 @@ public sealed class ApplicationDbContextInitializer
                     OtHours150 = sp.OtHours,
                     TotalOtHours = sp.OtHours,
                     ContractBaseSalary = sp.BasePay,
-                    ActualBaseSalary = sp.BasePay,
+                    ActualBaseSalary = breakdown.ActualBaseSalary,
                     PositionAllowance = sp.PosAllow,
                     OtherAllowance = sp.OtherAllow,
                     OvertimePay = breakdown.OvertimePay,
+                    OtNightExtraPay = breakdown.OtNightExtraPay,
                     KpiBonus = sp.KpiBonus,
                     GrossIncome = breakdown.GrossIncome,
                     InsuranceSalaryBase = breakdown.SocialInsuranceBase,
@@ -669,6 +657,7 @@ public sealed class ApplicationDbContextInitializer
                     EmployeeHealthInsurance = breakdown.EmployeeHealthInsurance,
                     EmployeeUnemploymentInsurance = breakdown.EmployeeUnemploymentInsurance,
                     TotalEmployeeInsurance = breakdown.TotalEmployeeInsurance,
+                    EmployeeUnionFee = breakdown.EmployeeUnionFee,
                     CompanySocialInsurance = breakdown.CompanySocialInsurance,
                     CompanyHealthInsurance = breakdown.CompanyHealthInsurance,
                     CompanyUnemploymentInsurance = breakdown.CompanyUnemploymentInsurance,
@@ -682,11 +671,19 @@ public sealed class ApplicationDbContextInitializer
                     TaxableIncome = breakdown.TaxableIncome,
                     AssessableIncome = breakdown.AssessableIncome,
                     PersonalIncomeTax = breakdown.PersonalIncomeTax,
+                    TaxResidencyMode = breakdown.TaxResidencyMode,
+                    UsedCommitment08 = breakdown.UsedCommitment08,
+                    PitBracketsJson = JsonSerializer.Serialize(pitSlices),
+                    CalculationTraceJson = JsonSerializer.Serialize(traceSteps),
                     DisciplineDeduction = 0m,
                     NetSalary = breakdown.NetSalary,
                     PaymentStatus = "Paid",
                     PaidAt = DateTime.UtcNow
                 };
+                foreach (var detail in VietnamPayrollEngine.BuildStandardRecordDetails(breakdown, sp.PosAllow, sp.OtherAllow, sp.KpiBonus, compIdsByCode))
+                {
+                    record.Details.Add(detail);
+                }
                 await _context.PayrollRecords.AddAsync(record, cancellationToken);
             }
 
@@ -794,6 +791,8 @@ public sealed class ApplicationDbContextInitializer
             }
         }
 
+        await EnsureFactoryPolicyGroupAssignedAsync(cancellationToken);
+
         // Bảo đảm sinh ngày nghỉ bù cho các ngày lễ 2026 trùng ngày nghỉ hằng tuần theo từng PolicyGroup (VD: T2-T6: Giỗ Tổ CN 26/4 -> nghỉ bù T2 27/4)
         await AttendancePolicyAndShiftEngine.EnsureCompensatoryHolidaysForYearAsync(_context, 2026, cancellationToken);
 
@@ -835,6 +834,176 @@ public sealed class ApplicationDbContextInitializer
 
         // Idempotent seed cho CL5: Tham số miễn thuế, Thành phần lương công thức NCalc, 3 Mẫu cấu trúc lương & Hồ sơ lương nhân viên
         await EnsureSalaryStructureSeededAsync(cancellationToken);
+
+        // Idempotent cleanup legacy TAX_SELF_DEDUCTION & đồng bộ PAY-2026-08 theo tham số hiệu lực 31/08/2026 (LCS 2,53M / 15,5M / 6,2M / 5 bậc)
+        await EnsureSamplePayroll202608RepairedAsync(cancellationToken);
+    }
+
+    public async Task EnsureSamplePayroll202608RepairedAsync(CancellationToken cancellationToken = default)
+    {
+        // 1. Dọn dẹp tham số cũ TAX_SELF_DEDUCTION / TAX_DEPENDENT_DEDUCTION trong PayrollParameters (đã thay bằng PayrollStatutoryParameters)
+        var legacyParams = await _context.PayrollParameters
+            .Where(p => p.ParamCode == "TAX_SELF_DEDUCTION" || p.ParamCode == "TAX_DEPENDENT_DEDUCTION")
+            .ToListAsync(cancellationToken);
+        if (legacyParams.Count > 0)
+        {
+            _context.PayrollParameters.RemoveRange(legacyParams);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        // 2. Đảm bảo PayrollStatutoryParameters có giai đoạn 2026-07-01 (LCS 2.530.000, Giảm trừ 15.5M/6.2M) & Biểu thuế 5 bậc 2026
+        var july2026 = new DateOnly(2026, 7, 1);
+        if (!await _context.PayrollStatutoryParameters.AnyAsync(p => p.EffectiveFrom == july2026, cancellationToken))
+        {
+            var defJuly = BuildDefaultStatutoryParameters().FirstOrDefault(p => p.EffectiveFrom == july2026);
+            if (defJuly != null)
+            {
+                await _context.PayrollStatutoryParameters.AddAsync(defJuly, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
+        var jan2026 = new DateOnly(2026, 1, 1);
+        if (!await _context.PitBrackets.AnyAsync(b => b.EffectiveFrom >= jan2026, cancellationToken))
+        {
+            var brackets2026 = BuildDefaultPitBrackets().Where(b => b.EffectiveFrom >= jan2026).ToList();
+            if (brackets2026.Count > 0)
+            {
+                await _context.PitBrackets.AddRangeAsync(brackets2026, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
+
+        // 3. Kiểm tra & sửa kỳ lương mẫu PAY-2026-08 (nếu thiếu chi tiết, thiếu trace 15 bước, TotalCompanyCost = 0 hoặc còn giảm trừ 11M)
+        var period = await _context.PayrollPeriods
+            .FirstOrDefaultAsync(p => p.PeriodCode == "PAY-2026-08", cancellationToken);
+        if (period is null)
+            return;
+
+        var records = await _context.PayrollRecords
+            .Include(r => r.Details)
+            .Include(r => r.Employee)
+                .ThenInclude(e => e.Dependents)
+            .Include(r => r.OrganizationUnit)
+            .Where(r => r.PayrollPeriodId == period.Id)
+            .ToListAsync(cancellationToken);
+
+        if (records.Count == 0)
+            return;
+
+        static int CountSteps(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return 0;
+            try
+            {
+                return JsonSerializer.Deserialize<List<CalculationTraceStepDto>>(json)?.Count ?? 0;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        bool needsRepair = records.Any(r =>
+            r.TotalCompanyCost <= 0m
+            || r.SelfDeductionAmount == 11_000_000m
+            || CountSteps(r.CalculationTraceJson) < 15
+            || string.IsNullOrWhiteSpace(r.PitBracketsJson))
+            || !await _context.PayrollRecordDetails.AnyAsync(d => d.PayrollRecord.PayrollPeriodId == period.Id, cancellationToken);
+
+        if (!needsRepair)
+            return;
+
+        var statutoryContext = await VietnamPayrollEngine.ResolveStatutoryContextAsync(_context, period.EndDate, cancellationToken);
+        var compIdsByCode = await _context.SalaryComponents
+            .AsNoTracking()
+            .ToDictionaryAsync(c => c.ComponentCode, c => c.Id, StringComparer.OrdinalIgnoreCase, cancellationToken);
+        var recordIdsWithDetails = await _context.PayrollRecordDetails
+            .AsNoTracking()
+            .Where(d => d.PayrollRecord.PayrollPeriodId == period.Id)
+            .Select(d => d.PayrollRecordId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        var hasDetailsSet = recordIdsWithDetails.ToHashSet();
+
+        foreach (var rec in records)
+        {
+            var depCount = rec.Employee.Dependents.Count(d => d.IsTaxDeductible);
+            var wageRegion = rec.Employee.WageRegion ?? rec.OrganizationUnit.WageRegion;
+            var stdDays = rec.StandardWorkdays > 0m ? rec.StandardWorkdays : period.StandardWorkdays;
+
+            var calcInput = new PayrollCalculationInput(
+                ContractBaseSalary: rec.ContractBaseSalary,
+                PositionAllowance: rec.PositionAllowance,
+                OtherAllowance: rec.OtherAllowance,
+                StandardWorkdays: stdDays,
+                PayableWorkdays: rec.PayableWorkdays,
+                OtHours150: rec.OtHours150,
+                OtHours200: rec.OtHours200,
+                OtHours300: rec.OtHours300,
+                KpiBonus: rec.KpiBonus,
+                DisciplineDeduction: rec.DisciplineDeduction,
+                DependentCount: depCount,
+                IsUnionMember: rec.Employee.IsUnionMember,
+                WageRegion: wageRegion > 0 ? wageRegion : 1,
+                UnusedLeavePayout: rec.UnusedLeavePayout,
+                CommissionBonus: rec.CommissionBonus,
+                ThirteenthMonthBonus: rec.ThirteenthMonthBonus,
+                RetroEarningAmount: rec.RetroEarningAmount,
+                RetroDeductionAmount: rec.RetroDeductionAmount,
+                SalaryAdvanceDeduction: rec.SalaryAdvanceDeduction,
+                LoanInstallmentDeduction: rec.LoanInstallmentDeduction,
+                TaxResidencyMode: string.IsNullOrWhiteSpace(rec.TaxResidencyMode) ? "ResidentStandard" : rec.TaxResidencyMode,
+                HasPitCommitment08: rec.UsedCommitment08);
+
+            var breakdown = VietnamPayrollEngine.Calculate(calcInput, statutoryContext);
+            var pitSlices = string.Equals(breakdown.TaxResidencyMode, "ResidentStandard", StringComparison.OrdinalIgnoreCase)
+                ? VietnamPayrollEngine.CalculateProgressivePitBreakdown(breakdown.AssessableIncome, statutoryContext.PitBrackets)
+                : new List<PitBracketTaxSliceDto>();
+            var traceSteps = VietnamPayrollEngine.BuildCalculationTrace(calcInput, breakdown, statutoryContext.Parameter, pitSlices);
+
+            rec.ActualBaseSalary = breakdown.ActualBaseSalary;
+            rec.OvertimePay = breakdown.OvertimePay;
+            rec.OtNightExtraPay = breakdown.OtNightExtraPay;
+            rec.OtTaxExemptAmount = breakdown.OtTaxExemptAmount;
+            rec.GrossIncome = breakdown.GrossIncome;
+            rec.InsuranceSalaryBase = breakdown.SocialInsuranceBase;
+            rec.UnemploymentInsuranceBase = breakdown.UnemploymentInsuranceBase;
+            rec.EmployeeSocialInsurance = breakdown.EmployeeSocialInsurance;
+            rec.EmployeeHealthInsurance = breakdown.EmployeeHealthInsurance;
+            rec.EmployeeUnemploymentInsurance = breakdown.EmployeeUnemploymentInsurance;
+            rec.TotalEmployeeInsurance = breakdown.TotalEmployeeInsurance;
+            rec.EmployeeUnionFee = breakdown.EmployeeUnionFee;
+            rec.CompanySocialInsurance = breakdown.CompanySocialInsurance;
+            rec.CompanyHealthInsurance = breakdown.CompanyHealthInsurance;
+            rec.CompanyUnemploymentInsurance = breakdown.CompanyUnemploymentInsurance;
+            rec.CompanyOccupationalAccidentInsurance = breakdown.CompanyOccupationalAccidentInsurance;
+            rec.CompanyUnionFee = breakdown.CompanyUnionFee;
+            rec.TotalCompanyCost = breakdown.TotalCompanyCost;
+            rec.DependentCount = depCount;
+            rec.SelfDeductionAmount = breakdown.SelfDeductionAmount;
+            rec.DependentDeductionAmount = breakdown.DependentDeductionAmount;
+            rec.TaxableIncome = breakdown.TaxableIncome;
+            rec.AssessableIncome = breakdown.AssessableIncome;
+            rec.PersonalIncomeTax = breakdown.PersonalIncomeTax;
+            rec.TaxResidencyMode = breakdown.TaxResidencyMode;
+            rec.UsedCommitment08 = breakdown.UsedCommitment08;
+            rec.PitBracketsJson = JsonSerializer.Serialize(pitSlices);
+            rec.CalculationTraceJson = JsonSerializer.Serialize(traceSteps);
+            rec.NetSalary = breakdown.NetSalary;
+
+            if (!hasDetailsSet.Contains(rec.Id))
+            {
+                var bonusTotal = rec.KpiBonus + rec.CommissionBonus + rec.ThirteenthMonthBonus + rec.UnusedLeavePayout + rec.RetroEarningAmount;
+                foreach (var detail in VietnamPayrollEngine.BuildStandardRecordDetails(breakdown, rec.PositionAllowance, rec.OtherAllowance, bonusTotal, compIdsByCode))
+                {
+                    detail.PayrollRecordId = rec.Id;
+                    await _context.PayrollRecordDetails.AddAsync(detail, cancellationToken);
+                }
+            }
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     private async Task EnsureSalaryStructureSeededAsync(CancellationToken cancellationToken)
@@ -1256,6 +1425,91 @@ public sealed class ApplicationDbContextInitializer
         });
         group.PayrollPolicies.Add(BuildDefaultPayrollPolicy(0));
         return group;
+    }
+
+    public static PolicyGroup BuildFactoryMonSatPolicyGroup()
+    {
+        var group = new PolicyGroup
+        {
+            PolicyCode = "FACTORY_MON_SAT",
+            PolicyName = "Chính sách Khối Nhà máy & Trang trại (T2–T7)",
+            IsCompanyDefault = false,
+            IsActive = true,
+            Description = "Áp dụng cho Nhà máy và Trang trại bò sữa làm việc Thứ 2 – Thứ 7 (chủ nhật OFF)"
+        };
+        group.AttendancePolicies.Add(new AttendancePolicy
+        {
+            GraceLateMinutes = 5,
+            GraceEarlyMinutes = 5,
+            RoundingIntervalMinutes = 5,
+            RoundingMode = "Nearest",
+            HalfDayLateThresholdMinutes = 60,
+            ZeroDayLateThresholdMinutes = 240,
+            MaxMissedPunchExplanationsPerMonth = 3,
+            MissedPunchOverQuotaAction = "FixedFine",
+            MissedPunchPenaltyAmount = 100000m,
+            RequireApprovedOvertimeRequest = true,
+            WeeklyWorkdaysMask = "Mon,Tue,Wed,Thu,Fri,Sat",
+            AllowPayableWorkdaysExceedStandard = false,
+            EmployeeReviewWindowDays = 3,
+            AnnualLeaveCarryForwardCapDays = 5m,
+            CarryForwardExpiryMonth = 3,
+            CarryForwardExpiryDay = 31,
+            AllowAdvanceAnnualLeave = false,
+            MaxAdvanceAnnualLeaveDays = 3m,
+            MidMonthHireCutoffDay = 15,
+            OtReconciliationMode = "MinOfApprovedAndActual",
+            OvertimeWarningThresholdPercent = 85,
+            BlockOvertimeWhenExceedingLimit = true,
+            AllowCompensatoryLeaveForOt = true,
+            UseSpecialIndustry300OtLimit = false
+        });
+        group.PayrollPolicies.Add(BuildDefaultPayrollPolicy(0));
+        return group;
+    }
+
+    private async Task EnsureFactoryPolicyGroupAssignedAsync(CancellationToken cancellationToken)
+    {
+        var factoryGroup = await _context.PolicyGroups
+            .Include(g => g.AttendancePolicies)
+            .FirstOrDefaultAsync(g => g.PolicyCode == "FACTORY_MON_SAT", cancellationToken);
+
+        if (factoryGroup == null)
+        {
+            factoryGroup = BuildFactoryMonSatPolicyGroup();
+            await _context.PolicyGroups.AddAsync(factoryGroup, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        var productionUnitIds = await _context.OrganizationUnits
+            .AsNoTracking()
+            .Where(u => u.UnitType == "Factory" || u.UnitType == "Farm")
+            .Select(u => u.Id)
+            .ToListAsync(cancellationToken);
+
+        if (productionUnitIds.Count > 0)
+        {
+            var assignedUnitIds = await _context.PolicyGroupAssignments
+                .AsNoTracking()
+                .Where(a => a.OrganizationUnitId.HasValue && a.IsActive)
+                .Select(a => a.OrganizationUnitId!.Value)
+                .ToListAsync(cancellationToken);
+
+            var missingUnitIds = productionUnitIds.Except(assignedUnitIds).ToList();
+            if (missingUnitIds.Count > 0)
+            {
+                await _context.PolicyGroupAssignments.AddRangeAsync(
+                    missingUnitIds.Select(uid => new PolicyGroupAssignment
+                    {
+                        PolicyGroupId = factoryGroup.Id,
+                        OrganizationUnitId = uid,
+                        EffectiveFrom = new DateOnly(2024, 1, 1),
+                        IsActive = true
+                    }),
+                    cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+        }
     }
 
     public static PayrollPolicy BuildDefaultPayrollPolicy(int policyGroupId) => new()

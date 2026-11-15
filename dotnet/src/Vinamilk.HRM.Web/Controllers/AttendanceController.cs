@@ -397,6 +397,98 @@ public class AttendanceController : Controller
         return detail == null ? NotFound() : Json(detail);
     }
 
+    public record SaveCellPunchLogAjaxRequest(
+        long? LogId,
+        int EmployeeId,
+        string WorkDate,
+        string? PunchTime,
+        string PunchType,
+        string Reason,
+        bool DeleteLog = false);
+
+    [HttpPost]
+    public async Task<IActionResult> SaveCellPunchLogAjax(
+        [FromBody] SaveCellPunchLogAjaxRequest req,
+        CancellationToken cancellationToken = default)
+    {
+        if (!DateOnly.TryParse(req.WorkDate, out var workDate))
+            return BadRequest(new { success = false, message = "Ngày chấm công không hợp lệ." });
+
+        TimeOnly? parsedTime = null;
+        if (!req.DeleteLog)
+        {
+            if (!TimeOnly.TryParse(req.PunchTime, out var t))
+                return BadRequest(new { success = false, message = "Giờ chấm công không hợp lệ (HH:mm)." });
+            parsedTime = t;
+        }
+
+        try
+        {
+            await _sender.Send(new SaveCellAttendancePunchLogCommand(
+                req.LogId, req.EmployeeId, workDate, parsedTime, req.PunchType, req.Reason, req.DeleteLog), cancellationToken);
+            var detail = await _sender.Send(new GetAttendanceCellDetailsQuery(req.EmployeeId, workDate), cancellationToken);
+            return Ok(new { success = true, message = "Đã cập nhật log và tính lại công ngày thành công.", detail });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+    }
+
+    public record UpdateDaySymbolAjaxRequest(
+        int EmployeeId,
+        string WorkDate,
+        string AttendanceSymbol,
+        string Reason);
+
+    [HttpPost]
+    public async Task<IActionResult> UpdateDaySymbolAjax(
+        [FromBody] UpdateDaySymbolAjaxRequest req,
+        CancellationToken cancellationToken = default)
+    {
+        if (!DateOnly.TryParse(req.WorkDate, out var workDate))
+            return BadRequest(new { success = false, message = "Ngày chấm công không hợp lệ." });
+
+        try
+        {
+            await _sender.Send(new UpdateAttendanceDaySymbolCommand(
+                req.EmployeeId, workDate, req.AttendanceSymbol, req.Reason), cancellationToken);
+            var detail = await _sender.Send(new GetAttendanceCellDetailsQuery(req.EmployeeId, workDate), cancellationToken);
+            return Ok(new { success = true, message = $"Đã cập nhật ký hiệu '{detail?.StatusCode}' và tính lại tổng hợp tháng.", detail });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BulkAssignSymbol(
+        int month,
+        int year,
+        int? unitId,
+        int[] employeeIds,
+        DateOnly fromDate,
+        DateOnly toDate,
+        string attendanceSymbol,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var updated = await _sender.Send(new BulkSetAttendanceSymbolCommand(
+                employeeIds ?? Array.Empty<int>(), fromDate, toDate, attendanceSymbol, reason), cancellationToken);
+            TempData["SuccessMessage"] = $"Đã nhập nhanh ký hiệu '{attendanceSymbol}' cho {updated} lượt ngày công ({fromDate:dd/MM}–{toDate:dd/MM/yyyy}) và lưu AuditLog.";
+        }
+        catch (Exception ex)
+        {
+            TempData["ErrorMessage"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index), new { month, year, unitId, tab = "matrix" });
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> StartRecalculationBatch(
