@@ -1,0 +1,266 @@
+@model IReadOnlyList<Vinamilk.HRM.Domain.Entities.SystemEntities.AuditLog>
+@{
+    ViewData["Title"] = "Nhật ký Kiểm toán (AuditLog) & Truy vết Dữ liệu (JSON Diff)";
+    var keyword = (string)(ViewBag.Keyword ?? "");
+    var moduleName = (string)(ViewBag.ModuleName ?? "");
+    var actionType = (string)(ViewBag.ActionType ?? "");
+}
+
+<!-- TOP NAVIGATION TABS FOR SECURITY SUITE -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Security/RbacMatrix" class="btn btn-outline-primary">
+            <i class="ti ti-shield-lock me-1"></i>1. Ma trận RBAC & Data Scope
+        </a>
+        <a href="/Security/Sessions" class="btn btn-outline-primary">
+            <i class="ti ti-devices me-1"></i>2. Quản lý Phiên & Mã hóa PII
+        </a>
+        <a href="/Security/AuditLogs" class="btn vnm-btn-primary">
+            <i class="ti ti-history me-1"></i>3. Nhật ký Kiểm toán (AuditLog JSON Diff)
+        </a>
+        <a href="/Auth/Setup2FA" class="btn btn-outline-secondary">
+            <i class="ti ti-device-mobile-lock me-1"></i>4. Cấu hình 2FA TOTP
+        </a>
+    </div>
+
+    <form asp-controller="Security" asp-action="CreateSampleAuditDiff" method="post" class="d-inline">
+        @Html.AntiForgeryToken()
+        <button type="submit" class="btn btn-success fw-semibold">
+            <i class="ti ti-bolt me-1"></i>Tạo Thay đổi Thực tế & Ghi JSON Diff Mẫu
+        </button>
+    </form>
+</div>
+
+@if (TempData["SecuritySuccess"] != null)
+{
+    <div class="alert alert-success border-0 shadow-sm d-flex align-items-center gap-2 mb-4">
+        <i class="ti ti-circle-check fs-4"></i>
+        <div class="fw-medium">@TempData["SecuritySuccess"]</div>
+    </div>
+}
+
+<!-- FILTER BAR -->
+<div class="vnm-card p-3 mb-4">
+    <form method="get" action="/Security/AuditLogs" class="row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label fw-semibold fs-7 text-uppercase text-muted mb-1">Từ khóa (Tài khoản, Bảng, ID, IP)</label>
+            <div class="input-group">
+                <span class="input-group-text bg-transparent"><i class="ti ti-search text-primary"></i></span>
+                <input type="text"
+                       name="keyword"
+                       value="@keyword"
+                       class="form-control"
+                       placeholder="VD: admin, Employee, VNM-0001, 127.0.0.1..." />
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label fw-semibold fs-7 text-uppercase text-muted mb-1">Phân hệ (Module)</label>
+            <select name="moduleName" class="form-select">
+                <option value="">-- Tất cả phân hệ --</option>
+                <option value="Identity" selected="@(moduleName == "Identity")">Identity (Định danh & RBAC)</option>
+                <option value="CoreHR" selected="@(moduleName == "CoreHR")">CoreHR (Hồ sơ & Tổ chức)</option>
+                <option value="AttendanceLeave" selected="@(moduleName == "AttendanceLeave")">AttendanceLeave (Chấm công & Phép)</option>
+                <option value="Payroll" selected="@(moduleName == "Payroll")">Payroll (Tiền lương & Thuế)</option>
+                <option value="Talent" selected="@(moduleName == "Talent")">Talent (Tuyển dụng, Đào tạo, KPI)</option>
+                <option value="System" selected="@(moduleName == "System")">System (Hệ thống)</option>
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label class="form-label fw-semibold fs-7 text-uppercase text-muted mb-1">Loại thao tác (Action)</label>
+            <select name="actionType" class="form-select">
+                <option value="">-- Tất cả thao tác --</option>
+                <option value="Create" selected="@(actionType == "Create")">Create (Thêm mới)</option>
+                <option value="Update" selected="@(actionType == "Update")">Update (Cập nhật)</option>
+                <option value="Delete" selected="@(actionType == "Delete")">Delete (Xóa mềm)</option>
+                <option value="LoginSuccess" selected="@(actionType == "LoginSuccess")">LoginSuccess (Đăng nhập)</option>
+                <option value="LoginFailed" selected="@(actionType == "LoginFailed")">LoginFailed (Sai mật khẩu)</option>
+                <option value="AccountLocked" selected="@(actionType == "AccountLocked")">AccountLocked (Khóa tài khoản)</option>
+                <option value="RbacMatrixUpdated" selected="@(actionType == "RbacMatrixUpdated")">RbacMatrixUpdated (Sửa ma trận quyền)</option>
+                <option value="SessionRevoked" selected="@(actionType == "SessionRevoked")">SessionRevoked (Thu hồi phiên)</option>
+                <option value="PiiDecrypted" selected="@(actionType == "PiiDecrypted")">PiiDecrypted (Giải mã CCCD/TK)</option>
+            </select>
+        </div>
+
+        <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn vnm-btn-primary flex-grow-1">
+                <i class="ti ti-filter me-1"></i>Lọc
+            </button>
+            <a href="/Security/AuditLogs" class="btn btn-outline-secondary" title="Xóa bộ lọc">
+                <i class="ti ti-refresh"></i>
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- AUDIT LOGS TABLE -->
+<div class="vnm-card p-4">
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+        <div>
+            <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                <i class="ti ti-file-analytics text-primary me-2"></i>Danh sách Nhật ký Kiểm toán (`system.AuditLogs` — @Model.Count bản ghi)
+            </h2>
+            <p class="text-secondary fs-6 mb-0">
+                Ghi tự động qua <code>AuditableEntityInterceptor</code>: Ai thực hiện • Lúc nào • Địa chỉ IP • Thao tác • Dữ liệu Cũ vs Mới (JSON Diff).
+            </p>
+        </div>
+    </div>
+
+    <div class="vnm-table-wrapper">
+        <table class="vnm-table vnm-table-mobile-cards">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Thời gian</th>
+                    <th>Người thực hiện</th>
+                    <th>Địa chỉ IP</th>
+                    <th>Phân hệ</th>
+                    <th>Thao tác</th>
+                    <th>Đối tượng (`Entity`)</th>
+                    <th>Cột thay đổi</th>
+                    <th class="text-end">Chi tiết Diff</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var log in Model)
+                {
+                    var badgeStatus = log.ActionType switch
+                    {
+                        "Create" or "LoginSuccess" => "success",
+                        "Update" or "RbacMatrixUpdated" or "UserAccessUpdated" => "info",
+                        "Delete" or "LoginFailed" or "AccountLocked" or "SessionRevoked" => "danger",
+                        _ => "warning"
+                    };
+
+                    <tr>
+                        <td data-label="ID" class="font-monospace text-muted">#@log.Id</td>
+                        <td data-label="Thời gian" class="font-monospace fs-7">
+                            @log.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
+                        </td>
+                        <td data-label="Người thực hiện">
+                            <span class="fw-bold font-monospace text-primary">@log.Username</span>
+                        </td>
+                        <td data-label="Địa chỉ IP" class="font-monospace fs-7">@(log.IpAddress ?? "127.0.0.1")</td>
+                        <td data-label="Phân hệ">
+                            <span class="badge bg-secondary-subtle text-secondary">@log.ModuleName</span>
+                        </td>
+                        <td data-label="Thao tác">
+                            <vnm-status-badge status="@badgeStatus" text="@log.ActionType" />
+                        </td>
+                        <td data-label="Đối tượng">
+                            <span class="fw-semibold">@log.EntityName</span>
+                            <span class="badge bg-primary-subtle text-primary font-monospace ms-1">@log.EntityId</span>
+                        </td>
+                        <td data-label="Cột thay đổi" class="font-monospace fs-7 text-secondary">
+                            @(string.IsNullOrWhiteSpace(log.AffectedColumns) ? "-" : log.AffectedColumns)
+                        </td>
+                        <td data-label="Chi tiết Diff" class="text-end">
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-primary"
+                                    data-old-json="@(log.OldValuesJson ?? "{}")"
+                                    data-new-json="@(log.NewValuesJson ?? "{}")"
+                                    data-entity="@log.EntityName (@log.EntityId)"
+                                    data-action="@log.ActionType bởi @log.Username lúc @log.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")"
+                                    onclick="openAuditDiffModal(this)">
+                                <i class="ti ti-git-compare me-1"></i>JSON Diff
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- JSON DIFF MODAL -->
+<div class="modal fade" id="auditDiffModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: var(--vnm-radius-lg);">
+            <div class="modal-header border-bottom">
+                <div>
+                    <h5 class="modal-title fw-bold" id="diffModalTitle">So sánh Dữ liệu Cũ vs Mới (JSON Diff)</h5>
+                    <div class="text-secondary fs-7" id="diffModalSubtitle"></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <div class="vnm-table-wrapper mb-3">
+                    <table class="vnm-table">
+                        <thead>
+                            <tr>
+                                <th>Trường dữ liệu (Field)</th>
+                                <th class="text-danger">Giá trị Cũ (`OldValuesJson`)</th>
+                                <th class="text-success">Giá trị Mới (`NewValuesJson`)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="diffComparisonTableBody">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="text-uppercase text-muted fw-bold fs-7 mb-1">Raw OldValuesJson</div>
+                        <pre id="rawOldJson" class="p-3 rounded-3 border font-monospace fs-7 mb-0" style="background: var(--vnm-bg-subtle); max-height: 200px; overflow: auto;"></pre>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-uppercase text-muted fw-bold fs-7 mb-1">Raw NewValuesJson</div>
+                        <pre id="rawNewJson" class="p-3 rounded-3 border font-monospace fs-7 mb-0" style="background: var(--vnm-bg-subtle); max-height: 200px; overflow: auto;"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openAuditDiffModal(btn) {
+            const oldRaw = btn.getAttribute('data-old-json') || '{}';
+            const newRaw = btn.getAttribute('data-new-json') || '{}';
+            const entity = btn.getAttribute('data-entity') || '';
+            const action = btn.getAttribute('data-action') || '';
+
+            document.getElementById('diffModalTitle').textContent = 'JSON Diff — ' + entity;
+            document.getElementById('diffModalSubtitle').textContent = action;
+
+            let oldObj = {};
+            let newObj = {};
+            try { oldObj = JSON.parse(oldRaw); } catch (e) { }
+            try { newObj = JSON.parse(newRaw); } catch (e) { }
+
+            document.getElementById('rawOldJson').textContent = JSON.stringify(oldObj, null, 2);
+            document.getElementById('rawNewJson').textContent = JSON.stringify(newObj, null, 2);
+
+            const allKeys = Array.from(new Set([...Object.keys(oldObj), ...Object.keys(newObj)]));
+            const tbody = document.getElementById('diffComparisonTableBody');
+            tbody.innerHTML = '';
+
+            if (allKeys.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Không có dữ liệu trường thay đổi</td></tr>';
+            } else {
+                allKeys.forEach(k => {
+                    const vOld = oldObj[k] !== undefined ? JSON.stringify(oldObj[k]) : '(trống)';
+                    const vNew = newObj[k] !== undefined ? JSON.stringify(newObj[k]) : '(trống)';
+                    const changed = vOld !== vNew;
+
+                    const tr = document.createElement('tr');
+                    if (changed) {
+                        tr.style.background = 'var(--vnm-warning-bg)';
+                    }
+                    tr.innerHTML = `
+                        <td class="fw-bold font-monospace">${VnmUI.escapeHtml(k)}</td>
+                        <td class="font-monospace text-danger">${VnmUI.escapeHtml(vOld)}</td>
+                        <td class="font-monospace text-success fw-bold">${VnmUI.escapeHtml(vNew)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            const modal = new bootstrap.Modal(document.getElementById('auditDiffModal'));
+            modal.show();
+        }
+    </script>
+}
+

@@ -1,0 +1,165 @@
+using Vinamilk.HRM.Domain.Common;
+using Vinamilk.HRM.Domain.Entities.Core;
+using Vinamilk.HRM.Domain.Entities.Time;
+
+namespace Vinamilk.HRM.Domain.Entities.Payroll;
+
+public class PitBracket : BaseAuditableEntity
+{
+    public int BracketLevel { get; set; }
+    public decimal LowerBound { get; set; }
+    public decimal? UpperBound { get; set; }
+    public decimal TaxRate { get; set; } // Thuế suất dạng thập phân (0.05 = 5%)
+    public DateOnly EffectiveFrom { get; set; }
+    public DateOnly? EffectiveTo { get; set; }
+    public string? LegalReference { get; set; }
+}
+
+public class PayrollStatutoryParameter : BaseAuditableEntity
+{
+    public DateOnly EffectiveFrom { get; set; }
+    public DateOnly? EffectiveTo { get; set; }
+    public string? LegalReference { get; set; }
+    public string? Notes { get; set; }
+    public decimal StatutoryBaseSalary { get; set; } // Lương cơ sở Nhà nước
+    public decimal MinWageRegion1 { get; set; }
+    public decimal MinWageRegion2 { get; set; }
+    public decimal MinWageRegion3 { get; set; }
+    public decimal MinWageRegion4 { get; set; }
+    public decimal SocialInsuranceCapMultiplier { get; set; } = 20m;
+    public decimal UnemploymentInsuranceCapMultiplier { get; set; } = 20m;
+    public decimal EmployeeSiRate { get; set; } = 0.08m;
+    public decimal EmployeeHiRate { get; set; } = 0.015m;
+    public decimal EmployeeUiRate { get; set; } = 0.01m;
+    public decimal CompanySiRate { get; set; } = 0.175m;
+    public decimal CompanyHiRate { get; set; } = 0.03m;
+    public decimal CompanyUiRate { get; set; } = 0.01m;
+    public decimal CompanyUnionFeeRate { get; set; } = 0.02m;
+    public decimal SelfDeduction { get; set; }
+    public decimal DependentDeduction { get; set; }
+
+    public decimal GetRegionalMinWage(int wageRegion) => wageRegion switch
+    {
+        1 => MinWageRegion1,
+        2 => MinWageRegion2,
+        3 => MinWageRegion3,
+        4 => MinWageRegion4,
+        _ => throw new ArgumentOutOfRangeException(nameof(wageRegion), $"Vùng lương '{wageRegion}' không hợp lệ (chỉ hỗ trợ 1..4).")
+    };
+}
+
+public class PayrollParameter : BaseAuditableEntity
+{
+    public string ParamCode { get; set; } = string.Empty;
+    public string ParamName { get; set; } = string.Empty;
+    public decimal ParamValue { get; set; }
+    public string ValueUnit { get; set; } = "VND";
+    public DateOnly EffectiveFrom { get; set; }
+    public DateOnly? EffectiveTo { get; set; }
+    public string? LegalReference { get; set; }
+}
+
+public class TaxBracket : BaseAuditableEntity
+{
+    public int BracketLevel { get; set; }
+    public decimal FromIncome { get; set; }
+    public decimal? ToIncome { get; set; }
+    public decimal TaxRatePercent { get; set; }
+    public decimal QuickSubtractionAmount { get; set; }
+    public DateOnly EffectiveFrom { get; set; }
+}
+
+public class SalaryComponent : BaseAuditableEntity
+{
+    public string ComponentCode { get; set; } = string.Empty;
+    public string ComponentName { get; set; } = string.Empty;
+    public string ComponentType { get; set; } = "Earning";
+    public bool IsTaxable { get; set; } = true;
+    public decimal TaxExemptLimit { get; set; } = 0m;
+    public bool IsSocialInsuranceBase { get; set; } = false;
+    public string? FormulaExpression { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsActive { get; set; } = true;
+
+    public ICollection<PayrollRecordDetail> RecordDetails { get; set; } = new List<PayrollRecordDetail>();
+}
+
+public class PayrollPeriod : BaseAuditableEntity
+{
+    public string PeriodCode { get; set; } = string.Empty;
+    public int Month { get; set; }
+    public int Year { get; set; }
+    public string PeriodTitle { get; set; } = string.Empty;
+    public DateOnly StartDate { get; set; }
+    public DateOnly EndDate { get; set; }
+    public decimal StandardWorkdays { get; set; } = 26m;
+    public string Status { get; set; } = "Draft";
+    public int? CalculatedByUserId { get; set; }
+    public DateTime? CalculatedAt { get; set; }
+    public int? ApprovedByUserId { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public bool IsLocked { get; set; } = false;
+    public DateTime? PayslipSentAt { get; set; }
+
+    public ICollection<PayrollRecord> PayrollRecords { get; set; } = new List<PayrollRecord>();
+}
+
+public class PayrollRecord : BaseLongAuditableEntity
+{
+    public int PayrollPeriodId { get; set; }
+    public int EmployeeId { get; set; }
+    public int OrganizationUnitId { get; set; }
+    public int PositionId { get; set; }
+    public int? MonthlyAttendanceSummaryId { get; set; }
+    public decimal StandardWorkdays { get; set; } = 26m;
+    public decimal PayableWorkdays { get; set; }
+    public decimal TotalOtHours { get; set; }
+    public decimal ContractBaseSalary { get; set; }
+    public decimal ActualBaseSalary { get; set; }
+    public decimal PositionAllowance { get; set; }
+    public decimal OtherAllowance { get; set; }
+    public decimal OvertimePay { get; set; }
+    public decimal KpiBonus { get; set; }
+    public decimal GrossIncome { get; set; }
+    public decimal InsuranceSalaryBase { get; set; }
+    public decimal EmployeeSocialInsurance { get; set; }
+    public decimal EmployeeHealthInsurance { get; set; }
+    public decimal EmployeeUnemploymentInsurance { get; set; }
+    public decimal TotalEmployeeInsurance { get; set; }
+    public decimal CompanySocialInsurance { get; set; }
+    public decimal CompanyHealthInsurance { get; set; }
+    public decimal CompanyUnemploymentInsurance { get; set; }
+    public decimal CompanyUnionFee { get; set; }
+    public int DependentCount { get; set; }
+    public decimal SelfDeductionAmount { get; set; }
+    public decimal DependentDeductionAmount { get; set; }
+    public decimal TaxableIncome { get; set; }
+    public decimal AssessableIncome { get; set; }
+    public decimal PersonalIncomeTax { get; set; }
+    public decimal DisciplineDeduction { get; set; }
+    public decimal NetSalary { get; set; }
+    public string PaymentStatus { get; set; } = "Paid";
+    public DateTime? PaidAt { get; set; }
+    public string? Notes { get; set; }
+
+    public PayrollPeriod PayrollPeriod { get; set; } = null!;
+    public Employee Employee { get; set; } = null!;
+    public OrganizationUnit OrganizationUnit { get; set; } = null!;
+    public Position Position { get; set; } = null!;
+    public MonthlyAttendanceSummary? MonthlyAttendanceSummary { get; set; }
+    public ICollection<PayrollRecordDetail> Details { get; set; } = new List<PayrollRecordDetail>();
+}
+
+public class PayrollRecordDetail : BaseLongAuditableEntity
+{
+    public long PayrollRecordId { get; set; }
+    public int SalaryComponentId { get; set; }
+    public string ComponentCode { get; set; } = string.Empty;
+    public string ComponentName { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string? CalculationNote { get; set; }
+
+    public PayrollRecord PayrollRecord { get; set; } = null!;
+    public SalaryComponent SalaryComponent { get; set; } = null!;
+}
+

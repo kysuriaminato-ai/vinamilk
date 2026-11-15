@@ -1,0 +1,82 @@
+@model Vinamilk.HRM.Domain.Entities.Core.LaborContract
+@{
+    Layout = "~/Views/Shared/_LayoutPrint.cshtml";
+    var e = Model.Employee;
+}
+
+<!-- QUỐC HIỆU & TIÊU NGỮ -->
+<div class="vnm-print-header-grid">
+    <div>
+        <div class="vnm-print-org">CÔNG TY CỔ PHẦN SỮA VIỆT NAM</div>
+        <div class="fw-bold">(VINAMILK)</div>
+        <div class="mt-1">Số: <strong>@Model.ContractNumber</strong></div>
+    </div>
+    <div>
+        <div class="vnm-print-nation">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+        <div class="vnm-print-motto">Độc lập - Tự do - Hạnh phúc</div>
+        <div class="mt-1 fst-italic">TP. Hồ Chí Minh, ngày @Model.SignDate.Day tháng @Model.SignDate.Month năm @Model.SignDate.Year</div>
+    </div>
+</div>
+
+<div class="text-center my-4">
+    <h1 class="fw-bold mb-1" style="font-size: 16pt;">HỢP ĐỒNG LAO ĐỘNG</h1>
+    <div class="fst-italic">(Ban hành theo Bộ luật Lao động nước CHXHCN Việt Nam năm 2019)</div>
+</div>
+
+<div style="font-size: 11.5pt; line-height: 1.65; text-align: justify;">
+    <p class="mb-2">
+        <strong>I. BÊN SỬ DỤNG LAO ĐỘNG (BÊN A): CÔNG TY CỔ PHẦN SỮA VIỆT NAM (VINAMILK)</strong><br />
+        - Đại diện bởi bà: <strong>MAI KIỀU LIÊN</strong> &nbsp;&nbsp;&nbsp;&nbsp; Chức vụ: <strong>Tổng Giám đốc</strong><br />
+        - Địa chỉ trụ sở chính: Số 10 Tân Trào, Phường Tân Phú, Quận 7, Thành phố Hồ Chí Minh.<br />
+        - Điện thoại: (028) 54 155 555 &nbsp;&nbsp;&nbsp;&nbsp; Mã số doanh nghiệp: 0300588569.
+    </p>
+
+    <p class="mb-3">
+        <strong>II. BÊN NGƯỜI LAO ĐỘNG (BÊN B): Ông/Bà @e.FullName.ToUpperInvariant()</strong><br />
+        - Mã số nhân viên: <strong>@e.EmployeeCode</strong> &nbsp;&nbsp;&nbsp;&nbsp; Ngày sinh: <strong>@e.DateOfBirth.ToString("dd/MM/yyyy")</strong> &nbsp;&nbsp;&nbsp;&nbsp; Giới tính: @e.Gender<br />
+        - Địa chỉ thường trú: @(e.PermanentAddress ?? "TP. Hồ Chí Minh")<br />
+        - Trình độ chuyên môn: @(e.Major ?? "Đại học") &nbsp;&nbsp;&nbsp;&nbsp; Số sổ BHXH: @(e.SocialInsuranceNumber ?? "7915002849")
+    </p>
+
+    <p class="mb-2">
+        Sau khi thỏa thuận tự nguyện, hai bên thống nhất giao kết Hợp đồng lao động với các điều khoản sau đây:
+    </p>
+
+    <p class="mb-2">
+        <strong>Điều 1. Công việc, Đơn vị làm việc và Thời hạn Hợp đồng:</strong><br />
+        - Loại hợp đồng lao động: <strong>@(Model.ContractType == "Indefinite" ? "Hợp đồng lao động không xác định thời hạn" : $"Hợp đồng lao động xác định thời hạn ({Model.ContractType})")</strong>.<br />
+        - Thời hạn hợp đồng: Từ ngày <strong>@Model.StartDate.ToString("dd/MM/yyyy")</strong> đến ngày <strong>@(Model.EndDate?.ToString("dd/MM/yyyy") ?? "Không xác định thời hạn")</strong>.<br />
+        - Đơn vị công tác: <strong>@(e.OrganizationUnit?.UnitName ?? "Trụ sở Chính")</strong>.<br />
+        - Chức danh chuyên môn / Chức vụ: <strong>@(e.Position?.PositionName ?? "Chuyên viên")</strong>.
+    </p>
+
+    <p class="mb-2">
+        <strong>Điều 2. Chế độ làm việc, Tiền lương, Phụ cấp và Bảo hiểm bắt buộc:</strong><br />
+        - Thời giờ làm việc: 08 giờ/ngày (40–44 giờ/tuần), được nghỉ phép năm hưởng nguyên lương theo quy định của Bộ luật Lao động 2019 (cộng thêm 01 ngày cho mỗi 05 năm thâm niên).<br />
+        - Mức lương cơ bản theo ngạch bậc: <strong>@Model.BaseSalary.ToString("N0") VNĐ/tháng</strong>.<br />
+        - Phụ cấp chức vụ: <strong>@Model.PositionAllowance.ToString("N0") VNĐ/tháng</strong> &nbsp;&nbsp;&nbsp;&nbsp; Phụ cấp khác: <strong>@Model.OtherAllowance.ToString("N0") VNĐ/tháng</strong>.<br />
+        - Hình thức trả lương: Chuyển khoản qua Ngân hàng @(e.BankName ?? "Vietcombank") vào ngày 05 hằng tháng.<br />
+        - Chế độ BHXH, BHYT, BHTN và Thuế TNCN: Trích nộp đầy đủ theo luật định hiện hành.
+    </p>
+
+    <p class="mb-3">
+        <strong>Điều 3. Điều khoản thi hành:</strong><br />
+        Hợp đồng lao động này được lập thành 02 bản có giá trị pháp lý như nhau, Người lao động giữ 01 bản, Công ty Cổ phần Sữa Việt Nam lưu 01 bản tại Hồ sơ Nhân sự.
+    </p>
+</div>
+
+<div class="row mt-4 pt-2 text-center" style="font-size: 11.5pt;">
+    <div class="col-6">
+        <div class="fw-bold">NGƯỜI LAO ĐỘNG (BÊN B)</div>
+        <div class="fst-italic" style="font-size: 10pt;">(Ký và ghi rõ họ tên)</div>
+        <div style="height: 75px;"></div>
+        <div class="fw-bold">@e.FullName</div>
+    </div>
+    <div class="col-6">
+        <div class="fw-bold">ĐẠI DIỆN NGƯỜI SỬ DỤNG LAO ĐỘNG (BÊN A)</div>
+        <div class="fst-italic" style="font-size: 10pt;">(Ký tên và đóng dấu Công ty)</div>
+        <div style="height: 75px;"></div>
+        <div class="fw-bold">MAI KIỀU LIÊN</div>
+    </div>
+</div>
+

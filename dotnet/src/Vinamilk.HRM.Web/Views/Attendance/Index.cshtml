@@ -1,0 +1,689 @@
+@model Vinamilk.HRM.Application.TimeAttendance.MonthlyAttendanceBoardDto
+@{
+    ViewData["Title"] = $"Bảng Chấm Công Tháng {Model.Month:D2}/{Model.Year} • GPS/QR • OT & Giải trình";
+    ViewData["BreadcrumbParent"] = "Chấm công & Nghỉ phép (Phiên 6)";
+    string activeTab = ViewBag.ActiveTab as string ?? "matrix";
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">
+            <i class="ti ti-calendar-time text-primary me-2"></i>Quản trị Chấm công Đa kênh, Làm thêm giờ (OT) & Giải trình Công
+        </h2>
+        <p class="text-secondary mb-0">
+            Import Máy chấm công/Excel • Chấm công Web GPS Geofencing & QR Động • Bảng công 31 ngày • Đi muộn/Về sớm, OT, Công tác & Khóa bảng công
+        </p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalImportAttendance">
+            <i class="ti ti-file-import me-1"></i>Import Máy chấm công / Excel
+        </button>
+        <a href="/Attendance/ExportExcel?month=@Model.Month&year=@Model.Year&unitId=@Model.SelectedUnitId" class="btn btn-outline-success">
+            <i class="ti ti-file-spreadsheet me-1"></i>Xuất Excel Bảng công (.xlsx)
+        </a>
+        <form asp-action="RecalculateMonth" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="month" value="@Model.Month" />
+            <input type="hidden" name="year" value="@Model.Year" />
+            <button type="submit" class="btn btn-outline-info" @(Model.IsMonthLocked ? "disabled" : "")>
+                <i class="ti ti-refresh me-1"></i>Tổng hợp lại Công
+            </button>
+        </form>
+        <form asp-action="ToggleLockMonth" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="month" value="@Model.Month" />
+            <input type="hidden" name="year" value="@Model.Year" />
+            <input type="hidden" name="lockState" value="@(Model.IsMonthLocked ? "false" : "true")" />
+            @if (Model.IsMonthLocked)
+            {
+                <button type="submit" class="btn btn-warning">
+                    <i class="ti ti-lock-open me-1"></i>Mở khóa Bảng công T@(Model.Month.ToString("D2"))
+                </button>
+            }
+            else
+            {
+                <button type="submit" class="btn btn-danger">
+                    <i class="ti ti-lock me-1"></i>Khóa Bảng công Chuyển Tính lương
+                </button>
+            }
+        </form>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-circle-check me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-alert-triangle me-2"></i>@TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (Model.IsMonthLocked)
+{
+    <div class="alert alert-warning border-0 shadow-sm d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <i class="ti ti-lock-check fs-4 me-2"></i>
+            <strong>BẢNG CHẤM CÔNG THÁNG @Model.Month.ToString("D2")/@Model.Year ĐÃ KHÓA SỔ!</strong>
+            Người khóa: <strong>@(Model.LockedBy ?? "huyen.ntt")</strong> lúc @(Model.LockedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Hôm nay"). Mọi thao tác sửa đổi/import đều được bảo vệ để phục vụ tính lương.
+        </div>
+        <span class="badge bg-dark">LOCKED FOR PAYROLL</span>
+    </div>
+}
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-primary">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Công chuẩn Tháng @Model.Month.ToString("D2")/@Model.Year</div>
+            <div class="fs-2 fw-bold text-primary mt-1">@Model.StandardWorkdaysInMonth.ToString("0.#") công</div>
+            <div class="fs-7 text-muted">Nhân sự có bảng công: <strong>@Model.TotalPresentToday</strong></div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-danger">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Lượt Đi muộn / Về sớm</div>
+            <div class="fs-2 fw-bold text-danger mt-1">@Model.TotalLateCasesInMonth lượt</div>
+            <div class="fs-7 text-muted">Có thể gửi Giải trình qua Workflow</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-warning">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Tổng Giờ Làm thêm (OT)</div>
+            <div class="fs-2 fw-bold text-warning mt-1">@Model.TotalOtHoursInMonth.ToString("0.#") giờ</div>
+            <div class="fs-7 text-muted">Kiểm soát trần 40h/tháng • 200h/năm</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-info">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Lượt Ngày Đi Công tác (CT)</div>
+            <div class="fs-2 fw-bold text-info mt-1">@Model.TotalBusinessTripDays ngày</div>
+            <div class="fs-7 text-muted">Tính 100% ngày công hưởng lương</div>
+        </div>
+    </div>
+</div>
+
+<!-- Navigation Tabs -->
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "matrix" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-matrix" type="button">
+            <i class="ti ti-table me-1"></i>Bảng công Tháng @Model.Month.ToString("D2")/@Model.Year (@Model.MatrixRows.Count NV)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "gpsqr" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-gpsqr" type="button">
+            <i class="ti ti-map-pin-check me-1"></i>Chấm công Web GPS Geofencing & QR Động
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "overtime" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-overtime" type="button">
+            <i class="ti ti-clock-plus me-1"></i>Quản lý Làm thêm giờ - OT (@Model.OvertimeRequests.Count)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "explanations" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-explanations" type="button">
+            <i class="ti ti-file-description me-1"></i>Giải trình Chấm công & Công tác (@Model.Explanations.Count)
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- TAB 1: MA TRẬN BẢNG CHẤM CÔNG 31 NGÀY -->
+    <div class="tab-pane fade @(activeTab == "matrix" ? "show active" : "")" id="tab-matrix">
+        <div class="vnm-card p-3 mb-3">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label fs-7 fw-semibold">Tháng</label>
+                    <select name="month" class="form-select form-select-sm">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m" selected="@(Model.Month == m)">Tháng @m.ToString("D2")</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fs-7 fw-semibold">Năm</label>
+                    <select name="year" class="form-select form-select-sm">
+                        <option value="2025" selected="@(Model.Year == 2025)">2025</option>
+                        <option value="2026" selected="@(Model.Year == 2026)">2026</option>
+                        <option value="2027" selected="@(Model.Year == 2027)">2027</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fs-7 fw-semibold">Đơn vị / Nhà máy / Trang trại</label>
+                    <select name="unitId" class="form-select form-select-sm">
+                        <option value="">-- Toàn bộ đơn vị --</option>
+                        @foreach (var u in Model.Units)
+                        {
+                            <option value="@u.Id" selected="@(Model.SelectedUnitId == u.Id)">@u.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fs-7 fw-semibold">Tìm Mã NV / Họ tên</label>
+                    <input type="text" name="search" class="form-control form-control-sm" value="@Model.SearchKeyword" placeholder="Nhập mã VNM-0001 hoặc tên..." />
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-sm btn-primary w-100">
+                        <i class="ti ti-search me-1"></i>Xem Bảng công
+                    </button>
+                </div>
+            </form>
+
+            <!-- Chú giải ký hiệu chấm công -->
+            <div class="d-flex flex-wrap gap-2 mt-3 pt-2 border-top fs-7 align-items-center">
+                <span class="fw-semibold text-muted">Ký hiệu chuẩn:</span>
+                <span class="badge bg-success-subtle text-success">X : Đủ công (1.0)</span>
+                <span class="badge bg-info-subtle text-info-emphasis">CT : Đi công tác (1.0)</span>
+                <span class="badge bg-primary-subtle text-primary">P : Nghỉ phép năm (1.0)</span>
+                <span class="badge bg-danger text-white">L : Nghỉ Lễ Tết (1.0)</span>
+                <span class="badge bg-warning text-dark">Om / TS : Ốm / Thai sản (BHXH)</span>
+                <span class="badge bg-danger-subtle text-danger">Đỏ : Đi muộn / Về sớm</span>
+                <span class="badge bg-light text-muted border">OFF : Nghỉ tuần</span>
+            </div>
+        </div>
+
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm align-middle mb-0 text-center" style="font-size: 0.78rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-start" style="min-width: 190px; position: sticky; left: 0; z-index: 2; background: var(--vnm-bg-surface);">Nhân sự</th>
+                            @for (int d = 1; d <= Model.DaysInMonth; d++)
+                            {
+                                var dt = new DateOnly(Model.Year, Model.Month, d);
+                                var isSun = dt.DayOfWeek == DayOfWeek.Sunday;
+                                <th style="min-width: 34px;" class="@(isSun ? "bg-danger-subtle text-danger" : "")">
+                                    <div>@d.ToString("D2")</div>
+                                </th>
+                            }
+                            <th class="bg-primary-subtle text-primary">Thực tế</th>
+                            <th class="bg-info-subtle text-info-emphasis">Phép/Lễ</th>
+                            <th class="bg-danger-subtle text-danger">Phút trễ</th>
+                            <th class="bg-warning-subtle text-warning-emphasis">Tổng OT</th>
+                            <th class="bg-success-subtle text-success fw-bold">Công tính lương</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.MatrixRows)
+                        {
+                            var totalOt = row.TotalOtHours150 + row.TotalOtHours200 + row.TotalOtHours300;
+                            <tr>
+                                <td class="text-start" style="position: sticky; left: 0; z-index: 1; background: var(--vnm-bg-surface);">
+                                    <div class="fw-bold">@row.FullName</div>
+                                    <div class="text-muted" style="font-size: 0.72rem;">@row.EmployeeCode • @row.UnitName</div>
+                                </td>
+                                @foreach (var cell in row.Days)
+                                {
+                                    var tooltip = $"Ngày {cell.Date:dd/MM}: Ký hiệu {cell.Symbol}" +
+                                                  (cell.CheckInText != null ? $" | Vào {cell.CheckInText} - Ra {cell.CheckOutText}" : "") +
+                                                  (cell.LateMinutes > 0 ? $" | Đi muộn {cell.LateMinutes} phút" : "") +
+                                                  (cell.OvertimeHours > 0 ? $" | OT {cell.OvertimeHours:0.#}h" : "") +
+                                                  (cell.EditReason != null ? $" | {cell.EditReason}" : "");
+                                    <td class="@cell.CssClass" title="@tooltip" style="cursor: pointer;">
+                                        <div>@cell.Symbol</div>
+                                        @if (cell.LateMinutes > 0)
+                                        {
+                                            <div style="font-size: 0.62rem;">-@cell.LateMinutes'</div>
+                                        }
+                                        else if (cell.OvertimeHours > 0)
+                                        {
+                                            <div class="text-primary" style="font-size: 0.62rem;">+@cell.OvertimeHours.ToString("0.#")h</div>
+                                        }
+                                    </td>
+                                }
+                                <td class="fw-bold">@row.ActualWorkdays.ToString("0.#")</td>
+                                <td>@((row.PaidLeaveDays + row.HolidayDays).ToString("0.#"))</td>
+                                <td class="@(row.TotalLateMinutes > 0 ? "text-danger fw-bold" : "text-muted")">
+                                    @(row.TotalLateMinutes > 0 ? $"{row.TotalLateMinutes}p ({row.TotalLateCount}l)" : "0")
+                                </td>
+                                <td class="@(totalOt > 0 ? "text-warning-emphasis fw-bold" : "text-muted")">
+                                    @totalOt.ToString("0.#")h
+                                </td>
+                                <td class="fw-bold text-success bg-success-subtle">@row.TotalPayableWorkdays.ToString("0.#")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: CHẤM CÔNG WEB GPS GEOFENCING & QUÉT MÃ QR ĐỘNG -->
+    <div class="tab-pane fade @(activeTab == "gpsqr" ? "show active" : "")" id="tab-gpsqr">
+        <div class="row g-3">
+            <div class="col-lg-5">
+                <div class="vnm-card p-4 h-100">
+                    <h5 class="fw-bold mb-2">
+                        <i class="ti ti-map-pin-check text-primary me-2"></i>Chấm công Web Định vị GPS (Haversine) & QR Động
+                    </h5>
+                    <p class="text-secondary fs-7 mb-3">
+                        Hệ thống kiểm tra khoảng cách tọa độ GPS so với bán kính cho phép của Nhà máy / Văn phòng Vinamilk hoặc xác thực mã QR Kiosk thay đổi mỗi 5 phút.
+                    </p>
+
+                    <div class="p-3 rounded border text-center mb-3" style="background: var(--vnm-bg-subtle);">
+                        <div class="fs-7 text-muted text-uppercase fw-semibold">Mã QR Kiosk Động Hiện Hành (Hiệu lực 5 phút)</div>
+                        <div class="fs-3 fw-bold font-monospace text-primary my-1" id="vnmCurrentQrCode">@Model.CurrentDynamicQrToken</div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.getElementById('qrInputBox').value='@Model.CurrentDynamicQrToken'">
+                            <i class="ti ti-qrcode me-1"></i>Điền mã QR này vào form chấm công
+                        </button>
+                    </div>
+
+                    <form asp-action="WebCheckIn" method="post">
+                        @Html.AntiForgeryToken()
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Nhân viên thực hiện chấm công (*)</label>
+                            <select name="employeeId" class="form-select" required>
+                                @foreach (var emp in Model.ActiveEmployees)
+                                {
+                                    <option value="@emp.Id">@emp.Name</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Loại chấm công</label>
+                                <select name="punchType" class="form-select">
+                                    <option value="CheckIn">Vào ca (Check-In)</option>
+                                    <option value="CheckOut">Tan ca (Check-Out)</option>
+                                </select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Phương thức xác thực</label>
+                                <select name="sourceType" class="form-select" id="punchSourceSelect">
+                                    <option value="MobileGps">Định vị GPS (Geofencing)</option>
+                                    <option value="WebQr">Quét mã QR Động (WebQr)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold d-flex justify-content-between">
+                                <span>Chọn nhanh Tọa độ Điểm chuẩn Vinamilk hoặc Lấy GPS trình duyệt</span>
+                                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" onclick="detectBrowserGps()">
+                                    <i class="ti ti-current-location me-1"></i>Lấy GPS thiết bị
+                                </button>
+                            </label>
+                            <select class="form-select form-select-sm mb-2" onchange="applyPresetLocation(this)">
+                                @foreach (var loc in Model.GeofenceLocations)
+                                {
+                                    <option value="@loc.Latitude,@loc.Longitude">
+                                        @loc.Name (Bán kính @loc.AllowedRadiusMeters m)
+                                    </option>
+                                }
+                            </select>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label fs-7 text-muted">Vĩ độ (Latitude)</label>
+                                    <input type="number" step="0.0001" name="latitude" id="gpsLatInput" class="form-control form-control-sm font-monospace" value="10.7296" required />
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fs-7 text-muted">Kinh độ (Longitude)</label>
+                                    <input type="number" step="0.0001" name="longitude" id="gpsLonInput" class="form-control form-control-sm font-monospace" value="106.7218" required />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Mã QR xác thực (Nếu chọn phương thức WebQr)</label>
+                            <input type="text" name="qrToken" id="qrInputBox" class="form-control font-monospace" value="@Model.CurrentDynamicQrToken" />
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">
+                            <i class="ti ti-fingerprint me-1"></i>Xác nhận Chấm công Ngay
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="col-lg-7">
+                <div class="vnm-card overflow-hidden h-100">
+                    <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                        <div class="fw-bold"><i class="ti ti-history text-primary me-1"></i>Nhật ký Chấm công Đa kênh Gần nhất (GPS / QR / Máy vân tay)</div>
+                        <span class="badge bg-primary-subtle text-primary">@Model.RecentLogs.Count bản ghi</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Thời gian</th>
+                                    <th>Nhân viên</th>
+                                    <th>Loại</th>
+                                    <th>Nguồn / Thiết bị</th>
+                                    <th>Tọa độ GPS & Địa điểm Geofence</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var log in Model.RecentLogs)
+                                {
+                                    <tr>
+                                        <td class="font-monospace fs-7">@log.PunchTime.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                        <td>
+                                            <div class="fw-semibold">@log.FullName</div>
+                                            <div class="text-muted fs-7">@log.EmployeeCode</div>
+                                        </td>
+                                        <td>
+                                            <span class="badge @(log.PunchType == "CheckIn" ? "bg-success-subtle text-success" : "bg-info-subtle text-info-emphasis")">
+                                                @log.PunchType
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold fs-7">@log.SourceType</div>
+                                            <div class="text-muted fs-7 font-monospace">@log.DeviceId</div>
+                                        </td>
+                                        <td class="fs-7">
+                                            <div>@log.LocationAddress</div>
+                                            @if (log.Latitude.HasValue && log.Longitude.HasValue)
+                                            {
+                                                <span class="text-muted font-monospace">(@log.Latitude.Value.ToString("0.0000"), @log.Longitude.Value.ToString("0.0000"))</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: QUẢN LÝ LÀM THÊM GIỜ (OVERTIME) -->
+    <div class="tab-pane fade @(activeTab == "overtime" ? "show active" : "")" id="tab-overtime">
+        <div class="row g-3">
+            <div class="col-lg-4">
+                <div class="vnm-card p-3">
+                    <h5 class="fw-bold mb-2"><i class="ti ti-clock-plus text-primary me-2"></i>Đăng ký Làm thêm giờ (OT)</h5>
+                    <p class="text-secondary fs-7">
+                        Tự động kiểm tra trần OT <strong>40 giờ/tháng</strong> và <strong>200 giờ/năm</strong> theo Điều 107 Bộ luật Lao động 2019 và đẩy vào luồng duyệt <code>WF_OVERTIME</code>.
+                    </p>
+                    <form asp-action="SubmitOvertime" method="post">
+                        @Html.AntiForgeryToken()
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold">Nhân viên đăng ký (*)</label>
+                            <select name="employeeId" class="form-select" required>
+                                @foreach (var emp in Model.ActiveEmployees)
+                                {
+                                    <option value="@emp.Id">@emp.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold">Ngày làm thêm (*)</label>
+                            <input type="date" name="overtimeDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Từ giờ (*)</label>
+                                <input type="time" name="startTime" class="form-control" value="17:30" required />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Đến giờ (*)</label>
+                                <input type="time" name="endTime" class="form-control" value="20:30" required />
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold">Loại hệ số OT (Điều 98 BLLĐ 2019)</label>
+                            <select name="overtimeRateType" class="form-select">
+                                <option value="OT150">OT150 — Ngày thường (Hưởng 150% đơn giá lương)</option>
+                                <option value="OT200">OT200 — Ngày nghỉ hàng tuần (Hưởng 200%)</option>
+                                <option value="OT300">OT300 — Ngày Lễ, Tết có hưởng lương (Hưởng 300%)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Lý do & Nội dung công việc OT (*)</label>
+                            <textarea name="reason" class="form-control" rows="2" placeholder="VD: Tăng ca đóng gói lô hàng sữa tươi xuất khẩu..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="ti ti-send me-1"></i>Gửi Đơn OT qua Workflow
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="vnm-card overflow-hidden">
+                    <div class="p-3 border-bottom fw-bold">
+                        Danh sách Đơn Làm thêm giờ & Theo dõi Trần OT (40h/tháng • 200h/năm)
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Nhân viên</th>
+                                    <th>Ngày & Khung giờ OT</th>
+                                    <th>Số giờ & Hệ số</th>
+                                    <th>Lũy kế Trần OT</th>
+                                    <th>Trạng thái Workflow</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var ot in Model.OvertimeRequests)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">@ot.FullName</div>
+                                            <div class="text-muted fs-7">@ot.EmployeeCode • @ot.UnitName</div>
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold font-monospace">@ot.OvertimeDate.ToString("dd/MM/yyyy")</div>
+                                            <div class="text-muted fs-7">@ot.StartTime.ToString("HH:mm") - @ot.EndTime.ToString("HH:mm")</div>
+                                            <div class="text-secondary fs-7">@ot.Reason</div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-warning-subtle text-warning-emphasis fw-bold">@ot.RequestedHours.ToString("0.#") giờ</span>
+                                            <div class="badge bg-dark mt-1">@ot.OvertimeRateType</div>
+                                        </td>
+                                        <td>
+                                            <div class="fs-7">Tháng: <strong>@ot.EmployeeMonthlyOtTotal.ToString("0.#") / 40h</strong></div>
+                                            <div class="progress my-1" style="height: 5px; width: 120px;">
+                                                <div class="progress-bar @(ot.EmployeeMonthlyOtTotal > 32 ? "bg-danger" : "bg-primary")"
+                                                     style="width: @Math.Min(100, (int)(ot.EmployeeMonthlyOtTotal / 40m * 100))%"></div>
+                                            </div>
+                                            <div class="fs-7 text-muted">Năm: @ot.EmployeeYearlyOtTotal.ToString("0.#") / 200h</div>
+                                        </td>
+                                        <td>
+                                            @if (ot.Status == "Approved")
+                                            {
+                                                <span class="badge bg-success-subtle text-success">Đã duyệt (@ot.ApprovedHours.ToString("0.#")h)</span>
+                                            }
+                                            else if (ot.Status == "Rejected")
+                                            {
+                                                <span class="badge bg-danger-subtle text-danger">Từ chối</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-warning-subtle text-warning-emphasis">Chờ duyệt</span>
+                                                <div class="mt-1">
+                                                    <a href="/Workflows?entityType=OvertimeRequest" class="fs-7 text-primary text-decoration-none">
+                                                        Xử lý tại Workflow <i class="ti ti-arrow-right"></i>
+                                                    </a>
+                                                </div>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 4: GIẢI TRÌNH CHẤM CÔNG -->
+    <div class="tab-pane fade @(activeTab == "explanations" ? "show active" : "")" id="tab-explanations">
+        <div class="row g-3">
+            <div class="col-lg-4">
+                <div class="vnm-card p-3">
+                    <h5 class="fw-bold mb-2"><i class="ti ti-file-description text-primary me-2"></i>Gửi Giải trình Chấm công</h5>
+                    <p class="text-secondary fs-7">
+                        Dành cho trường hợp quên chấm vân tay, lỗi nhận diện khuôn mặt hoặc đi gặp đối tác bên ngoài. Sau khi Workflow duyệt sẽ tự động xóa phút đi trễ và tính đủ 1.0 công.
+                    </p>
+                    <form asp-action="SubmitExplanation" method="post">
+                        @Html.AntiForgeryToken()
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold">Nhân viên giải trình (*)</label>
+                            <select name="employeeId" class="form-select" required>
+                                @foreach (var emp in Model.ActiveEmployees)
+                                {
+                                    <option value="@emp.Id">@emp.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold">Ngày cần giải trình (*)</label>
+                            <input type="date" name="attendanceDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Giờ vào thực tế</label>
+                                <input type="time" name="proposedCheckIn" class="form-control" value="08:00" required />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Giờ ra thực tế</label>
+                                <input type="time" name="proposedCheckOut" class="form-control" value="17:00" required />
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Lý do giải trình chi tiết (*)</label>
+                            <textarea name="reason" class="form-control" rows="3" placeholder="VD: Đi họp với đối tác cung ứng bao bì Tetra Pak từ 07:45 sáng..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="ti ti-send me-1"></i>Trình duyệt Giải trình Công
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="vnm-card overflow-hidden">
+                    <div class="p-3 border-bottom fw-bold">
+                        Danh sách Các ngày Đi trễ / Cần giải trình hoặc Đã điều chỉnh Công
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Nhân viên</th>
+                                    <th>Ngày công</th>
+                                    <th>Ký hiệu & Phút trễ</th>
+                                    <th>Nội dung Giải trình / Ghi chú</th>
+                                    <th>Trạng thái Duyệt</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var ex in Model.Explanations)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold">@ex.FullName</div>
+                                            <div class="text-muted fs-7">@ex.EmployeeCode • @ex.UnitName</div>
+                                        </td>
+                                        <td class="font-monospace fw-semibold">@ex.AttendanceDate.ToString("dd/MM/yyyy")</td>
+                                        <td>
+                                            <span class="badge bg-secondary-subtle text-secondary me-1">@ex.CurrentSymbol</span>
+                                            @if (ex.LateMinutes > 0)
+                                            {
+                                                <span class="badge bg-danger-subtle text-danger">Trễ @ex.LateMinutes phút</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-success-subtle text-success">Đủ công</span>
+                                            }
+                                        </td>
+                                        <td class="fs-7">@ex.EditReason</td>
+                                        <td>
+                                            @if (ex.IsApproved || ex.WorkflowStatus == "Approved")
+                                            {
+                                                <span class="badge bg-success-subtle text-success"><i class="ti ti-check me-1"></i>Đã duyệt cập nhật công</span>
+                                            }
+                                            else if (ex.WorkflowStatus == "InProgress")
+                                            {
+                                                <a href="/Workflows?entityType=AttendanceExplanation" class="badge bg-warning-subtle text-warning-emphasis text-decoration-none">
+                                                    Đang chờ duyệt (#WF-@ex.WorkflowInstanceId)
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-light text-muted border">Chưa gửi giải trình</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Import Excel Máy chấm công -->
+<div class="modal fade" id="modalImportAttendance" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="ImportExcel" method="post" enctype="multipart/form-data" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="month" value="@Model.Month" />
+            <input type="hidden" name="year" value="@Model.Year" />
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="ti ti-file-import text-primary me-2"></i>Import Dữ liệu từ Máy chấm công / Excel (.xlsx)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info border-0 fs-7">
+                    Hệ thống tự động đối chiếu giờ vào/ra với Ca làm việc để tính số phút đi muộn, về sớm, công ca đêm và giờ OT. Nếu bảng công tháng đã khóa, hệ thống sẽ từ chối ghi đè.
+                </div>
+                <div class="mb-3">
+                    <a href="/Attendance/DownloadImportTemplate" class="btn btn-sm btn-outline-primary">
+                        <i class="ti ti-download me-1"></i>Tải File Excel Mẫu Import Chấm công (.xlsx)
+                    </a>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Chọn file Excel (.xlsx) dữ liệu chấm công (*)</label>
+                    <input type="file" name="excelFile" accept=".xlsx" class="form-control" required />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button>
+                <button type="submit" class="btn btn-primary">Thực hiện Import</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function applyPresetLocation(selectEl) {
+            if (!selectEl.value) return;
+            const parts = selectEl.value.split(',');
+            if (parts.length === 2) {
+                document.getElementById('gpsLatInput').value = parts[0];
+                document.getElementById('gpsLonInput').value = parts[1];
+            }
+        }
+
+        function detectBrowserGps() {
+            if (!navigator.geolocation) {
+                if (window.VnmUI) window.VnmUI.toast('Trình duyệt không hỗ trợ Geolocation.', 'warning');
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(function (pos) {
+                document.getElementById('gpsLatInput').value = pos.coords.latitude.toFixed(4);
+                document.getElementById('gpsLonInput').value = pos.coords.longitude.toFixed(4);
+                if (window.VnmUI) window.VnmUI.toast('Đã lấy tọa độ GPS thực tế từ trình duyệt!', 'success');
+            }, function () {
+                if (window.VnmUI) window.VnmUI.toast('Không thể truy cập GPS thiết bị, đang giữ tọa độ mặc định Trụ sở Vinamilk.', 'info');
+            });
+        }
+    </script>
+}
+

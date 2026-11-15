@@ -1,0 +1,491 @@
+@model Vinamilk.HRM.Application.TimeAttendance.ShiftAndScheduleOverviewDto
+@{
+    ViewData["Title"] = "Quản lý Ca làm việc, Xếp ca Kéo-Thả & Ngày Lễ";
+    ViewData["BreadcrumbParent"] = "Chấm công & Nghỉ phép (Phiên 6)";
+    var prevWeek = Model.WeekStartDate.AddDays(-7).ToString("yyyy-MM-dd");
+    var nextWeek = Model.WeekStartDate.AddDays(7).ToString("yyyy-MM-dd");
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">
+            <i class="ti ti-calendar-clock text-primary me-2"></i>Ca làm việc, Lịch Xếp ca Kéo-Thả (Shift Roster) & Ngày Lễ Tết
+        </h2>
+        <p class="text-secondary mb-0">
+            Kéo thẻ Ca làm việc thả trực tiếp vào ô lịch nhân viên • Phân ca xoay vòng Nhà máy 3 ca • Cấu hình Ngày Lễ hưởng lương 300%
+        </p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalBulkSchedule">
+            <i class="ti ti-calendar-plus me-1"></i>Phân ca Hàng loạt
+        </button>
+        <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalSaveHoliday">
+            <i class="ti ti-confetti me-1"></i>Thêm Ngày Lễ
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalSaveShift">
+            <i class="ti ti-plus me-1"></i>Thiết lập Ca mới
+        </button>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-circle-check me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-alert-triangle me-2"></i>@TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-primary">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Tổng số Ca làm việc chuẩn</div>
+            <div class="fs-2 fw-bold text-primary mt-1">@Model.WorkShifts.Count</div>
+            <div class="fs-7 text-muted">Hành chính + 3 Ca Nhà máy sữa</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-success">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Lượt phân ca Sản xuất tuần này</div>
+            <div class="fs-2 fw-bold text-success mt-1">@Model.TotalFactoryShiftCount</div>
+            <div class="fs-7 text-muted">Ca 1 (06-14h) & Ca 2 (14-22h)</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-dark">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Lượt Ca 3 Đêm (Phụ cấp +30%)</div>
+            <div class="fs-2 fw-bold mt-1">@Model.TotalNightShiftCount</div>
+            <div class="fs-7 text-muted">Khung giờ 22:00 - 06:00 sáng hôm sau</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-danger">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Ngày Nghỉ Lễ hưởng lương (@Model.SelectedYear)</div>
+            <div class="fs-2 fw-bold text-danger mt-1">@Model.TotalHolidayDaysInYear ngày</div>
+            <div class="fs-7 text-muted">Theo Điều 112 BLLĐ 2019 (OT x300%)</div>
+        </div>
+    </div>
+</div>
+
+<!-- Navigation Tabs -->
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-roster" type="button">
+            <i class="ti ti-drag-drop me-1"></i>Lịch Xếp ca Kéo-Thả (Drag & Drop Calendar)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-shifts" type="button">
+            <i class="ti ti-clock-hour-8 me-1"></i>Danh mục Ca làm việc (@Model.WorkShifts.Count)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-holidays" type="button">
+            <i class="ti ti-calendar-star me-1"></i>Lịch Ngày Lễ, Tết Việt Nam (@Model.Holidays.Count)
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- TAB 1: CALENDAR XẾP CA KÉO THẢ -->
+    <div class="tab-pane fade show active" id="tab-roster">
+        <!-- Thanh công cụ lọc tuần + Bảng mẫu Ca kéo-thả -->
+        <div class="vnm-card p-3 mb-3">
+            <div class="row g-3 align-items-center justify-content-between">
+                <div class="col-lg-5">
+                    <form method="get" class="d-flex flex-wrap gap-2 align-items-center">
+                        <a href="/Shifts?weekStart=@prevWeek&unitId=@Model.SelectedUnitId" class="btn btn-sm btn-outline-secondary">
+                            <i class="ti ti-chevron-left"></i> Tuần trước
+                        </a>
+                        <span class="fw-bold px-2">
+                            Tuần: @Model.WeekStartDate.ToString("dd/MM/yyyy") — @Model.WeekEndDate.ToString("dd/MM/yyyy")
+                        </span>
+                        <a href="/Shifts?weekStart=@nextWeek&unitId=@Model.SelectedUnitId" class="btn btn-sm btn-outline-secondary">
+                            Tuần sau <i class="ti ti-chevron-right"></i>
+                        </a>
+                        <select name="unitId" class="form-select form-select-sm" style="width: 210px;" onchange="this.form.submit()">
+                            <option value="">-- Tất cả đơn vị --</option>
+                            @foreach (var u in Model.Units)
+                            {
+                                <option value="@u.Id" selected="@(Model.SelectedUnitId == u.Id)">@u.Name</option>
+                            }
+                        </select>
+                        <input type="hidden" name="weekStart" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" />
+                    </form>
+                </div>
+
+                <!-- Palette các thẻ Ca làm việc có thể kéo thả -->
+                <div class="col-lg-7">
+                    <div class="d-flex flex-wrap align-items-center justify-content-lg-end gap-2">
+                        <span class="fs-7 text-muted fw-semibold"><i class="ti ti-hand-grab me-1"></i>Kéo thẻ Ca thả vào lịch:</span>
+                        @foreach (var s in Model.WorkShifts)
+                        {
+                            <div draggable="true"
+                                 ondragstart="onShiftDragStart(event, @s.Id, '@s.ShiftCode', '@s.StartTime.ToString("HH:mm")-@s.EndTime.ToString("HH:mm")', false, '@s.BadgeColorClass')"
+                                 class="badge border px-3 py-2 @s.BadgeColorClass"
+                                 style="cursor: grab; user-select: none;"
+                                 title="Kéo thả ca @s.ShiftName vào ô lịch bên dưới">
+                                <i class="ti ti-grip-vertical me-1"></i><strong>@s.ShiftCode</strong> (@s.StartTime.ToString("HH:mm")-@s.EndTime.ToString("HH:mm"))
+                            </div>
+                        }
+                        <div draggable="true"
+                             ondragstart="onShiftDragStart(event, null, 'OFF', 'Nghỉ', true, 'bg-secondary-subtle text-secondary border-secondary-subtle')"
+                             class="badge border px-3 py-2 bg-secondary-subtle text-secondary"
+                             style="cursor: grab; user-select: none;"
+                             title="Kéo thả ngày nghỉ tuần (OFF) vào ô lịch">
+                            <i class="ti ti-grip-vertical me-1"></i><strong>OFF</strong> (Nghỉ tuần)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle mb-0 text-center">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-start" style="min-width: 230px;">Nhân viên & Đơn vị</th>
+                            @foreach (var dt in Model.WeekDates)
+                            {
+                                var isSun = dt.DayOfWeek == DayOfWeek.Sunday;
+                                <th style="min-width: 120px;" class="@(isSun ? "bg-danger-subtle text-danger" : "")">
+                                    <div class="fw-bold">@Vinamilk.HRM.Application.TimeAttendance.ShiftAndHolidaySeeder.GetDayOfWeekVi(dt.DayOfWeek)</div>
+                                    <div class="fs-7 font-monospace">@dt.ToString("dd/MM")</div>
+                                </th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.RosterRows)
+                        {
+                            <tr>
+                                <td class="text-start">
+                                    <div class="fw-bold">@row.FullName</div>
+                                    <div class="text-muted fs-7">@row.EmployeeCode • @row.UnitName</div>
+                                </td>
+                                @foreach (var cell in row.DayCells)
+                                {
+                                    <td class="p-2 shift-drop-zone"
+                                        ondragover="onShiftDragOver(event)"
+                                        ondragleave="onShiftDragLeave(event)"
+                                        ondrop="onShiftDrop(event, @row.EmployeeId, '@cell.WorkDate.ToString("yyyy-MM-dd")')"
+                                        style="transition: background 0.15s ease;">
+                                        @if (cell.IsHoliday)
+                                        {
+                                            <div class="badge bg-danger text-white w-100 py-1 mb-1" title="@cell.HolidayName">
+                                                <i class="ti ti-flag me-1"></i>LỄ: @cell.HolidayName
+                                            </div>
+                                        }
+                                        <div class="shift-cell-badge badge border w-100 py-2 @cell.BadgeColorClass">
+                                            <div class="fw-bold fs-6 shift-code-label">@cell.ShiftCode</div>
+                                            <div class="fs-7 fw-normal mt-1 shift-time-label">@cell.TimeRangeText</div>
+                                        </div>
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: DANH MỤC CA LÀM VIỆC -->
+    <div class="tab-pane fade" id="tab-shifts">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mã Ca</th>
+                            <th>Tên Ca làm việc</th>
+                            <th>Giờ làm việc</th>
+                            <th>Nghỉ giữa ca</th>
+                            <th>Số giờ chuẩn</th>
+                            <th>Qua đêm & Phụ cấp đêm</th>
+                            <th>Cho phép trễ</th>
+                            <th>Lượt xếp ca tuần này</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in Model.WorkShifts)
+                        {
+                            <tr>
+                                <td><span class="badge border px-2 py-1 @s.BadgeColorClass">@s.ShiftCode</span></td>
+                                <td class="fw-bold">@s.ShiftName</td>
+                                <td class="font-monospace">@s.StartTime.ToString("HH:mm") — @s.EndTime.ToString("HH:mm")</td>
+                                <td class="font-monospace">
+                                    @(s.BreakStartTime.HasValue ? $"{s.BreakStartTime:HH\\:mm} - {s.BreakEndTime:HH\\:mm}" : "Ăn ca theo dây chuyền")
+                                </td>
+                                <td>@s.StandardHours.ToString("0.#") giờ (@s.WorkdayValue công)</td>
+                                <td>
+                                    @if (s.IsOvernight)
+                                    {
+                                        <span class="badge bg-dark text-white">Ca đêm (+@(s.NightShiftAllowanceRate * 100)% lương)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Ca ban ngày</span>
+                                    }
+                                </td>
+                                <td>@s.GraceLateMinutes phút</td>
+                                <td><span class="badge bg-primary-subtle text-primary">@s.AssignedSchedulesCount lượt</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: NGÀY LỄ TẾT VIỆT NAM -->
+    <div class="tab-pane fade" id="tab-holidays">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Ngày tháng</th>
+                            <th>Thứ trong tuần</th>
+                            <th>Tên Ngày Lễ / Tết (Điều 112 BLLĐ 2019)</th>
+                            <th>Hưởng nguyên lương</th>
+                            <th>Hệ số lương làm thêm (OT)</th>
+                            <th class="text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var h in Model.Holidays)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold text-danger">@h.HolidayDate.ToString("dd/MM/yyyy")</td>
+                                <td>@h.DayOfWeekVi</td>
+                                <td class="fw-semibold">@h.HolidayName</td>
+                                <td>
+                                    <span class="badge bg-success-subtle text-success">100% lương cơ bản</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-danger-subtle text-danger fw-bold">x@(h.OvertimeMultiplier * 100)% (OT300)</span>
+                                </td>
+                                <td class="text-end">
+                                    <form asp-action="DeleteHoliday" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@h.Id" />
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Xóa ngày lễ">
+                                            <i class="ti ti-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Phân ca Hàng loạt -->
+<div class="modal fade" id="modalBulkSchedule" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="BulkAssignSchedule" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="ti ti-calendar-plus text-primary me-2"></i>Phân ca Hàng loạt theo Đơn vị / Khoảng ngày</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Chọn Đơn vị / Nhà máy áp dụng (*)</label>
+                    <select name="organizationUnitId" class="form-select" required>
+                        @foreach (var u in Model.Units)
+                        {
+                            <option value="@u.Id">@u.Name (@u.Code)</option>
+                        }
+                    </select>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Từ ngày (*)</label>
+                        <input type="date" name="fromDate" class="form-control" value="@Model.WeekStartDate.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Đến ngày (*)</label>
+                        <input type="date" name="toDate" class="form-control" value="@Model.WeekEndDate.ToString("yyyy-MM-dd")" required />
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Ca làm việc áp dụng (*)</label>
+                    <select name="workShiftId" class="form-select">
+                        @foreach (var s in Model.WorkShifts)
+                        {
+                            <option value="@s.Id">@s.ShiftCode — @s.ShiftName (@s.StartTime.ToString("HH:mm") - @s.EndTime.ToString("HH:mm"))</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" name="isDayOff" value="true" id="chkBulkDayOff" />
+                    <label class="form-check-label" for="chkBulkDayOff">Đánh dấu là Ngày nghỉ tuần (OFF)</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button>
+                <button type="submit" class="btn btn-primary">Thực hiện Phân ca</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Thêm Ca làm việc -->
+<div class="modal fade" id="modalSaveShift" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="SaveWorkShift" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Thiết lập Ca làm việc</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Mã Ca (*)</label>
+                        <input type="text" name="shiftCode" class="form-control" placeholder="VD: CA_HC2" required />
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label fw-semibold">Tên Ca làm việc (*)</label>
+                        <input type="text" name="shiftName" class="form-control" placeholder="Ca Hành chính Linh hoạt" required />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Giờ bắt đầu</label>
+                        <input type="time" name="startTime" class="form-control" value="08:30" required />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Giờ kết thúc</label>
+                        <input type="time" name="endTime" class="form-control" value="17:30" required />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Số phút đi trễ cho phép</label>
+                        <input type="number" name="graceLateMinutes" class="form-control" value="5" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Tỷ lệ phụ cấp đêm (0.3 = 30%)</label>
+                        <input type="number" step="0.05" name="nightShiftAllowanceRate" class="form-control" value="0.00" />
+                    </div>
+                    <div class="col-12 mt-2">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="isOvernight" value="true" id="chkOvernight" />
+                            <label class="form-check-label" for="chkOvernight">Ca làm việc qua đêm (hưởng phụ cấp đêm theo Điều 98 BLLĐ 2019)</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-primary">Lưu Ca làm việc</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Thêm Ngày Lễ -->
+<div class="modal fade" id="modalSaveHoliday" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="SaveHoliday" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Thêm Ngày Nghỉ Lễ / Tết</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Ngày lễ (*)</label>
+                    <input type="date" name="holidayDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Tên Ngày Lễ / Sự kiện (*)</label>
+                    <input type="text" name="holidayName" class="form-control" placeholder="VD: Ngày truyền thống Vinamilk 20/08" required />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Hệ số tính lương OT ngày lễ</label>
+                    <input type="number" step="0.5" name="overtimeMultiplier" class="form-control" value="3.0" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-success">Lưu Ngày Lễ</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let draggedShiftPayload = null;
+
+        function onShiftDragStart(ev, shiftId, shiftCode, timeText, isDayOff, badgeClass) {
+            draggedShiftPayload = {
+                workShiftId: shiftId,
+                shiftCode: shiftCode,
+                timeText: timeText,
+                isDayOff: isDayOff,
+                badgeClass: badgeClass
+            };
+            ev.dataTransfer.effectAllowed = 'copy';
+        }
+
+        function onShiftDragOver(ev) {
+            ev.preventDefault();
+            ev.currentTarget.style.background = 'var(--vnm-primary-soft)';
+        }
+
+        function onShiftDragLeave(ev) {
+            ev.currentTarget.style.background = '';
+        }
+
+        async function onShiftDrop(ev, employeeId, workDateStr) {
+            ev.preventDefault();
+            const td = ev.currentTarget;
+            td.style.background = '';
+            if (!draggedShiftPayload) return;
+
+            const badge = td.querySelector('.shift-cell-badge');
+            const codeLbl = td.querySelector('.shift-code-label');
+            const timeLbl = td.querySelector('.shift-time-label');
+
+            if (badge && codeLbl && timeLbl) {
+                badge.className = 'shift-cell-badge badge border w-100 py-2 ' + draggedShiftPayload.badgeClass;
+                codeLbl.textContent = draggedShiftPayload.shiftCode;
+                timeLbl.textContent = draggedShiftPayload.timeText;
+            }
+
+            try {
+                const resp = await fetch('/Shifts/AssignCellAjax', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        employeeId: employeeId,
+                        workDate: workDateStr,
+                        workShiftId: draggedShiftPayload.workShiftId,
+                        isDayOff: draggedShiftPayload.isDayOff
+                    })
+                });
+                const json = await resp.json();
+                if (window.VnmUI && window.VnmUI.toast) {
+                    window.VnmUI.toast(json.message || 'Đã cập nhật lịch phân ca!', 'success');
+                }
+            } catch (err) {
+                if (window.VnmUI && window.VnmUI.toast) {
+                    window.VnmUI.toast('Lỗi khi lưu lịch phân ca.', 'error');
+                }
+            }
+        }
+    </script>
+}

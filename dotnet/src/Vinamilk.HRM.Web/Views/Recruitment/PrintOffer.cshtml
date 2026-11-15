@@ -1,0 +1,57 @@
+@model Vinamilk.HRM.Application.Talent.JobOfferSummaryDto
+@{
+    Layout = "_LayoutPrint";
+    ViewData["Title"] = $"Thư mời Nhận việc (Offer Letter) - {Model.OfferCode}";
+}
+
+<div class="p-4">
+    <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-4">
+        <div>
+            <h4 class="fw-bold text-primary mb-0">CÔNG TY CỔ PHẦN SỮA VIỆT NAM (VINAMILK)</h4>
+            <div class="text-secondary fs-7">Số 10 Tân Trào, Phường Tân Phú, Quận 7, TP. Hồ Chí Minh</div>
+        </div>
+        <div class="text-end">
+            <div class="fw-bold font-monospace">Số: @Model.OfferCode</div>
+            <div class="fs-7 text-muted">TP.HCM, ngày @DateTime.Today.Day tháng @DateTime.Today.Month năm @DateTime.Today.Year</div>
+        </div>
+    </div>
+
+    <div class="text-center mb-4">
+        <h2 class="fw-bold text-uppercase mb-1">THƯ MỜI NHẬN VIỆC (OFFER LETTER)</h2>
+        <div class="text-secondary">Kính gửi: Ông/Bà <strong>@Model.CandidateName</strong> (@Model.CandidateEmail)</div>
+    </div>
+
+    <p>Lời đầu tiên, Ban Tuyển dụng Công ty Cổ phần Sữa Việt Nam (Vinamilk) chân thành cảm ơn Ông/Bà đã tham gia quá trình phỏng vấn và trân trọng chúc mừng Ông/Bà đã trúng tuyển vào vị trí sau:</p>
+
+    <table class="table table-bordered my-4">
+        <tbody>
+            <tr><th style="width: 35%;">Chức danh công việc</th><td class="fw-bold text-primary">@Model.ProposedPositionName</td></tr>
+            <tr><th>Đơn vị công tác</th><td class="fw-semibold">@Model.ProposedUnitName</td></tr>
+            <tr><th>Ngày nhận việc dự kiến</th><td class="font-monospace fw-bold">@Model.ExpectedStartDate.ToString("dd/MM/yyyy")</td></tr>
+            <tr><th>Thời gian thử việc</th><td>02 tháng (Hưởng 85% mức lương chính thức)</td></tr>
+            <tr><th>Thu nhập trong thời gian thử việc</th><td class="font-monospace fw-bold">@Model.OfferedProbationSalary.ToString("N0") VNĐ / tháng</td></tr>
+            <tr><th>Mức lương chính thức sau thử việc</th><td class="font-monospace fw-bold text-success">@Model.OfferedOfficialSalary.ToString("N0") VNĐ / tháng</td></tr>
+            <tr><th>Phúc lợi bổ sung</th><td>Phụ cấp ăn ca, xăng xe, Bảo hiểm Vinamilk Care, Thưởng KPI & Tháng 13</td></tr>
+            <tr><th>Hạn xác nhận Thư mời</th><td class="font-monospace text-danger fw-bold">@Model.OfferExpiryDate.ToString("dd/MM/yyyy")</td></tr>
+        </tbody>
+    </table>
+
+    <p>Vui lòng xác nhận đồng ý Thư mời nhận việc trước ngày <strong>@Model.OfferExpiryDate.ToString("dd/MM/yyyy")</strong> để Phòng Nhân sự chuẩn bị Hợp đồng Thử việc và quy trình Hội nhập (Onboarding).</p>
+
+    <div class="row mt-5 pt-4 text-center">
+        <div class="col-6">
+            <div class="fw-bold">XÁC NHẬN CỦA ỨNG VIÊN</div>
+            <div class="fs-7 text-muted fst-italic">(Ký và ghi rõ họ tên)</div>
+            <div style="height: 80px;"></div>
+            <div class="fw-semibold">@Model.CandidateName</div>
+        </div>
+        <div class="col-6">
+            <div class="fw-bold">TUQ. TỔNG GIÁM ĐỐC VINAMILK</div>
+            <div class="fw-bold">GIÁM ĐỐC NHÂN SỰ (CHRO)</div>
+            <div class="fs-7 text-muted fst-italic">(Ký tên & Đóng dấu)</div>
+            <div style="height: 80px;"></div>
+            <div class="fw-bold">Nguyễn Thị Thanh Huyền</div>
+        </div>
+    </div>
+</div>
+

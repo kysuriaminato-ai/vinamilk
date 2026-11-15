@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#0213B0" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>@ViewData["Title"] - Vinamilk ESS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/@@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css" rel="stylesheet" />
+    <style>
+        body { background: #F4F6FB; padding-bottom: 76px; font-family: system-ui, -apple-system, sans-serif; }
+        .ess-header { background: linear-gradient(135deg, #0213B0, #1E3A8A); color: #fff; padding: 14px 16px; position: sticky; top: 0; z-index: 1020; }
+        .ess-card { background: #fff; border-radius: 14px; border: 1px solid #E5E7EB; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+        .ess-bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #E5E7EB; z-index: 1030; display: flex; justify-content: space-around; padding: 8px 4px; }
+        .ess-nav-item { text-decoration: none; color: #64748B; font-size: 11px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-weight: 600; }
+        .ess-nav-item.active { color: #0213B0; }
+        .ess-nav-item i { font-size: 20px; }
+    </style>
+</head>
+<body>
+    <header class="ess-header d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-white text-primary fw-extrabold">VNM</span>
+            <div>
+                <div class="fw-bold lh-1">Vinamilk ESS / MSS</div>
+                <small class="opacity-75" style="font-size: 11px;">Cổng Nhân sự Di động (PWA)</small>
+            </div>
+        </div>
+        <a href="/" class="btn btn-sm btn-outline-light">
+            <i class="ti ti-layout-dashboard me-1"></i>Admin
+        </a>
+    </header>
+
+    <main class="container py-3" style="max-width: 720px;">
+        @RenderBody()
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
+

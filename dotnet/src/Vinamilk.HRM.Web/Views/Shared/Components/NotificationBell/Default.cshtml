@@ -1,0 +1,61 @@
+@model IReadOnlyList<Vinamilk.HRM.Web.ViewComponents.NotificationItemVm>
+@{
+    var unreadCount = Model.Count(x => x.IsUnread);
+}
+
+<div class="dropdown">
+    <button class="btn btn-icon border-0 position-relative rounded-circle p-2"
+            type="button"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+            aria-label="Thông báo hệ thống (@unreadCount chưa đọc)"
+            style="background: var(--vnm-bg-subtle);">
+        <i class="ti ti-bell fs-4"></i>
+        <span id="vnmRealtimeBellBadge"
+              class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger @(unreadCount > 0 ? "" : "d-none")"
+              style="font-size: 0.65rem;">
+            @unreadCount
+        </span>
+    </button>
+
+    <div class="dropdown-menu dropdown-menu-end shadow-lg border-0 p-0 mt-2"
+         style="width: 380px; border-radius: var(--vnm-radius-md); background: var(--vnm-bg-surface);">
+        <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom"
+             style="border-color: var(--vnm-border-subtle) !important;">
+            <span class="fw-bold fs-6">
+                <i class="ti ti-broadcast text-success me-1"></i>Thông báo Realtime (SignalR)
+            </span>
+            <a href="/Workflows" class="btn btn-link btn-sm text-decoration-none p-0 fs-7">
+                Trung tâm duyệt
+            </a>
+        </div>
+
+        <div id="vnmRealtimeNotificationList" style="max-height: 340px; overflow-y: auto;">
+            @foreach (var n in Model)
+            {
+                <a href="@n.TargetUrl"
+                   class="dropdown-item d-flex align-items-start gap-2 px-3 py-2 border-bottom text-wrap"
+                   style="border-color: var(--vnm-border-subtle) !important; @(n.IsUnread ? "background: var(--vnm-primary-soft);" : "")">
+                    <div class="mt-1">
+                        <i class="ti @n.Icon fs-4 @n.ColorClass"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold fs-6 text-body">@n.Title</div>
+                        <div class="text-secondary fs-7 mt-1">@n.Description</div>
+                        <div class="text-muted fs-7 mt-1"><i class="ti ti-clock me-1"></i>@n.TimeAgo</div>
+                    </div>
+                    @if (n.IsUnread)
+                    {
+                        <span class="badge bg-primary rounded-circle p-1 mt-2" title="Chưa đọc"></span>
+                    }
+                </a>
+            }
+        </div>
+
+        <div class="p-2 text-center border-top" style="border-color: var(--vnm-border-subtle) !important;">
+            <a href="/Workflows" class="text-decoration-none fw-semibold fs-7 text-primary">
+                Xem tất cả đơn chờ phê duyệt & lịch sử Email <i class="ti ti-arrow-right ms-1"></i>
+            </a>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,118 @@
+@model Vinamilk.HRM.Domain.Entities.Core.Employee
+@{
+    Layout = "~/Views/Shared/_LayoutPrint.cshtml";
+    var empName = Model?.FullName ?? "Trần Minh Quốc";
+    var empCode = Model?.EmployeeCode ?? "VNM-0005";
+    var unitName = Model?.OrganizationUnit?.UnitName ?? "Khối Công nghệ Thông tin & Chuyển đổi số";
+    var posName = Model?.Position?.PositionName ?? "Giám đốc Khối";
+}
+
+<!-- QUỐC HIỆU & TIÊU NGỮ CHUẨN NGHỊ ĐỊNH 30/2020/NĐ-CP -->
+<div class="vnm-print-header-grid">
+    <div>
+        <div class="vnm-print-org">CÔNG TY CỔ PHẦN SỮA VIỆT NAM</div>
+        <div class="fw-bold">(VINAMILK)</div>
+        <div style="border-bottom: 1px solid #000; width: 95px; margin: 4px auto;"></div>
+        <div class="mt-2">Số: 118/2026/QĐ-NS-VNM</div>
+    </div>
+    <div>
+        <div class="vnm-print-nation">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+        <div class="vnm-print-motto">Độc lập - Tự do - Hạnh phúc</div>
+        <div class="mt-2 fst-italic">TP. Hồ Chí Minh, ngày 15 tháng 11 năm 2026</div>
+    </div>
+</div>
+
+<!-- TIÊU ĐỀ QUYẾT ĐỊNH -->
+<div class="text-center my-4">
+    <h1 class="fw-bold mb-1" style="font-size: 16pt;">QUYẾT ĐỊNH</h1>
+    <div class="fw-bold" style="font-size: 13pt;">Về việc Điều chuyển, Bổ nhiệm Cán bộ và Điều chỉnh Bậc lương Ngạch Chuyên gia</div>
+    <div style="border-bottom: 1px solid #000; width: 160px; margin: 8px auto;"></div>
+</div>
+
+<div class="text-center fw-bold mb-3" style="font-size: 13pt;">
+    TỔNG GIÁM ĐỐC CÔNG TY CỔ PHẦN SỮA VIỆT NAM
+</div>
+
+<div class="mb-3" style="text-align: justify; font-style: italic;">
+    <div>- Căn cứ Bộ luật Lao động nước Cộng hòa Xã hội Chủ nghĩa Việt Nam năm 2019;</div>
+    <div>- Căn cứ Điều lệ Tổ chức và Hoạt động của Công ty Cổ phần Sữa Việt Nam (Vinamilk);</div>
+    <div>- Căn cứ Quy chế Quản trị Nhân sự, Thang bảng lương 10 ngạch / 50 bậc của Công ty;</div>
+    <div>- Xét đề nghị của Giám đốc Khối Nhân sự – Hành chính tại Tờ trình số 42/TTr-NS ngày 10/11/2026.</div>
+</div>
+
+<div class="text-center fw-bold my-3" style="font-size: 14pt;">
+    QUYẾT ĐỊNH:
+</div>
+
+<div style="text-align: justify;">
+    <p class="mb-2">
+        <strong>Điều 1.</strong> Điều chuyển và bổ nhiệm ông/bà <strong>@empName</strong> (Mã nhân viên: <strong>@empCode</strong>),
+        hiện đang công tác tại <strong>@unitName</strong> giữ chức vụ <strong>@posName</strong> kể từ ngày <strong>01/12/2026</strong>.
+    </p>
+
+    <p class="mb-2">
+        <strong>Điều 2.</strong> Chế độ tiền lương và phụ cấp chức vụ của ông/bà <strong>@empName</strong> được hưởng theo Ngạch lương
+        <strong>M2 – Quản lý Cấp trung Cao cấp (Bậc 4/5)</strong> theo quy định hiện hành của Công ty Cổ phần Sữa Việt Nam:
+    </p>
+</div>
+
+<!-- BẢNG THÔNG TIN SO SÁNH TRƯỚC & SAU ĐIỀU CHUYỂN -->
+<table class="table table-bordered border-dark my-3" style="font-size: 11.5pt;">
+    <thead>
+        <tr class="text-center fw-bold">
+            <th style="width: 28%;">Chỉ tiêu Nhân sự</th>
+            <th style="width: 36%;">Trước khi Điều chuyển</th>
+            <th style="width: 36%;">Sau khi Bổ nhiệm (Từ 01/12/2026)</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="fw-bold">Đơn vị công tác</td>
+            <td>Phòng Phát triển Phần mềm Core ERP</td>
+            <td>@unitName</td>
+        </tr>
+        <tr>
+            <td class="fw-bold">Chức danh công việc</td>
+            <td>Trưởng phòng Kỹ thuật</td>
+            <td>@posName</td>
+        </tr>
+        <tr>
+            <td class="fw-bold">Ngạch / Bậc lương</td>
+            <td>M1 - Bậc 3 (Hệ số 3.45)</td>
+            <td>M2 - Bậc 4 (Hệ số 4.20)</td>
+        </tr>
+        <tr>
+            <td class="fw-bold">Mức lương cơ bản</td>
+            <td class="text-end">38.500.000 VNĐ/tháng</td>
+            <td class="text-end fw-bold">48.000.000 VNĐ/tháng</td>
+        </tr>
+        <tr>
+            <td class="fw-bold">Phụ cấp trách nhiệm</td>
+            <td class="text-end">4.000.000 VNĐ/tháng</td>
+            <td class="text-end fw-bold">7.500.000 VNĐ/tháng</td>
+        </tr>
+    </tbody>
+</table>
+
+<div style="text-align: justify;">
+    <p class="mb-2">
+        <strong>Điều 3.</strong> Giám đốc Khối Nhân sự, Giám đốc Khối Tài chính – Kế toán, Trưởng đơn vị liên quan và ông/bà
+        <strong>@empName</strong> chịu trách nhiệm thi hành Quyết định này. Quyết định có hiệu lực kể từ ngày ký.
+    </p>
+</div>
+
+<!-- CHỮ KÝ & NƠI NHẬN -->
+<div class="row mt-4 pt-2">
+    <div class="col-6" style="font-size: 11pt;">
+        <div class="fw-bold fst-italic">Nơi nhận:</div>
+        <div>- Như Điều 3 (để thi hành);</div>
+        <div>- Hội đồng Quản trị (để b/c);</div>
+        <div>- Lưu: VT, Hồ sơ Nhân sự 2C (@empCode).</div>
+    </div>
+    <div class="col-6 text-center">
+        <div class="fw-bold">TỔNG GIÁM ĐỐC</div>
+        <div class="fst-italic" style="font-size: 10.5pt;">(Đã ký số & đóng dấu đỏ)</div>
+        <div style="height: 75px;"></div>
+        <div class="fw-bold" style="font-size: 13pt;">MAI KIỀU LIÊN</div>
+    </div>
+</div>

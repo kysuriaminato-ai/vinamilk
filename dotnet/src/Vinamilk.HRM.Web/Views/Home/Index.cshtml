@@ -1,0 +1,326 @@
+@using System.Text.Json
+@model Vinamilk.HRM.Application.Analytics.RoleDashboardOverviewDto
+@{
+    ViewData["Title"] = $"Dashboard Điều hành ({Model.RoleView})";
+    var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+}
+
+<!-- EXECUTIVE WELCOME & ROLE SWITCHER -->
+<div class="vnm-card p-4 mb-4 border-0 text-white"
+     style="background: linear-gradient(135deg, #0213B0 0%, #1E3A8A 65%, #010B66 100%);">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <div class="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill mb-2"
+                 style="background: rgba(255,255,255,0.16);">
+                <span class="badge @(Model.IsFromCache ? "bg-info" : "bg-success") rounded-circle p-1"></span>
+                <span class="fs-7 fw-semibold">
+                    @(Model.IsFromCache ? "IMemoryCache Hit (10m TTL)" : "Dữ liệu tính toán mới nhất")
+                    • Kỳ @Model.SelectedMonth/@Model.SelectedYear • @Model.GeneratedAtUtc.ToLocalTime().ToString("HH:mm:ss")
+                </span>
+            </div>
+            <h1 class="fw-extrabold mb-1" style="font-size: var(--vnm-fs-2xl);">
+                Dashboard Quản trị Nhân sự — Góc nhìn @Model.RoleView
+            </h1>
+            <p class="text-white-50 fs-6 mb-0">
+                Tổng hợp Headcount, Biến động (Turnover), Quỹ lương Gross/Net/BHXH, Cơ cấu nhân lực & Cảnh báo hợp đồng
+            </p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="/Reports" class="btn btn-light fw-bold text-primary">
+                <i class="ti ti-file-spreadsheet me-1"></i>Báo cáo BM01–BM04
+            </a>
+            <a href="/ESS" class="btn btn-outline-light">
+                <i class="ti ti-device-mobile me-1"></i>Cổng ESS / MSS
+            </a>
+            <a href="/AiExpert" class="btn btn-outline-light">
+                <i class="ti ti-sparkles me-1"></i>AI HR Expert
+            </a>
+        </div>
+    </div>
+
+    <!-- Role Switcher Tabs -->
+    <div class="d-flex flex-wrap gap-2 mt-3 pt-3 border-top" style="border-color: rgba(255,255,255,0.18) !important;">
+        @foreach (var rv in new[] { ("Executive", "Ban Điều hành (CEO/CFO)"), ("HR", "Nhân sự & C&B"), ("Manager", "Trưởng Bộ phận"), ("Employee", "Nhân viên") })
+        {
+            var active = string.Equals(Model.RoleView, rv.Item1, StringComparison.OrdinalIgnoreCase);
+            <a href="@Url.Action("Index", new { roleView = rv.Item1, year = Model.SelectedYear, month = Model.SelectedMonth, unitId = Model.SelectedUnitId })"
+               class="btn btn-sm @(active ? "btn-light text-primary fw-bold" : "btn-outline-light")">
+                @rv.Item2
+            </a>
+        }
+    </div>
+</div>
+
+<!-- FILTER BAR -->
+<form method="get" action="/" class="vnm-card p-3 mb-4">
+    <input type="hidden" name="roleView" value="@Model.RoleView" />
+    <div class="row g-2 align-items-end">
+        <div class="col-6 col-md-2">
+            <label class="form-label fs-7 fw-semibold mb-1">Năm</label>
+            <select name="year" class="form-select form-select-sm">
+                @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 2; y--)
+                {
+                    <option value="@y" selected="@(Model.SelectedYear == y)">Năm @y</option>
+                }
+            </select>
+        </div>
+        <div class="col-6 col-md-2">
+            <label class="form-label fs-7 fw-semibold mb-1">Tháng</label>
+            <select name="month" class="form-select form-select-sm">
+                @for (int m = 1; m <= 12; m++)
+                {
+                    <option value="@m" selected="@(Model.SelectedMonth == m)">Tháng @m</option>
+                }
+            </select>
+        </div>
+        <div class="col-12 col-md-4">
+            <label class="form-label fs-7 fw-semibold mb-1">Đơn vị / Phòng ban</label>
+            <select name="unitId" class="form-select form-select-sm">
+                <option value="">-- Toàn bộ Vinamilk --</option>
+                @foreach (var u in Model.Units)
+                {
+                    <option value="@u.Id" selected="@(Model.SelectedUnitId == u.Id)">@u.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-12 col-md-4 d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+                <i class="ti ti-filter me-1"></i>Lọc dữ liệu
+            </button>
+            <button type="submit" name="refresh" value="true" class="btn btn-outline-secondary btn-sm" title="Làm mới Cache">
+                <i class="ti ti-refresh me-1"></i>Làm mới Cache
+            </button>
+        </div>
+    </div>
+</form>
+
+<!-- KPI CARDS -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="text-muted fs-7 fw-semibold">Tổng Nhân sự đang làm việc</div>
+                    <div class="fs-2 fw-extrabold text-primary mt-1">@Model.TotalHeadcount</div>
+                </div>
+                <span class="badge bg-primary-subtle text-primary p-2 rounded-3"><i class="ti ti-users fs-4"></i></span>
+            </div>
+            <div class="fs-7 text-muted mt-2">
+                Chính thức: <strong>@Model.OfficialCount</strong> • Thử việc: <strong>@Model.ProbationCount</strong>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="text-muted fs-7 fw-semibold">Tỷ lệ Nghỉ việc (Turnover)</div>
+                    <div class="fs-2 fw-extrabold @(Model.TurnoverRatePercent > 10 ? "text-danger" : "text-success") mt-1">
+                        @Model.TurnoverRatePercent.ToString("0.0")%
+                    </div>
+                </div>
+                <span class="badge bg-warning-subtle text-warning p-2 rounded-3"><i class="ti ti-user-minus fs-4"></i></span>
+            </div>
+            <div class="fs-7 text-muted mt-2">
+                Nghỉ việc / Nghỉ hưu: <strong>@Model.ResignedOrRetiredCount</strong> • Chờ duyệt: <strong>@Model.PendingApprovalsCount</strong>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="text-muted fs-7 fw-semibold">Tổng Quỹ lương Gross</div>
+                    <div class="fs-3 fw-extrabold text-dark mt-1">@Model.TotalMonthlyPayrollGross.ToString("N0") đ</div>
+                </div>
+                <span class="badge bg-success-subtle text-success p-2 rounded-3"><i class="ti ti-cash fs-4"></i></span>
+            </div>
+            <div class="fs-7 text-muted mt-2">
+                Thực nhận (Net): <strong>@Model.TotalMonthlyPayrollNet.ToString("N0") đ</strong>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="text-muted fs-7 fw-semibold">BHXH Doanh nghiệp & Cảnh báo</div>
+                    <div class="fs-3 fw-extrabold text-info mt-1">@Model.TotalCompanySiCost.ToString("N0") đ</div>
+                </div>
+                <span class="badge bg-danger-subtle text-danger p-2 rounded-3"><i class="ti ti-bell-ringing fs-4"></i></span>
+            </div>
+            <div class="fs-7 text-muted mt-2">
+                HĐ hết hạn (30d): <strong class="text-danger">@Model.ExpiringContractsCount</strong> • Sinh nhật: <strong>@Model.BirthdaysInMonth.Count</strong>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CHARTS ROW 1 -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-7">
+        <div class="vnm-card p-3 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="fw-bold mb-0"><i class="ti ti-chart-bar me-2 text-primary"></i>Cơ cấu Nhân sự theo Đơn vị</h5>
+                <span class="badge bg-light text-dark">Headcount</span>
+            </div>
+            <div id="chartDivisionHeadcount" style="min-height: 300px;"></div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-5">
+        <div class="vnm-card p-3 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="fw-bold mb-0"><i class="ti ti-chart-area me-2 text-success"></i>Xu hướng Quỹ lương Gross</h5>
+                <span class="badge bg-light text-dark">Theo tháng</span>
+            </div>
+            <div id="chartPayrollTrend" style="min-height: 300px;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- CHARTS ROW 2 -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+        <div class="vnm-card p-3 h-100">
+            <h6 class="fw-bold mb-2"><i class="ti ti-gender-bigender me-1 text-primary"></i>Cơ cấu Giới tính</h6>
+            <div id="chartGender" style="min-height: 240px;"></div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="vnm-card p-3 h-100">
+            <h6 class="fw-bold mb-2"><i class="ti ti-cake me-1 text-warning"></i>Cơ cấu Nhóm tuổi</h6>
+            <div id="chartAge" style="min-height: 240px;"></div>
+        </div>
+    </div>
+    <div class="col-12 col-md-4">
+        <div class="vnm-card p-3 h-100">
+            <h6 class="fw-bold mb-2"><i class="ti ti-school me-1 text-info"></i>Trình độ Chuyên môn</h6>
+            <div id="chartEducation" style="min-height: 240px;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ACTIONABLE ALERTS TABLES -->
+<div class="row g-3">
+    <div class="col-12 col-lg-7">
+        <div class="vnm-card p-3 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0"><i class="ti ti-file-alert me-2 text-danger"></i>Hợp đồng lao động sắp hết hạn (30 ngày)</h5>
+                <a href="/Employee" class="btn btn-sm btn-outline-primary">Quản lý Hồ sơ</a>
+            </div>
+            @if (Model.ExpiringContracts.Count == 0)
+            {
+                <div class="alert alert-success mb-0">Không có hợp đồng nào sắp hết hạn trong 30 ngày tới.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Số HĐ</th>
+                                <th>Nhân viên</th>
+                                <th>Đơn vị</th>
+                                <th>Ngày hết hạn</th>
+                                <th>Còn lại</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var c in Model.ExpiringContracts)
+                            {
+                                <tr>
+                                    <td class="font-monospace fw-semibold">@c.ContractNumber</td>
+                                    <td>@c.EmployeeCode - @c.FullName</td>
+                                    <td>@c.UnitName</td>
+                                    <td>@c.EndDate.ToString("dd/MM/yyyy")</td>
+                                    <td><span class="badge bg-danger-subtle text-danger">@c.DaysRemaining ngày</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+    <div class="col-12 col-lg-5">
+        <div class="vnm-card p-3 h-100">
+            <h5 class="fw-bold mb-3"><i class="ti ti-gift me-2 text-warning"></i>Sinh nhật Nhân sự trong Tháng @Model.SelectedMonth</h5>
+            @if (Model.BirthdaysInMonth.Count == 0)
+            {
+                <div class="text-muted">Không có nhân sự sinh nhật trong tháng @Model.SelectedMonth.</div>
+            }
+            else
+            {
+                <div class="list-group list-group-flush">
+                    @foreach (var b in Model.BirthdaysInMonth)
+                    {
+                        <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-semibold">@b.FullName <span class="text-muted fs-7">(@b.EmployeeCode)</span></div>
+                                <div class="fs-7 text-muted">@b.UnitName • @b.PositionName (@b.TurningAge tuổi)</div>
+                            </div>
+                            <span class="badge bg-warning-subtle text-warning fw-bold">@b.DateOfBirth.ToString("dd/MM")</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.53.0/dist/apexcharts.min.js"></script>
+    <script>
+        (function () {
+            if (typeof ApexCharts === 'undefined') return;
+
+            const divisionData = @Html.Raw(JsonSerializer.Serialize(Model.HeadcountByDivision, jsonOptions));
+            const payrollData = @Html.Raw(JsonSerializer.Serialize(Model.MonthlyPayrollTrend, jsonOptions));
+            const genderData = @Html.Raw(JsonSerializer.Serialize(Model.GenderDistribution, jsonOptions));
+            const ageData = @Html.Raw(JsonSerializer.Serialize(Model.AgeBrackets, jsonOptions));
+            const eduData = @Html.Raw(JsonSerializer.Serialize(Model.EducationDistribution, jsonOptions));
+
+            new ApexCharts(document.querySelector('#chartDivisionHeadcount'), {
+                chart: { type: 'bar', height: 290, toolbar: { show: false } },
+                plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
+                colors: ['#0213B0'],
+                series: [{ name: 'Nhân sự', data: divisionData.map(x => x.value) }],
+                xaxis: { categories: divisionData.map(x => x.label) }
+            }).render();
+
+            new ApexCharts(document.querySelector('#chartPayrollTrend'), {
+                chart: { type: 'area', height: 290, toolbar: { show: false } },
+                colors: ['#0213B0'],
+                dataLabels: { enabled: false },
+                stroke: { curve: 'smooth', width: 2 },
+                series: [{ name: 'Tổng Gross', data: payrollData.map(x => x.value) }],
+                xaxis: { categories: payrollData.map(x => x.label) },
+                yaxis: { labels: { formatter: v => Math.round(v / 1000000) + 'M' } }
+            }).render();
+
+            new ApexCharts(document.querySelector('#chartGender'), {
+                chart: { type: 'donut', height: 235 },
+                colors: ['#0213B0', '#EC4899', '#94A3B8'],
+                series: genderData.map(x => x.value),
+                labels: genderData.map(x => x.label),
+                legend: { position: 'bottom' }
+            }).render();
+
+            new ApexCharts(document.querySelector('#chartAge'), {
+                chart: { type: 'bar', height: 235, toolbar: { show: false } },
+                colors: ['#F59E0B'],
+                plotOptions: { bar: { borderRadius: 4, columnWidth: '50%' } },
+                series: [{ name: 'Số lượng', data: ageData.map(x => x.value) }],
+                xaxis: { categories: ageData.map(x => x.label) }
+            }).render();
+
+            new ApexCharts(document.querySelector('#chartEducation'), {
+                chart: { type: 'bar', height: 235, toolbar: { show: false } },
+                colors: ['#0EA5E9'],
+                plotOptions: { bar: { borderRadius: 4, columnWidth: '55%' } },
+                series: [{ name: 'Số lượng', data: eduData.map(x => x.value) }],
+                xaxis: { categories: eduData.map(x => x.label) }
+            }).render();
+        })();
+    </script>
+}

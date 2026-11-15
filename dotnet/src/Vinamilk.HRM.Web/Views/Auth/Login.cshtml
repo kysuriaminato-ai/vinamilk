@@ -1,0 +1,236 @@
+@{
+    Layout = "~/Views/Shared/_LayoutAuth.cshtml";
+    ViewData["Title"] = "Đăng nhập & Xác thực Đa yếu tố (2FA)";
+    var returnUrl = (string)(ViewData["ReturnUrl"] ?? "/");
+}
+
+<div class="vnm-card overflow-hidden shadow-lg w-100" style="max-width: 1000px; border-radius: var(--vnm-radius-xl);">
+    <div class="row g-0">
+        <!-- Left Brand Panel -->
+        <div class="col-lg-5 d-none d-lg-flex flex-column justify-content-between p-5 text-white position-relative"
+             style="background: linear-gradient(155deg, #0213B0 0%, #010B66 100%);">
+            <div>
+                <div class="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill mb-4"
+                     style="background: rgba(255,255,255,0.14);">
+                    <i class="ti ti-shield-lock"></i>
+                    <span class="fs-7 fw-semibold">Zero-Trust RBAC & 2FA TOTP (RFC 6238)</span>
+                </div>
+                <h1 class="fw-extrabold mb-3" style="font-size: 2rem; letter-spacing: -0.03em;">
+                    VINAMILK<br />ENTERPRISE HRM
+                </h1>
+                <p class="text-white-50 fs-6 mb-4">
+                    Hệ thống Định danh Hợp nhất gắn kết Tài khoản (`identity.Users`) với Hồ sơ Nhân sự (`core.Employees`), kiểm soát Phiên đăng nhập & Khóa bảo vệ sau 5 lần sai.
+                </p>
+
+                <div class="d-flex flex-column gap-3 mt-4">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-3 p-2 bg-white bg-opacity-10">
+                            <i class="ti ti-sitemap fs-4"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold fs-6">6 Vai trò × 62 Quyền × 4 Cấp Data Scope</div>
+                            <div class="text-white-50 fs-7">Toàn công ty • Khối/Đơn vị • Phòng ban • Bản thân</div>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-3 p-2 bg-white bg-opacity-10">
+                            <i class="ti ti-lock-check fs-4"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold fs-6">PBKDF2-SHA256 & Rate Limiting</div>
+                            <div class="text-white-50 fs-7">Chống Brute-Force, Khóa 15 phút khi sai 5 lần</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-4 border-top border-white border-opacity-10 fs-7 text-white-50">
+                © 2026 Công ty Cổ phần Sữa Việt Nam (Vinamilk).
+            </div>
+        </div>
+
+        <!-- Right Auth Form Panel -->
+        <div class="col-lg-7 p-4 p-md-5" style="background: var(--vnm-bg-surface);">
+            @if (TempData["AuthError"] != null)
+            {
+                <div class="alert alert-danger d-flex align-items-center gap-2 py-2 px-3 mb-3 border-0 shadow-sm">
+                    <i class="ti ti-alert-octagon fs-4"></i>
+                    <div class="fs-6 fw-medium">@TempData["AuthError"]</div>
+                </div>
+            }
+            @if (TempData["AuthWarning"] != null)
+            {
+                <div class="alert alert-warning d-flex align-items-center gap-2 py-2 px-3 mb-3 border-0 shadow-sm">
+                    <i class="ti ti-alert-triangle fs-4"></i>
+                    <div class="fs-6 fw-medium">@TempData["AuthWarning"]</div>
+                </div>
+            }
+            @if (TempData["AuthSuccess"] != null)
+            {
+                <div class="alert alert-success d-flex align-items-center gap-2 py-2 px-3 mb-3 border-0 shadow-sm">
+                    <i class="ti ti-circle-check fs-4"></i>
+                    <div class="fs-6 fw-medium">@TempData["AuthSuccess"]</div>
+                </div>
+            }
+
+            <form asp-controller="Auth" asp-action="LoginSubmit" method="post" id="vnmRealLoginForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="returnUrl" value="@returnUrl" />
+                <input type="hidden" name="otpCode" id="combinedOtpInput" value="826904" />
+
+                <!-- STEP 1: CREDENTIALS LOGIN -->
+                <div id="vnmAuthStep1">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="vnm-badge vnm-badge-info"><span class="vnm-badge-dot"></span>Bước 1/2: Xác thực Định danh</span>
+                        <span class="text-muted fs-7 font-monospace">PBKDF2 / Cookie Auth</span>
+                    </div>
+                    <h2 class="fw-extrabold mb-1" style="font-size: var(--vnm-fs-xl);">Đăng nhập Hệ thống</h2>
+                    <p class="text-secondary fs-6 mb-3">
+                        Mật khẩu mặc định của 10 tài khoản Seeded: <code class="fw-bold text-primary">Vinamilk@2026</code>
+                    </p>
+
+                    <!-- Quick Role Demo Selector -->
+                    <div class="mb-3 p-3 rounded-3 border" style="background: var(--vnm-bg-subtle); border-color: var(--vnm-border-subtle) !important;">
+                        <div class="text-uppercase text-muted fw-bold fs-7 mb-2">
+                            <i class="ti ti-bolt text-warning me-1"></i>Chọn nhanh 6 Tài khoản Vai trò trong SQL Server
+                        </div>
+                        <div class="d-flex flex-wrap gap-1">
+                            <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('admin@vinamilk.com.vn', 'SuperAdmin (62/62 quyền - Scope: Toàn công ty)')">SuperAdmin</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('huyen.ntt@vinamilk.com.vn', 'HR Manager (VNM-0020 - Giám đốc Nhân sự)')">HR Manager</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('dung.la@vinamilk.com.vn', 'HR Staff (VNM-0021 - Chuyên viên Nhân sự)')">HR Staff</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('hung.nv@vinamilk.com.vn', 'Line Manager (VNM-0001 - Scope: Đơn vị/Nhà máy)')">Line Manager</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('tri.dm@vinamilk.com.vn', 'Accountant (VNM-0024 - Kế toán Tiền lương)')">Accountant</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary fs-7" onclick="fillDemoAccount('tung.pt@vinamilk.com.vn', 'Employee (VNM-0016 - Scope: Bản thân ESS)')">Employee</button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="loginEmail" class="form-label fw-semibold fs-6">Username, Email hoặc Mã NV <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent"><i class="ti ti-user-check text-secondary"></i></span>
+                            <input type="text"
+                                   id="loginEmail"
+                                   name="usernameOrEmail"
+                                   class="form-control"
+                                   value="admin@vinamilk.com.vn"
+                                   required
+                                   placeholder="VD: admin@vinamilk.com.vn, huyen.ntt hoặc VNM-0020" />
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between">
+                            <label for="loginPassword" class="form-label fw-semibold fs-6">Mật khẩu <span class="text-danger">*</span></label>
+                            <div class="d-flex gap-2">
+                                <a href="/Auth/ForgotPassword" class="text-decoration-none fs-7 text-primary fw-medium">Quên mật khẩu?</a>
+                                <span class="text-muted">•</span>
+                                <a href="/Auth/ChangePassword" class="text-decoration-none fs-7 text-secondary">Đổi mật khẩu</a>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <span class="input-group-text bg-transparent"><i class="ti ti-lock text-secondary"></i></span>
+                            <input type="password"
+                                   id="loginPassword"
+                                   name="password"
+                                   class="form-control"
+                                   value="Vinamilk@2026"
+                                   required />
+                            <button class="btn btn-outline-secondary" type="button" onclick="togglePassVisibility()" aria-label="Hiện/Ẩn mật khẩu">
+                                <i class="ti ti-eye" id="togglePassIcon"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between mb-4">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="rememberDevice" value="true" id="rememberDevice" checked />
+                            <label class="form-check-label fs-6" for="rememberDevice">Ghi nhớ phiên thiết bị 14 ngày (`UserSessions`)</label>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn vnm-btn-primary flex-grow-1 py-2 fs-6">
+                            <i class="ti ti-login me-1"></i>Đăng nhập Ngay
+                        </button>
+                        <button type="button" class="btn btn-outline-primary py-2 px-3 fs-6" onclick="goTo2FAStep()">
+                            <i class="ti ti-device-mobile-message me-1"></i>Bước 2FA TOTP
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STEP 2: 2FA TOTP VERIFICATION -->
+                <div id="vnmAuthStep2" class="d-none">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <span class="vnm-badge vnm-badge-warning"><span class="vnm-badge-dot"></span>Bước 2/2: Bảo mật 2 lớp (2FA TOTP RFC 6238)</span>
+                        <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fs-7" onclick="backToStep1()">
+                            <i class="ti ti-arrow-left me-1"></i>Quay lại Bước 1
+                        </button>
+                    </div>
+
+                    <h2 class="fw-extrabold mb-1" style="font-size: var(--vnm-fs-xl);">Nhập mã xác thực 6 số</h2>
+                    <p class="text-secondary fs-6 mb-4">
+                        Mở ứng dụng <strong>Microsoft / Google Authenticator</strong> cho tài khoản <span id="selectedAccountBadge" class="fw-bold text-primary font-monospace">admin@vinamilk.com.vn</span> (Hoặc dùng mã Demo: <code>826904</code>).
+                    </p>
+
+                    <div class="d-flex justify-content-between gap-2 mb-4" role="group" aria-label="Mã OTP 6 chữ số">
+                        <input type="text" maxlength="1" class="form-control text-center fw-bold fs-3 font-monospace otp-digit" value="8" aria-label="Chữ số OTP 1" />
+                        <input type="text" maxlength="1" class="form-control text-center fw-bold fs-3 font-monospace otp-digit" value="2" aria-label="Chữ số OTP 2" />
+                        <input type="text" maxlength="1" class="form-control text-center fw-bold fs-3 font-monospace otp-digit" value="6" aria-label="Chữ số OTP 3" />
+                        <input type="text" maxlength="1" class="form-control text-center fw-bold fs-3 font-monospace otp-digit" value="9" aria-label="Chữ số OTP 4" />
+                        <input type="text" maxlength="1" class="form-control text-center fw-bold fs-3 font-monospace otp-digit" value="0" aria-label="Chữ số OTP 5" />
+                        <input type="text" maxlength="1" class="form-control text-center fw-bold fs-3 font-monospace otp-digit" value="4" aria-label="Chữ số OTP 6" />
+                    </div>
+
+                    <div class="p-3 rounded-3 mb-4 d-flex align-items-center gap-2 fs-7"
+                         style="background: var(--vnm-info-bg); color: var(--vnm-info);">
+                        <i class="ti ti-shield-check fs-4"></i>
+                        <span>Phiên đăng nhập sẽ được lưu vào bảng <code>identity.UserSessions</code> và ghi nhận vào <code>system.AuditLogs</code>.</span>
+                    </div>
+
+                    <button type="submit" class="btn vnm-btn-primary w-100 py-2 fs-6" onclick="syncOtpDigits()">
+                        <i class="ti ti-shield-lock me-1"></i>Xác nhận OTP & Truy cập Hệ thống
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function fillDemoAccount(email, roleTitle) {
+            document.getElementById('loginEmail').value = email;
+            document.getElementById('loginPassword').value = 'Vinamilk@2026';
+            VnmUI.toast('Đã điền tài khoản: ' + roleTitle, 'info');
+        }
+
+        function togglePassVisibility() {
+            const input = document.getElementById('loginPassword');
+            const icon = document.getElementById('togglePassIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'ti ti-eye-off';
+            } else {
+                input.type = 'password';
+                icon.className = 'ti ti-eye';
+            }
+        }
+
+        function goTo2FAStep() {
+            const email = document.getElementById('loginEmail').value;
+            document.getElementById('selectedAccountBadge').textContent = email;
+            document.getElementById('vnmAuthStep1').classList.add('d-none');
+            document.getElementById('vnmAuthStep2').classList.remove('d-none');
+        }
+
+        function backToStep1() {
+            document.getElementById('vnmAuthStep2').classList.add('d-none');
+            document.getElementById('vnmAuthStep1').classList.remove('d-none');
+        }
+
+        function syncOtpDigits() {
+            const digits = Array.from(document.querySelectorAll('.otp-digit')).map(el => el.value.trim()).join('');
+            document.getElementById('combinedOtpInput').value = digits;
+        }
+    </script>
+}

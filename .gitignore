@@ -1,0 +1,32 @@
+# .NET Core / ASP.NET Core / Visual Studio / Rider
+bin/
+obj/
+out/
+publish/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+.idea/
+
+# Test & Coverage outputs
+TestResults/
+[Tt]est[Rr]esult*/
+coverage*.xml
+coverage*.json
+coverage*.info
+*.coverage
+*.coveragexml
+
+# Logs & Backups & Local runtime artifacts
+logs/
+backups/
+*.log
+.env
+secrets.json
+
+# OS files
+.DS_Store
+Thumbs.db
+

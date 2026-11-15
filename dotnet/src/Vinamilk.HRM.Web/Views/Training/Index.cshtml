@@ -1,0 +1,440 @@
+@model Vinamilk.HRM.Application.Talent.TrainingOverviewDto
+@{
+    ViewData["Title"] = $"Đào tạo & Phát triển Năng lực (Vinamilk Academy {Model.Year})";
+    ViewData["BreadcrumbParent"] = "Phát triển Nhân tài (Phiên 8)";
+    string activeTab = ViewBag.ActiveTab as string ?? "classes";
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">
+            <i class="ti ti-school text-primary me-2"></i>Quản trị Đào tạo Doanh nghiệp (Vinamilk Academy)
+        </h2>
+        <p class="text-secondary mb-0">
+            Danh mục khóa học • Kế hoạch đào tạo năm • Đăng ký, Điểm danh, Đánh giá • Cấp Chứng chỉ vào Hồ sơ 360° & Kiểm soát Chi phí
+        </p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Training/ExportExcel?year=@Model.Year" class="btn btn-outline-success">
+            <i class="ti ti-file-spreadsheet me-1"></i>Xuất Kế hoạch & Chi phí (.xlsx)
+        </a>
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalCreateCourse">
+            <i class="ti ti-book-2 me-1"></i>Thêm Khóa học
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCreateClass">
+            <i class="ti ti-plus me-1"></i>Mở Lớp Đào tạo Mới
+        </button>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-circle-check me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-alert-triangle me-2"></i>@TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-primary">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Danh mục Khóa học</div>
+            <div class="fs-2 fw-bold text-primary mt-1">@Model.TotalCourses khóa</div>
+            <div class="fs-7 text-muted">An toàn TP, Kỹ thuật, Lãnh đạo</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-info">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Lớp học trong Kế hoạch @Model.Year</div>
+            <div class="fs-2 fw-bold text-info mt-1">@Model.TotalClassesInYear lớp</div>
+            <div class="fs-7 text-muted">Tổng học viên: <strong>@Model.AllEnrollments.Count</strong></div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-success">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Chứng chỉ Đã cấp</div>
+            <div class="fs-2 fw-bold text-success mt-1">@Model.TotalPassedCertificates chứng chỉ</div>
+            <div class="fs-7 text-muted">Tự động lưu vào Hồ sơ nhân viên</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-warning">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Tổng Chi phí Đào tạo @Model.Year</div>
+            <div class="fs-3 fw-bold text-warning mt-1 font-monospace">@Model.TotalTrainingCostInYear.ToString("N0") đ</div>
+            <div class="fs-7 text-muted">Theo dõi ngân sách đào tạo năm</div>
+        </div>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "classes" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-classes" type="button">
+            <i class="ti ti-presentation me-1"></i>Kế hoạch & Lớp Đào tạo (@Model.Classes.Count)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "enrollments" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-enrollments" type="button">
+            <i class="ti ti-users me-1"></i>Điểm danh, Đánh giá & Chứng chỉ (@Model.AllEnrollments.Count)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "courses" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-courses" type="button">
+            <i class="ti ti-books me-1"></i>Danh mục Khóa học (@Model.Courses.Count)
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- TAB 1: CLASSES -->
+    <div class="tab-pane fade @(activeTab == "classes" ? "show active" : "")" id="tab-classes">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mã Lớp</th>
+                            <th>Tên Lớp học & Khóa học</th>
+                            <th>Thời gian & Địa điểm</th>
+                            <th>Giảng viên</th>
+                            <th>Sĩ số</th>
+                            <th>Chi phí thực tế</th>
+                            <th class="text-end">Ghi danh</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var cls in Model.Classes)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold text-primary">@cls.ClassCode</td>
+                                <td>
+                                    <div class="fw-bold">@cls.ClassName</div>
+                                    <div class="text-muted fs-7">@cls.CourseName (@cls.CourseCategory)</div>
+                                </td>
+                                <td class="fs-7">
+                                    <div class="font-monospace">@cls.StartDate.ToString("dd/MM/yyyy") — @cls.EndDate.ToString("dd/MM/yyyy")</div>
+                                    <div class="text-muted">@cls.Location</div>
+                                </td>
+                                <td>@cls.InstructorName</td>
+                                <td><span class="badge bg-dark">@cls.EnrolledCount / @cls.MaxCapacity</span></td>
+                                <td class="font-monospace fw-semibold">@cls.TotalActualCost.ToString("N0") đ</td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="openEnrollModal(@cls.Id, '@Html.Raw(cls.ClassName.Replace("'", "\\'"))')">
+                                        <i class="ti ti-user-plus me-1"></i>Ghi danh NV
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: ENROLLMENTS -->
+    <div class="tab-pane fade @(activeTab == "enrollments" ? "show active" : "")" id="tab-enrollments">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Học viên</th>
+                            <th>Lớp học</th>
+                            <th>Chuyên cần</th>
+                            <th>Điểm thi</th>
+                            <th>Kết quả & Chứng chỉ</th>
+                            <th>Khảo sát sau đào tạo</th>
+                            <th class="text-end">Chấm điểm</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in Model.AllEnrollments)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="fw-bold">@e.EmployeeName</div>
+                                    <div class="text-muted fs-7">@e.EmployeeCode • @e.UnitName</div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold">@e.ClassName</div>
+                                    <div class="text-muted fs-7 font-monospace">@e.ClassCode</div>
+                                </td>
+                                <td><span class="badge bg-info-subtle text-info-emphasis">@e.AttendanceRatePercent.ToString("0")%</span></td>
+                                <td class="fw-bold font-monospace">@e.FinalScore.ToString("0.0") / 10</td>
+                                <td>
+                                    @if (e.Result == "Passed")
+                                    {
+                                        <span class="badge bg-success-subtle text-success">Đạt</span>
+                                        <div class="fs-7 font-monospace text-primary mt-1">@e.CertificateNumber</div>
+                                    }
+                                    else if (e.Result == "Failed")
+                                    {
+                                        <span class="badge bg-danger-subtle text-danger">Không đạt</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning-subtle text-warning-emphasis">Đang học</span>
+                                    }
+                                </td>
+                                <td class="fs-7">
+                                    @if (e.FeedbackRating.HasValue)
+                                    {
+                                        <span class="text-warning fw-bold">@e.FeedbackRating/5 ★</span>
+                                        <div class="text-muted">@e.FeedbackComment</div>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-sm btn-primary"
+                                            onclick="openEvalModal(@e.Id, '@Html.Raw(e.EmployeeName.Replace("'", "\\'"))', @e.AttendanceRatePercent, @e.FinalScore)">
+                                        <i class="ti ti-certificate me-1"></i>Đánh giá & Cấp bằng
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: COURSES -->
+    <div class="tab-pane fade @(activeTab == "courses" ? "show active" : "")" id="tab-courses">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mã Khóa</th>
+                            <th>Tên Khóa học</th>
+                            <th>Nhóm Năng lực</th>
+                            <th>Thời lượng</th>
+                            <th>Định mức Chi phí / Người</th>
+                            <th>Cam kết làm việc</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in Model.Courses)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold text-primary">@c.CourseCode</td>
+                                <td>
+                                    <div class="fw-bold">@c.CourseName</div>
+                                    <div class="text-muted fs-7">@c.Description</div>
+                                </td>
+                                <td><span class="badge bg-primary-subtle text-primary">@c.CourseCategory</span></td>
+                                <td>@c.DurationHours giờ</td>
+                                <td class="font-monospace">@c.StandardCostPerPerson.ToString("N0") đ</td>
+                                <td>@c.CommitmentMonths tháng</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Thêm Khóa học -->
+<div class="modal fade" id="modalCreateCourse" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="CreateCourse" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Thêm Khóa học Mới</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2">
+                    <div class="col-4">
+                        <label class="form-label fw-semibold">Mã Khóa (*)</label>
+                        <input type="text" name="courseCode" class="form-control" placeholder="TRN-AI26" required />
+                    </div>
+                    <div class="col-8">
+                        <label class="form-label fw-semibold">Tên Khóa học (*)</label>
+                        <input type="text" name="courseName" class="form-control" required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Nhóm</label>
+                        <select name="courseCategory" class="form-select">
+                            <option value="Technical">Chuyên môn / Kỹ thuật</option>
+                            <option value="Safety">An toàn Thực phẩm / Lao động</option>
+                            <option value="Leadership">Quản lý & Lãnh đạo</option>
+                            <option value="SoftSkills">Kỹ năng mềm</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Thời lượng (Giờ)</label>
+                        <input type="number" name="durationHours" class="form-control" value="16" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Chi phí chuẩn/người</label>
+                        <input type="number" name="standardCostPerPerson" class="form-control" value="4000000" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Cam kết (Tháng)</label>
+                        <input type="number" name="commitmentMonths" class="form-control" value="12" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Mô tả khóa học</label>
+                        <textarea name="description" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-primary">Lưu Khóa học</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Mở Lớp Đào tạo -->
+<div class="modal fade" id="modalCreateClass" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="CreateClass" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Mở Lớp Đào tạo theo Kế hoạch Năm</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Chọn Khóa học (*)</label>
+                    <select name="trainingCourseId" class="form-select" required>
+                        @foreach (var c in Model.Courses)
+                        {
+                            <option value="@c.Id">@c.CourseCode — @c.CourseName</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Tên Lớp học (*)</label>
+                    <input type="text" name="className" class="form-control" required />
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Ngày bắt đầu</label>
+                        <input type="date" name="startDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Ngày kết thúc</label>
+                        <input type="date" name="endDate" class="form-control" value="@DateTime.Today.AddDays(2).ToString("yyyy-MM-dd")" />
+                    </div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Giảng viên</label>
+                        <input type="text" name="instructorName" class="form-control" value="Chuyên gia Vinamilk Academy" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Địa điểm</label>
+                        <input type="text" name="location" class="form-control" value="Vinamilk Tower Q.7" />
+                    </div>
+                </div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Sĩ số tối đa</label>
+                        <input type="number" name="maxCapacity" class="form-control" value="30" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Tổng Chi phí lớp (VNĐ)</label>
+                        <input type="number" name="totalActualCost" class="form-control" value="35000000" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-primary">Mở Lớp Đào tạo</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Ghi danh Học viên -->
+<div class="modal fade" id="modalEnroll" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="EnrollEmployee" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="trainingClassId" id="enrClassId" />
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Ghi danh vào Lớp: <span id="enrClassName" class="text-primary"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label fw-semibold">Chọn Nhân viên tham gia (*)</label>
+                <select name="employeeId" class="form-select" required>
+                    @foreach (var emp in Model.ActiveEmployees)
+                    {
+                        <option value="@emp.Id">@emp.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-primary">Xác nhận Ghi danh</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Chấm điểm & Cấp Chứng chỉ -->
+<div class="modal fade" id="modalEvaluateEnr" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="EvaluateEnrollment" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="enrollmentId" id="evEnrId" />
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Đánh giá Sau Đào tạo: <span id="evEmpName" class="text-primary"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Tỷ lệ Điểm danh (%)</label>
+                        <input type="number" name="attendanceRatePercent" id="evAttendance" class="form-control" min="0" max="100" required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Điểm thi Cuối khóa (0-10)</label>
+                        <input type="number" step="0.1" name="finalScore" id="evScore" class="form-control" min="0" max="10" required />
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Khảo sát chất lượng lớp học (1-5 ★)</label>
+                    <input type="number" name="feedbackRating" class="form-control" value="5" min="1" max="5" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Ý kiến phản hồi của học viên</label>
+                    <textarea name="feedbackComment" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button>
+                <button type="submit" class="btn btn-success">Lưu Điểm & Cấp Chứng chỉ</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openEnrollModal(classId, className) {
+            document.getElementById('enrClassId').value = classId;
+            document.getElementById('enrClassName').textContent = className;
+            new bootstrap.Modal(document.getElementById('modalEnroll')).show();
+        }
+        function openEvalModal(enrId, empName, attRate, score) {
+            document.getElementById('evEnrId').value = enrId;
+            document.getElementById('evEmpName').textContent = empName;
+            document.getElementById('evAttendance').value = attRate;
+            document.getElementById('evScore').value = score > 0 ? score : 8.5;
+            new bootstrap.Modal(document.getElementById('modalEvaluateEnr')).show();
+        }
+    </script>
+}
+

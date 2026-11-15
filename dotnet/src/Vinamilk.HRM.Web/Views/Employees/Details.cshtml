@@ -1,0 +1,786 @@
+@model Vinamilk.HRM.Application.CoreHR.Employees.Employee360ProfileDto
+@{
+    var e = Model.Employee;
+    var ret = Model.RetirementInfo;
+}
+
+<!-- TOP BAR NAVIGATION -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div>
+        <a href="/Employees" class="btn btn-sm btn-outline-secondary">
+            <i class="ti ti-arrow-left me-1"></i>Quay lại Danh sách Nhân sự
+        </a>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Employees/Print2C/@e.Id" target="_blank" class="btn btn-outline-primary">
+            <i class="ti ti-printer me-1"></i>In Sơ yếu lý lịch Mẫu 2C (A4)
+        </a>
+        <a href="/Employees/Export2CPdf/@e.Id" class="btn btn-outline-danger">
+            <i class="ti ti-file-type-pdf me-1"></i>Xuất PDF Mẫu 2C (QuestPDF)
+        </a>
+        <a href="/Transfers?empId=@e.Id" class="btn vnm-btn-primary">
+            <i class="ti ti-arrows-transfer-up me-1"></i>Tạo Quyết định Điều chuyển / Bổ nhiệm
+        </a>
+    </div>
+</div>
+
+@if (TempData["CoreHrSuccess"] != null)
+{
+    <div class="alert alert-success border-0 shadow-sm d-flex align-items-center gap-2 mb-4">
+        <i class="ti ti-circle-check fs-4"></i>
+        <div class="fw-medium">@TempData["CoreHrSuccess"]</div>
+    </div>
+}
+
+<!-- EMPLOYEE 360° HEADER CARD WITH AVATAR CROPPER TRIGGER -->
+<div class="vnm-card p-4 mb-4">
+    <div class="row align-items-center g-3">
+        <div class="col-auto">
+            <div class="position-relative">
+                @if (!string.IsNullOrWhiteSpace(e.AvatarUrl) && e.AvatarUrl.StartsWith("data:image"))
+                {
+                    <img src="@e.AvatarUrl"
+                         alt="@e.FullName"
+                         class="rounded-circle border border-3 border-primary shadow-sm"
+                         style="width: 88px; height: 88px; object-fit: cover;" />
+                }
+                else
+                {
+                    <div class="rounded-circle d-flex align-items-center justify-content-center fw-extrabold text-white shadow"
+                         style="width: 88px; height: 88px; font-size: 2rem; background: linear-gradient(135deg, #0213B0, #0284C7);">
+                        @(e.FullName.Split(' ').LastOrDefault()?[..1] ?? "V")
+                    </div>
+                }
+                <button type="button"
+                        class="btn btn-sm btn-primary rounded-circle position-absolute bottom-0 end-0 p-1 shadow"
+                        title="Cắt & Đổi ảnh đại diện (Crop Avatar)"
+                        data-bs-toggle="modal"
+                        data-bs-target="#cropAvatarModal">
+                    <i class="ti ti-camera"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                <span class="badge bg-primary font-monospace fs-6">@e.EmployeeCode</span>
+                <h1 class="fw-extrabold mb-0" style="font-size: var(--vnm-fs-xl);">@e.FullName</h1>
+                <vnm-status-badge status="@(e.WorkStatus == "Official" ? "success" : "warning")" text="@e.WorkStatus" />
+            </div>
+            <div class="text-secondary fs-6 mb-2">
+                <i class="ti ti-id-badge-2 text-primary me-1"></i><strong>@(e.Position?.PositionName ?? "Chuyên viên")</strong> •
+                <i class="ti ti-building-skyscraper text-primary ms-2 me-1"></i><strong>@(e.OrganizationUnit?.UnitName ?? "Vinamilk")</strong>
+            </div>
+            <div class="d-flex flex-wrap gap-3 text-muted fs-7 font-monospace">
+                <span><i class="ti ti-mail me-1"></i>@(e.WorkEmail ?? "vnm@vinamilk.com.vn")</span>
+                <span><i class="ti ti-phone me-1"></i>@(e.PhoneNumber ?? "0908.xxx.xxx")</span>
+                <span><i class="ti ti-calendar-check me-1"></i>Ngày vào làm: @e.HireDate.ToString("dd/MM/yyyy")</span>
+                <span class="text-primary fw-bold"><i class="ti ti-hourglass-high me-1"></i>Dự kiến nghỉ hưu (BLLĐ 2019): @ret.ExpectedRetirementDate.ToString("MM/yyyy") (@ret.RetirementAgeYears tuổi @(ret.RetirementAgeMonths > 0 ? $"{ret.RetirementAgeMonths}T" : ""))</span>
+            </div>
+        </div>
+
+        <div class="col-lg-3 text-lg-end border-start ps-lg-4">
+            <div class="text-muted fs-7">Tổng Thu nhập Định mức (Gross)</div>
+            <div class="fw-extrabold font-monospace text-primary" style="font-size: var(--vnm-fs-xl);">
+                @((e.BaseSalary + e.PositionAllowance + e.OtherAllowance).ToString("N0")) ₫
+            </div>
+            <div class="text-secondary fs-7">
+                Ngạch/Bậc: <strong>@(e.SalaryStep?.SalaryScale?.ScaleCode ?? "M1") - @(e.SalaryStep?.StepName ?? "Bậc 3")</strong>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 11 TABS NAVIGATION (CHUẨN HỒ SƠ NHÂN VIÊN 360°) -->
+<ul class="nav nav-tabs mb-3 fw-semibold flex-nowrap overflow-auto" role="tablist">
+    <li class="nav-item"><button class="nav-link active text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-1" type="button">1. Thông tin chung</button></li>
+    <li class="nav-item"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-2" type="button">2. Liên hệ</button></li>
+    <li class="nav-item"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-3" type="button">3. Gia đình / Phụ thuộc (@e.Dependents.Count)</button></li>
+    <li class="nav-item"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-4" type="button">4. Học vấn & Chứng chỉ (@e.Certificates.Count)</button></li>
+    <li class="nav-item"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-5" type="button">5. Quá trình công tác (@e.EmploymentHistories.Count)</button></li>
+    <li class="nav-item"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-6" type="button">6. Hợp đồng (@e.Contracts.Count)</button></li>
+    <li class="nav-item"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-7" type="button">7. Lương & Phụ cấp</button></li>
+    <li class="nav-item"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-8" type="button">8. Khen thưởng / Kỷ luật (@e.RewardDisciplines.Count)</button></li>
+    <li class="nav-item"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-9" type="button">9. Đào tạo (@Model.TrainingEnrollments.Count)</button></li>
+    <li class="nav-item"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-10" type="button">10. Tài liệu đính kèm (@e.Documents.Count)</button></li>
+    <li class="nav-item"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#tab-11" type="button">11. Lịch sử thay đổi (@Model.ChangeHistoryLogs.Count)</button></li>
+</ul>
+
+<div class="tab-content">
+    <!-- TAB 1: THÔNG TIN CHUNG (EDITABLE FORM) -->
+    <div class="tab-pane fade show active" id="tab-1" role="tabpanel">
+        <div class="vnm-card p-4">
+            <form asp-controller="Employees" asp-action="Save" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@e.Id" />
+                <input type="hidden" name="phoneNumber" value="@e.PhoneNumber" />
+                <input type="hidden" name="workEmail" value="@e.WorkEmail" />
+                <input type="hidden" name="personalEmail" value="@e.PersonalEmail" />
+                <input type="hidden" name="permanentAddress" value="@e.PermanentAddress" />
+                <input type="hidden" name="currentAddress" value="@e.CurrentAddress" />
+                <input type="hidden" name="bankAccount" value="@Model.DecryptedBankAccount" />
+                <input type="hidden" name="bankName" value="@e.BankName" />
+
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="fw-bold mb-0" style="font-size: var(--vnm-fs-md);">
+                        <i class="ti ti-user-Scan text-primary me-2"></i>1. Thông tin Định danh, Đơn vị & Pháp lý
+                    </h3>
+                    <button type="submit" class="btn vnm-btn-primary">
+                        <i class="ti ti-device-floppy me-1"></i>Lưu Thay đổi & Ghi AuditLog
+                    </button>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Mã Nhân viên</label>
+                        <input type="text" name="employeeCode" value="@e.EmployeeCode" class="form-control font-monospace fw-bold" required />
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-semibold">Họ và Tên khai sinh</label>
+                        <input type="text" name="fullName" value="@e.FullName" class="form-control fw-bold" required />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">Giới tính</label>
+                        <select name="gender" class="form-select">
+                            <option value="Nam" selected="@(e.Gender == "Nam")">Nam</option>
+                            <option value="Nữ" selected="@(e.Gender == "Nữ")">Nữ</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">Ngày sinh</label>
+                        <input type="date" name="dateOfBirth" value="@e.DateOfBirth.ToString("yyyy-MM-dd")" class="form-control font-monospace" required />
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Số CCCD (Mã hóa AES-256)</label>
+                        <input type="text" name="citizenId" value="@Model.DecryptedCitizenId" class="form-control font-monospace" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Mã số thuế TNCN (Mã hóa AES-256)</label>
+                        <input type="text" name="taxCode" value="@Model.DecryptedTaxCode" class="form-control font-monospace" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Số sổ BHXH</label>
+                        <input type="text" name="socialInsuranceNumber" value="@e.SocialInsuranceNumber" class="form-control font-monospace" />
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Đơn vị công tác hiện tại</label>
+                        <select name="organizationUnitId" class="form-select">
+                            @foreach (var u in Model.Units)
+                            {
+                                <option value="@u.Id" selected="@(u.Id == e.OrganizationUnitId)">@u.UnitCode — @u.UnitName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Chức danh công việc</label>
+                        <select name="positionId" class="form-select">
+                            @foreach (var p in Model.Positions)
+                            {
+                                <option value="@p.Id" selected="@(p.Id == e.PositionId)">@p.PositionName</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Ngày vào làm</label>
+                        <input type="date" name="hireDate" value="@e.HireDate.ToString("yyyy-MM-dd")" class="form-control font-monospace" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Trạng thái làm việc</label>
+                        <select name="workStatus" class="form-select">
+                            <option value="Official" selected="@(e.WorkStatus == "Official")">Chính thức (Official)</option>
+                            <option value="Probation" selected="@(e.WorkStatus == "Probation")">Thử việc (Probation)</option>
+                            <option value="Maternity" selected="@(e.WorkStatus == "Maternity")">Nghỉ thai sản</option>
+                            <option value="Resigned" selected="@(e.WorkStatus == "Resigned")">Đã thôi việc</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Loại HĐLĐ</label>
+                        <input type="text" name="currentContractType" value="@e.CurrentContractType" class="form-control font-monospace" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Lương cơ bản (VNĐ)</label>
+                        <input type="number" name="baseSalary" value="@e.BaseSalary" class="form-control font-monospace fw-bold text-primary" />
+                        <input type="hidden" name="positionAllowance" value="@e.PositionAllowance" />
+                        <input type="hidden" name="otherAllowance" value="@e.OtherAllowance" />
+                        <input type="hidden" name="educationLevelId" value="@e.EducationLevelId" />
+                        <input type="hidden" name="major" value="@e.Major" />
+                        <input type="hidden" name="salaryStepId" value="@e.SalaryStepId" />
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- TAB 2: LIÊN HỆ -->
+    <div class="tab-pane fade" id="tab-2" role="tabpanel">
+        <div class="vnm-card p-4">
+            <h3 class="fw-bold mb-3" style="font-size: var(--vnm-fs-md);">2. Thông tin Liên hệ & Địa chỉ Cư trú</h3>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="p-3 rounded-3 border">
+                        <div class="text-muted fs-7">Số điện thoại di động</div>
+                        <div class="fw-bold font-monospace fs-5 mt-1">@(e.PhoneNumber ?? "0908.112.233")</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="p-3 rounded-3 border">
+                        <div class="text-muted fs-7">Email Công việc (Microsoft 365)</div>
+                        <div class="fw-bold font-monospace fs-6 mt-1 text-primary">@(e.WorkEmail ?? "vnm@vinamilk.com.vn")</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="p-3 rounded-3 border">
+                        <div class="text-muted fs-7">Email Cá nhân</div>
+                        <div class="fw-bold font-monospace fs-6 mt-1">@(e.PersonalEmail ?? "canhan@gmail.com")</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="p-3 rounded-3 border">
+                        <div class="text-muted fs-7">Hộ khẩu thường trú</div>
+                        <div class="fw-semibold mt-1">@(e.PermanentAddress ?? "Số 10 Tân Trào, Phường Tân Phú, Quận 7, TP. Hồ Chí Minh")</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="p-3 rounded-3 border">
+                        <div class="text-muted fs-7">Chỗ ở hiện nay</div>
+                        <div class="fw-semibold mt-1">@(e.CurrentAddress ?? e.PermanentAddress ?? "Quận 7, TP. Hồ Chí Minh")</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: GIA ĐÌNH / NGƯỜI PHỤ THUỘC GIẢM TRỪ GIA CẢNH -->
+    <div class="tab-pane fade" id="tab-3" role="tabpanel">
+        <div class="vnm-card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h3 class="fw-bold mb-0" style="font-size: var(--vnm-fs-md);">
+                        3. Quan hệ Gia đình & Người phụ thuộc Giảm trừ Gia cảnh (4.400.000 ₫/người/tháng)
+                    </h3>
+                </div>
+                <button type="button" class="btn btn-sm vnm-btn-primary" data-bs-toggle="modal" data-bs-target="#addDependentModal">
+                    <i class="ti ti-plus me-1"></i>Thêm Người phụ thuộc
+                </button>
+            </div>
+
+            <div class="vnm-table-wrapper">
+                <table class="vnm-table">
+                    <thead>
+                        <tr>
+                            <th>Họ và Tên Người thân</th>
+                            <th>Quan hệ</th>
+                            <th>Ngày sinh</th>
+                            <th>Giảm trừ Thuế TNCN</th>
+                            <th>Từ ngày</th>
+                            <th>Liên hệ khẩn cấp</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var d in e.Dependents)
+                        {
+                            <tr>
+                                <td class="fw-bold">@d.FullName</td>
+                                <td><span class="badge bg-info-subtle text-info">@d.Relationship</span></td>
+                                <td class="font-monospace">@(d.DateOfBirth?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                <td>
+                                    @if (d.IsTaxDeductible)
+                                    {
+                                        <vnm-status-badge status="success" text="Có giảm trừ (-4.4 Tr)" />
+                                    }
+                                    else
+                                    {
+                                        <vnm-status-badge status="neutral" text="Không giảm trừ" />
+                                    }
+                                </td>
+                                <td class="font-monospace">@(d.DeductionFromDate?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                <td class="font-monospace">@(d.EmergencyPhone ?? "-")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 4: HỌC VẤN & CHỨNG CHỈ -->
+    <div class="tab-pane fade" id="tab-4" role="tabpanel">
+        <div class="vnm-card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h3 class="fw-bold mb-1" style="font-size: var(--vnm-fs-md);">4. Trình độ Học vấn, Bằng cấp & Chứng chỉ Chuyên môn</h3>
+                    <div class="text-secondary fs-6">
+                        Trình độ cao nhất: <strong>@(e.EducationLevel?.LevelName ?? "Đại học")</strong> • Chuyên ngành: <strong>@(e.Major ?? "Công nghệ Thực phẩm / Quản trị")</strong>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm vnm-btn-primary" data-bs-toggle="modal" data-bs-target="#addCertModal">
+                    <i class="ti ti-certificate me-1"></i>Thêm Chứng chỉ
+                </button>
+            </div>
+
+            <div class="vnm-table-wrapper">
+                <table class="vnm-table">
+                    <thead>
+                        <tr>
+                            <th>Tên Văn bằng / Chứng chỉ</th>
+                            <th>Phân loại</th>
+                            <th>Tổ chức cấp</th>
+                            <th>Ngày cấp</th>
+                            <th>Xếp loại / Điểm</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in e.Certificates)
+                        {
+                            <tr>
+                                <td class="fw-bold">@c.CertificateName</td>
+                                <td><span class="badge bg-primary-subtle text-primary">@c.CertificateType</span></td>
+                                <td>@(c.IssuedBy ?? "Bộ GD&ĐT / Quốc tế")</td>
+                                <td class="font-monospace">@(c.IssueDate?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                <td class="fw-semibold text-success">@(c.ScoreOrGrade ?? "Xuất sắc")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 5: QUÁ TRÌNH CÔNG TÁC -->
+    <div class="tab-pane fade" id="tab-5" role="tabpanel">
+        <div class="vnm-card p-4">
+            <h3 class="fw-bold mb-3" style="font-size: var(--vnm-fs-md);">5. Dòng thời gian Quá trình Công tác & Bổ nhiệm (`EmploymentHistories`)</h3>
+            <div class="vnm-timeline">
+                @foreach (var h in e.EmploymentHistories)
+                {
+                    <div class="vnm-timeline-item">
+                        <div class="vnm-timeline-dot"></div>
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-bold text-primary">@h.PositionName — @h.DepartmentName</span>
+                            <span class="font-monospace fs-7">@h.FromDate.ToString("dd/MM/yyyy") → @(h.ToDate?.ToString("dd/MM/yyyy") ?? "Nay")</span>
+                        </div>
+                        <div class="text-secondary fs-7 mt-1">@h.CompanyName • @h.Notes</div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 6: HỢP ĐỒNG LAO ĐỘNG & PHỤ LỤC -->
+    <div class="tab-pane fade" id="tab-6" role="tabpanel">
+        <div class="vnm-card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h3 class="fw-bold mb-0" style="font-size: var(--vnm-fs-md);">6. Hợp đồng Lao động & Phụ lục Gia hạn (`LaborContracts`)</h3>
+                <a href="/Contracts" class="btn btn-sm btn-outline-primary">Mở Trung tâm Quản lý Hợp đồng</a>
+            </div>
+            <div class="vnm-table-wrapper">
+                <table class="vnm-table">
+                    <thead>
+                        <tr>
+                            <th>Số Hợp đồng</th>
+                            <th>Loại HĐLĐ</th>
+                            <th>Ngày hiệu lực</th>
+                            <th>Ngày hết hạn</th>
+                            <th>Lương HĐ</th>
+                            <th>Số Phụ lục</th>
+                            <th>Trạng thái</th>
+                            <th class="text-end">In HĐ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in e.Contracts)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold text-primary">@c.ContractNumber</td>
+                                <td>@c.ContractType</td>
+                                <td class="font-monospace">@c.StartDate.ToString("dd/MM/yyyy")</td>
+                                <td class="font-monospace">@(c.EndDate?.ToString("dd/MM/yyyy") ?? "Vô thời hạn")</td>
+                                <td class="font-monospace fw-bold">@c.BaseSalary.ToString("N0") ₫</td>
+                                <td><span class="badge bg-info-subtle text-info">@c.Addendums.Count phụ lục</span></td>
+                                <td><vnm-status-badge status="success" text="@c.Status" /></td>
+                                <td class="text-end">
+                                    <a href="/Contracts/Print/@c.Id" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="ti ti-printer me-1"></i>In HĐ A4
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 7: LƯƠNG, PHỤ CẤP & TÀI KHOẢN NGÂN HÀNG -->
+    <div class="tab-pane fade" id="tab-7" role="tabpanel">
+        <div class="vnm-card p-4">
+            <h3 class="fw-bold mb-3" style="font-size: var(--vnm-fs-md);">7. Cơ cấu Lương 3P, Phụ cấp & Tài khoản Nhận lương</h3>
+            <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                    <div class="p-3 rounded-3 border">
+                        <div class="text-muted fs-7">Lương cơ bản theo Ngạch/Bậc</div>
+                        <div class="fw-extrabold font-monospace fs-4 text-primary mt-1">@e.BaseSalary.ToString("N0") ₫</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="p-3 rounded-3 border">
+                        <div class="text-muted fs-7">Phụ cấp Chức vụ</div>
+                        <div class="fw-extrabold font-monospace fs-4 text-success mt-1">@e.PositionAllowance.ToString("N0") ₫</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="p-3 rounded-3 border">
+                        <div class="text-muted fs-7">Phụ cấp Độc hại / Điện thoại / Ăn ca</div>
+                        <div class="fw-extrabold font-monospace fs-4 text-info mt-1">@e.OtherAllowance.ToString("N0") ₫</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="p-3 rounded-3 border">
+                        <div class="text-muted fs-7">Tài khoản Ngân hàng (Giải mã AES-256)</div>
+                        <div class="fw-bold font-monospace fs-6 mt-1">@Model.DecryptedBankAccount</div>
+                        <div class="text-secondary fs-7">@(e.BankName ?? "Vietcombank") - @(e.BankBranch ?? "CN Nam Sài Gòn")</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 8: KHEN THƯỞNG & KỶ LUẬT -->
+    <div class="tab-pane fade" id="tab-8" role="tabpanel">
+        <div class="vnm-card p-4">
+            <h3 class="fw-bold mb-3" style="font-size: var(--vnm-fs-md);">8. Lịch sử Khen thưởng & Kỷ luật (`RewardDisciplines`)</h3>
+            <div class="vnm-table-wrapper">
+                <table class="vnm-table">
+                    <thead>
+                        <tr>
+                            <th>Số Quyết định</th>
+                            <th>Loại</th>
+                            <th>Danh hiệu / Hình thức</th>
+                            <th>Ngày hiệu lực</th>
+                            <th>Số tiền thưởng/phạt</th>
+                            <th>Lý do</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in e.RewardDisciplines)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold">@r.DecisionNumber</td>
+                                <td>
+                                    <vnm-status-badge status="@(r.Type == "Reward" ? "success" : "danger")" text="@(r.Type == "Reward" ? "Khen thưởng" : "Kỷ luật")" />
+                                </td>
+                                <td class="fw-semibold">@(r.Category?.CategoryName ?? r.Type)</td>
+                                <td class="font-monospace">@r.EffectiveDate.ToString("dd/MM/yyyy")</td>
+                                <td class="font-monospace fw-bold @(r.Type == "Reward" ? "text-success" : "text-danger")">@r.Amount.ToString("N0") ₫</td>
+                                <td>@r.Reason</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 9: ĐÀO TẠO & PHÁT TRIỂN -->
+    <div class="tab-pane fade" id="tab-9" role="tabpanel">
+        <div class="vnm-card p-4">
+            <h3 class="fw-bold mb-3" style="font-size: var(--vnm-fs-md);">9. Khóa học & Chương trình Đào tạo đã tham gia (`TrainingEnrollments`)</h3>
+            @if (Model.TrainingEnrollments.Count == 0)
+            {
+                <vnm-empty-state title="Chưa có dữ liệu khóa học" description="Nhân viên sẽ được ghi danh vào các khóa đào tạo hội nhập và nâng cao năng lực trong kỳ tới." />
+            }
+            else
+            {
+                <div class="vnm-table-wrapper">
+                    <table class="vnm-table">
+                        <thead>
+                            <tr>
+                                <th>Mã Lớp</th>
+                                <th>Tên Khóa học</th>
+                                <th>Tỷ lệ chuyên cần</th>
+                                <th>Điểm tổng kết</th>
+                                <th>Kết quả</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var te in Model.TrainingEnrollments)
+                            {
+                                <tr>
+                                    <td class="font-monospace">@te.TrainingClass.ClassCode</td>
+                                    <td class="fw-bold">@te.TrainingClass.TrainingCourse.CourseName</td>
+                                    <td class="font-monospace">@te.AttendanceRatePercent%</td>
+                                    <td class="font-monospace fw-bold">@te.FinalScore</td>
+                                    <td><vnm-status-badge status="success" text="@te.Result" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- TAB 10: TÀI LIỆU ĐÍNH KÈM -->
+    <div class="tab-pane fade" id="tab-10" role="tabpanel">
+        <div class="vnm-card p-4">
+            <div class="row g-4">
+                <div class="col-lg-7">
+                    <h3 class="fw-bold mb-3" style="font-size: var(--vnm-fs-md);">10. Kho Lưu trữ Hồ sơ Số hóa (`EmployeeDocuments`)</h3>
+                    <div class="vnm-table-wrapper">
+                        <table class="vnm-table">
+                            <thead>
+                                <tr>
+                                    <th>Loại tài liệu</th>
+                                    <th>Tiêu đề tệp</th>
+                                    <th>Đường dẫn lưu trữ</th>
+                                    <th>Dung lượng</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var doc in e.Documents)
+                                {
+                                    <tr>
+                                        <td><span class="badge bg-primary-subtle text-primary">@doc.DocumentCategory</span></td>
+                                        <td class="fw-bold">@doc.DocumentTitle</td>
+                                        <td class="font-monospace fs-7 text-muted">@doc.FilePath</td>
+                                        <td class="font-monospace fs-7">@((doc.FileSizeBytes / 1024.0).ToString("0.0")) KB</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <h4 class="fw-bold mb-2" style="font-size: var(--vnm-fs-md);">Tải lên Tài liệu Đính kèm Mới</h4>
+                    <form asp-controller="Employees" asp-action="AddDocument" method="post" enctype="multipart/form-data">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="employeeId" value="@e.Id" />
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold">Phân loại tài liệu</label>
+                            <select name="documentCategory" class="form-select">
+                                <option value="CitizenID">Bản scan CCCD 2 mặt</option>
+                                <option value="Degree">Bằng Đại học / Sau Đại học</option>
+                                <option value="HealthCheck">Giấy khám sức khỏe định kỳ</option>
+                                <option value="ContractScan">Bản scan Hợp đồng đã ký</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label fw-semibold">Tiêu đề tài liệu</label>
+                            <input type="text" name="documentTitle" class="form-control" value="Hồ sơ khám sức khỏe định kỳ 2026" required />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Tệp đính kèm</label>
+                            <input type="file" name="uploadFile" class="form-control" />
+                        </div>
+                        <button type="submit" class="btn vnm-btn-primary w-100">
+                            <i class="ti ti-cloud-upload me-1"></i>Đính kèm vào Hồ sơ 360°
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 11: LỊCH SỬ THAY ĐỔI (AUDIT LOGS) -->
+    <div class="tab-pane fade" id="tab-11" role="tabpanel">
+        <div class="vnm-card p-4">
+            <h3 class="fw-bold mb-3" style="font-size: var(--vnm-fs-md);">11. Nhật ký Kiểm toán Thay đổi Hồ sơ (`system.AuditLogs`)</h3>
+            <div class="vnm-table-wrapper">
+                <table class="vnm-table">
+                    <thead>
+                        <tr>
+                            <th>Thời gian</th>
+                            <th>Người thực hiện</th>
+                            <th>Thao tác</th>
+                            <th>Cột thay đổi</th>
+                            <th>Giá trị Mới (`NewValuesJson`)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var log in Model.ChangeHistoryLogs)
+                        {
+                            <tr>
+                                <td class="font-monospace fs-7">@log.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                <td class="font-monospace fw-bold text-primary">@log.Username</td>
+                                <td><vnm-status-badge status="info" text="@log.ActionType" /></td>
+                                <td class="font-monospace fs-7">@(log.AffectedColumns ?? "-")</td>
+                                <td class="font-monospace fs-7 text-truncate" style="max-width: 360px;">@log.NewValuesJson</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL CROP ẢNH ĐẠI DIỆN (INTERACTIVE CANVAS CROPPER) -->
+<div class="modal fade" id="cropAvatarModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: var(--vnm-radius-lg);">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold">
+                    <i class="ti ti-crop text-primary me-2"></i>Cắt & Cập nhật Ảnh đại diện Nhân sự (Avatar Crop)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Employees" asp-action="UpdateAvatar" method="post" onsubmit="prepareCroppedAvatar()">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="employeeId" value="@e.Id" />
+                <input type="hidden" name="croppedDataUrl" id="croppedDataUrlInput" />
+                <div class="modal-body text-center">
+                    <div class="mb-3">
+                        <input type="file" id="avatarFilePicker" class="form-control" accept="image/*" onchange="loadAvatarForCrop(this)" />
+                    </div>
+                    <canvas id="avatarCropCanvas" width="220" height="220" class="rounded-circle border border-3 border-primary shadow-sm mx-auto d-block"></canvas>
+                    <div class="mt-2">
+                        <label class="form-label fs-7 text-muted">Thu phóng vùng cắt (Zoom Crop):</label>
+                        <input type="range" class="form-range" min="1" max="2.5" step="0.1" value="1.2" id="avatarZoomRange" oninput="drawAvatarCrop()" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn vnm-btn-primary">
+                        <i class="ti ti-check me-1"></i>Cắt ảnh & Lưu vào Hồ sơ
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL THÊM NGƯỜI PHỤ THUỘC -->
+<div class="modal fade" id="addDependentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold">Thêm Người phụ thuộc Giảm trừ Gia cảnh</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Employees" asp-action="AddDependent" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="employeeId" value="@e.Id" />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Họ và Tên Người thân <span class="text-danger">*</span></label>
+                        <input type="text" name="fullName" class="form-control" required placeholder="VD: Nguyễn Minh Khôi" />
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Quan hệ</label>
+                            <select name="relationship" class="form-select">
+                                <option value="Child">Con ruột</option>
+                                <option value="Spouse">Vợ / Chồng</option>
+                                <option value="Mother">Mẹ ruột</option>
+                                <option value="Father">Cha ruột</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Ngày sinh</label>
+                            <input type="date" name="dateOfBirth" class="form-control font-monospace" value="2018-09-10" />
+                        </div>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="isTaxDeductible" value="true" checked id="chkTaxDed" />
+                        <label class="form-check-label" for="chkTaxDed">Đăng ký giảm trừ gia cảnh Thuế TNCN (-4.400.000 ₫/tháng)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="isEmergencyContact" value="true" checked id="chkEmerg" />
+                        <label class="form-check-label" for="chkEmerg">Là người liên hệ khẩn cấp</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn vnm-btn-primary">Lưu Người phụ thuộc</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL THÊM CHỨNG CHỈ -->
+<div class="modal fade" id="addCertModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold">Bổ sung Văn bằng / Chứng chỉ</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Employees" asp-action="AddCertificate" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="employeeId" value="@e.Id" />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Tên Chứng chỉ <span class="text-danger">*</span></label>
+                        <input type="text" name="certificateName" class="form-control" value="PMP - Project Management Professional" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Tổ chức cấp</label>
+                        <input type="text" name="issuedBy" class="form-control" value="PMI Institute" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Xếp loại / Điểm số</label>
+                        <input type="text" name="scoreOrGrade" class="form-control" value="Above Target" />
+                    </div>
+                    <input type="hidden" name="certificateType" value="International" />
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn vnm-btn-primary">Lưu Chứng chỉ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let avatarImg = null;
+        function drawAvatarCrop() {
+            const canvas = document.getElementById('avatarCropCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const zoom = parseFloat(document.getElementById('avatarZoomRange')?.value || '1.2');
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (avatarImg) {
+                const w = canvas.width * zoom;
+                const h = canvas.height * zoom;
+                const x = (canvas.width - w) / 2;
+                const y = (canvas.height - h) / 2;
+                ctx.drawImage(avatarImg, x, y, w, h);
+            } else {
+                const grad = ctx.createLinearGradient(0, 0, 220, 220);
+                grad.addColorStop(0, '#0213B0');
+                grad.addColorStop(1, '#059669');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, 220, 220);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 52px Be Vietnam Pro, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('@e.EmployeeCode', 110, 110);
+            }
+        }
+
+        function loadAvatarForCrop(input) {
+            if (!input.files || !input.files[0]) return;
+            const reader = new FileReader();
+            reader.onload = function (evt) {
+                avatarImg = new Image();
+                avatarImg.onload = () => drawAvatarCrop();
+                avatarImg.src = evt.target.result;
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+
+        function prepareCroppedAvatar() {
+            const canvas = document.getElementById('avatarCropCanvas');
+            document.getElementById('croppedDataUrlInput').value = canvas.toDataURL('image/png');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => drawAvatarCrop());
+    </script>
+}
+

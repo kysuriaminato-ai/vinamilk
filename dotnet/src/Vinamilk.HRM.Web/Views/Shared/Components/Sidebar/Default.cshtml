@@ -1,0 +1,49 @@
+@model IReadOnlyList<Vinamilk.HRM.Web.ViewComponents.SidebarMenuGroup>
+@{
+    var currentPath = (string)(ViewBag.CurrentPath ?? "/");
+}
+
+<aside id="vnmSidebar" class="vnm-sidebar" aria-label="Menu điều hướng chính">
+    <!-- Brand Header -->
+    <a href="/" class="vnm-sidebar-brand">
+        <div class="vnm-brand-logo" title="Vinamilk Enterprise HRM">VNM</div>
+        <div class="vnm-brand-text">
+            <div class="fw-extrabold fs-4 lh-1" style="letter-spacing: -0.03em;">VINAMILK</div>
+            <div class="fs-7 text-white-50 fw-medium mt-1">Enterprise HRM .NET 8</div>
+        </div>
+    </a>
+
+    <!-- Navigation Links -->
+    <div class="vnm-sidebar-nav">
+        @foreach (var group in Model)
+        {
+            <div class="vnm-nav-section-title">@group.GroupTitle</div>
+            @foreach (var item in group.Items)
+            {
+                var isActive = string.Equals(currentPath, item.Url, StringComparison.OrdinalIgnoreCase);
+                <a href="@item.Url"
+                   class="vnm-nav-item @(isActive ? "active" : "")"
+                   title="@item.Title"
+                   aria-current="@(isActive ? "page" : null)">
+                    <i class="ti @item.Icon vnm-nav-icon" aria-hidden="true"></i>
+                    <span class="vnm-nav-label flex-grow-1 text-truncate">@item.Title</span>
+                    @if (!string.IsNullOrWhiteSpace(item.BadgeText))
+                    {
+                        <span class="badge rounded-pill @(item.BadgeClass ?? "bg-primary") vnm-nav-badge" style="font-size: 0.68rem;">
+                            @item.BadgeText
+                        </span>
+                    }
+                </a>
+            }
+        }
+    </div>
+
+    <!-- Footer Info -->
+    <div class="p-3 border-top border-white border-opacity-10 vnm-brand-text">
+        <div class="d-flex align-items-center justify-content-between text-white-50 fs-7">
+            <span><i class="ti ti-shield-check text-success me-1"></i>WCAG 2.1 AA</span>
+            <span class="font-monospace">v8.0.3-ENT</span>
+        </div>
+    </div>
+</aside>
+

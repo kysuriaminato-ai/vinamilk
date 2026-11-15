@@ -1,0 +1,468 @@
+@model Vinamilk.HRM.Application.CoreHR.ContractsAndTransfers.TransfersAndLifecycleDto
+@{
+    ViewData["Title"] = "Điều chuyển, Bổ nhiệm, Thử việc, Lộ trình Nghỉ hưu (BLLĐ 2019) & Offboarding";
+    var preEmpId = ViewBag.PreselectedEmpId as int?;
+}
+
+<!-- CORE HR NAVIGATION BAR -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Organization" class="btn btn-outline-primary">
+            <i class="ti ti-sitemap me-1"></i>1. Cơ cấu Tổ chức & Ngạch lương
+        </a>
+        <a href="/Employees" class="btn btn-outline-primary">
+            <i class="ti ti-users me-1"></i>2. Danh sách & Hồ sơ 360°
+        </a>
+        <a href="/Contracts" class="btn btn-outline-primary">
+            <i class="ti ti-file-certificate me-1"></i>3. Hợp đồng & Cảnh báo Hết hạn
+        </a>
+        <a href="/Transfers" class="btn vnm-btn-primary">
+            <i class="ti ti-arrows-transfer-up me-1"></i>4. Điều chuyển, Thử việc & Nghỉ hưu
+        </a>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="button" class="btn vnm-btn-primary" data-bs-toggle="modal" data-bs-target="#createTransferModal">
+            <i class="ti ti-file-plus me-1"></i>Tạo Quyết định Điều chuyển / Bổ nhiệm
+        </button>
+        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#offboardingModal">
+            <i class="ti ti-user-minus me-1"></i>Thủ tục Nghỉ việc (Offboarding)
+        </button>
+    </div>
+</div>
+
+@if (TempData["CoreHrSuccess"] != null)
+{
+    <div class="alert alert-success border-0 shadow-sm d-flex align-items-center gap-2 mb-4">
+        <i class="ti ti-circle-check fs-4"></i>
+        <div class="fw-medium">@TempData["CoreHrSuccess"]</div>
+    </div>
+}
+
+<!-- TABS NAVIGATION -->
+<ul class="nav nav-tabs mb-3 fw-semibold" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-transfers" type="button">
+            <i class="ti ti-arrows-transfer-up me-1 text-primary"></i>1. Điều chuyển, Bổ nhiệm & Thăng chức (@Model.Transfers.Count QĐ)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-probation" type="button">
+            <i class="ti ti-user-check me-1 text-warning"></i>2. Đánh giá Thử việc (@Model.ProbationEmployees.Count NV)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-retirement" type="button">
+            <i class="ti ti-hourglass-high me-1 text-info"></i>3. Lộ trình Nghỉ hưu Bộ luật Lao động 2019 (Điều 169)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-offboarding" type="button">
+            <i class="ti ti-user-off me-1 text-danger"></i>4. Hồ sơ Nghỉ việc / Offboarding (@Model.OffboardedEmployees.Count)
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- TAB 1: ĐIỀU CHUYỂN / BỔ NHIỆM / THĂNG CHỨC -->
+    <div class="tab-pane fade show active" id="tab-transfers" role="tabpanel">
+        <div class="vnm-card p-4">
+            <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+                <div>
+                    <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                        Danh sách Quyết định Điều chuyển, Bổ nhiệm & Thăng chức (`PersonnelTransfers`)
+                    </h2>
+                    <p class="text-secondary fs-6 mb-0">
+                        Khi nhấn <strong>Phê duyệt</strong>, hệ thống tự động cập nhật Đơn vị mới, Chức danh mới, Phụ cấp mới và ghi thêm vào Quá trình công tác (`EmploymentHistories`).
+                    </p>
+                </div>
+            </div>
+
+            <div class="vnm-table-wrapper">
+                <table class="vnm-table vnm-table-mobile-cards">
+                    <thead>
+                        <tr>
+                            <th>Số Quyết định</th>
+                            <th>Nhân sự</th>
+                            <th>Loại Quyết định</th>
+                            <th>Từ Đơn vị / Chức danh</th>
+                            <th>Đến Đơn vị / Chức danh Mới</th>
+                            <th>Ngày hiệu lực</th>
+                            <th>Trạng thái Duyệt</th>
+                            <th class="text-end">Duyệt & In QĐ A4</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in Model.Transfers)
+                        {
+                            <tr>
+                                <td data-label="Số QĐ" class="font-monospace fw-bold text-primary">@t.DecisionNumber</td>
+                                <td data-label="Nhân sự">
+                                    <a href="/Employees/Details/@t.EmployeeId" class="fw-bold text-body text-decoration-none">
+                                        @t.Employee.EmployeeCode — @t.Employee.FullName
+                                    </a>
+                                </td>
+                                <td data-label="Loại QĐ">
+                                    <span class="badge bg-info-subtle text-info">@t.TransferType</span>
+                                </td>
+                                <td data-label="Từ Đơn vị">
+                                    <div class="fw-semibold">@t.FromUnit.UnitName</div>
+                                    <div class="text-muted fs-7">@t.FromPosition.PositionName</div>
+                                </td>
+                                <td data-label="Đến Đơn vị">
+                                    <div class="fw-bold text-primary">@t.ToUnit.UnitName</div>
+                                    <div class="text-success fw-semibold fs-7">@t.ToPosition.PositionName</div>
+                                </td>
+                                <td data-label="Hiệu lực" class="font-monospace">@t.EffectiveDate.ToString("dd/MM/yyyy")</td>
+                                <td data-label="Trạng thái">
+                                    @if (t.Status == "Approved")
+                                    {
+                                        <vnm-status-badge status="success" text="Đã phê duyệt" />
+                                    }
+                                    else if (t.Status == "Rejected")
+                                    {
+                                        <vnm-status-badge status="danger" text="Đã từ chối" />
+                                    }
+                                    else
+                                    {
+                                        <vnm-status-badge status="warning" text="Chờ phê duyệt" />
+                                    }
+                                </td>
+                                <td data-label="Thao tác" class="text-end">
+                                    <div class="d-inline-flex gap-1">
+                                        @if (t.Status == "PendingApproval")
+                                        {
+                                            <form asp-controller="Transfers" asp-action="ApproveTransfer" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="transferId" value="@t.Id" />
+                                                <button type="submit" name="isApproved" value="true" class="btn btn-sm btn-success" title="Phê duyệt & Áp dụng ngay">
+                                                    <i class="ti ti-check"></i> Duyệt
+                                                </button>
+                                                <button type="submit" name="isApproved" value="false" class="btn btn-sm btn-outline-danger" title="Từ chối">
+                                                    <i class="ti ti-x"></i>
+                                                </button>
+                                            </form>
+                                        }
+                                        <a href="/Transfers/PrintDecision/@t.Id" target="_blank" class="btn btn-sm vnm-btn-primary">
+                                            <i class="ti ti-printer me-1"></i>In QĐ A4
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: QUẢN LÝ & ĐÁNH GIÁ THỬ VIỆC -->
+    <div class="tab-pane fade" id="tab-probation" role="tabpanel">
+        <div class="vnm-card p-4">
+            <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                Danh sách Nhân sự Đang Thử việc (Hưởng 85% Lương chuẩn)
+            </h2>
+            <p class="text-secondary fs-6 mb-3">
+                Đánh giá kết quả sau 60 ngày thử việc để chuyển sang Chính thức (100% lương) hoặc chấm dứt thử việc.
+            </p>
+
+            @if (Model.ProbationEmployees.Count == 0)
+            {
+                <vnm-empty-state title="Không có nhân sự đang trong thời gian thử việc"
+                                 description="Tất cả nhân sự thử việc đã được đánh giá và chuyển sang hợp đồng chính thức." />
+            }
+            else
+            {
+                <div class="vnm-table-wrapper">
+                    <table class="vnm-table">
+                        <thead>
+                            <tr>
+                                <th>Mã NV</th>
+                                <th>Họ và Tên</th>
+                                <th>Đơn vị</th>
+                                <th>Chức danh</th>
+                                <th>Ngày bắt đầu</th>
+                                <th>Kết thúc thử việc (60 ngày)</th>
+                                <th class="text-end">Đánh giá Kết quả</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in Model.ProbationEmployees)
+                            {
+                                <tr>
+                                    <td class="font-monospace fw-bold text-primary">@p.EmployeeCode</td>
+                                    <td class="fw-bold">@p.FullName</td>
+                                    <td>@(p.OrganizationUnit?.UnitName)</td>
+                                    <td>@(p.Position?.PositionName)</td>
+                                    <td class="font-monospace">@p.HireDate.ToString("dd/MM/yyyy")</td>
+                                    <td class="font-monospace fw-bold text-warning">@p.HireDate.AddDays(60).ToString("dd/MM/yyyy")</td>
+                                    <td class="text-end">
+                                        <form asp-controller="Transfers" asp-action="EvaluateProbation" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="employeeId" value="@p.Id" />
+                                            <button type="submit" name="passedProbation" value="true" class="btn btn-sm btn-success">
+                                                <i class="ti ti-circle-check me-1"></i>Đạt → Chuyển Chính thức (100%)
+                                            </button>
+                                            <button type="submit" name="passedProbation" value="false" class="btn btn-sm btn-outline-danger">
+                                                Không đạt
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- TAB 3: LỘ TRÌNH TUỔI NGHỈ HƯU THEO BỘ LUẬT LAO ĐỘNG 2019 (ĐIỀU 169 & NĐ 135/2020) -->
+    <div class="tab-pane fade" id="tab-retirement" role="tabpanel">
+        <div class="vnm-card p-4">
+            <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+                <div>
+                    <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                        Dự báo Thời điểm Nghỉ hưu theo Lộ trình Bộ luật Lao động 2019 (Điều 169 & Nghị định 135/2020/NĐ-CP)
+                    </h2>
+                    <p class="text-secondary fs-6 mb-0">
+                        Lao động Nam: Tăng +3 tháng/năm cho đến đủ <strong>62 tuổi (năm 2028)</strong> •
+                        Lao động Nữ: Tăng +4 tháng/năm cho đến đủ <strong>60 tuổi (năm 2035)</strong>.
+                    </p>
+                </div>
+                <span class="vnm-badge vnm-badge-info">VietnamRetirementCalculator</span>
+            </div>
+
+            <div class="vnm-table-wrapper">
+                <table class="vnm-table vnm-table-mobile-cards">
+                    <thead>
+                        <tr>
+                            <th>Mã NV</th>
+                            <th>Họ và Tên</th>
+                            <th>Giới tính</th>
+                            <th>Ngày sinh</th>
+                            <th>Tuổi hiện tại</th>
+                            <th>Tuổi nghỉ hưu theo Luật</th>
+                            <th>Thời điểm hưởng lương hưu</th>
+                            <th>Thời gian còn lại</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.RetirementForecasts)
+                        {
+                            var r = item.RetirementInfo;
+                            <tr>
+                                <td data-label="Mã NV" class="font-monospace fw-bold text-primary">@item.Employee.EmployeeCode</td>
+                                <td data-label="Họ và Tên" class="fw-bold">
+                                    <a href="/Employees/Details/@item.Employee.Id" class="text-decoration-none text-body">@item.Employee.FullName</a>
+                                    <div class="text-muted fs-7">@(item.Employee.OrganizationUnit?.UnitName)</div>
+                                </td>
+                                <td data-label="Giới tính">@r.Gender</td>
+                                <td data-label="Ngày sinh" class="font-monospace">@r.DateOfBirth.ToString("dd/MM/yyyy")</td>
+                                <td data-label="Tuổi hiện tại" class="font-monospace fw-semibold">@r.CurrentAgeYears tuổi @r.CurrentAgeMonths tháng</td>
+                                <td data-label="Tuổi nghỉ hưu" class="font-monospace fw-bold text-primary">
+                                    @r.RetirementAgeYears tuổi @(r.RetirementAgeMonths > 0 ? $"{r.RetirementAgeMonths} tháng" : "")
+                                </td>
+                                <td data-label="Ngày nghỉ hưu" class="font-monospace fw-bold text-success">
+                                    @r.ExpectedRetirementDate.ToString("dd/MM/yyyy")
+                                </td>
+                                <td data-label="Còn lại">
+                                    <span class="badge @(r.RemainingMonths <= 36 ? "bg-warning text-dark" : "bg-secondary-subtle text-secondary") font-monospace">
+                                        @r.RemainingMonths tháng (~@(r.RemainingMonths / 12) năm)
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 4: HỒ SƠ NGHỈ VIỆC / OFFBOARDING -->
+    <div class="tab-pane fade" id="tab-offboarding" role="tabpanel">
+        <div class="vnm-card p-4">
+            <h2 class="fw-bold mb-3" style="font-size: var(--vnm-fs-lg);">
+                Danh sách Nhân sự Đã Thôi việc / Nghỉ hưu (`Offboarding`)
+            </h2>
+
+            @if (Model.OffboardedEmployees.Count == 0)
+            {
+                <vnm-empty-state title="Chưa có nhân sự nghỉ việc" description="Sử dụng nút 'Thủ tục Nghỉ việc (Offboarding)' phía trên để thực hiện quy trình bàn giao và chấm dứt HĐLĐ." />
+            }
+            else
+            {
+                <div class="vnm-table-wrapper">
+                    <table class="vnm-table">
+                        <thead>
+                            <tr>
+                                <th>Mã NV</th>
+                                <th>Họ và Tên</th>
+                                <th>Đơn vị</th>
+                                <th>Chức danh</th>
+                                <th>Ngày chấm dứt HĐ</th>
+                                <th>Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var o in Model.OffboardedEmployees)
+                            {
+                                <tr>
+                                    <td class="font-monospace fw-bold">@o.EmployeeCode</td>
+                                    <td class="fw-bold">@o.FullName</td>
+                                    <td>@(o.OrganizationUnit?.UnitName)</td>
+                                    <td>@(o.Position?.PositionName)</td>
+                                    <td class="font-monospace">@(o.TerminationDate?.ToString("dd/MM/yyyy") ?? "-")</td>
+                                    <td><vnm-status-badge status="danger" text="@o.WorkStatus" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- MODAL TẠO QUYẾT ĐỊNH ĐIỀU CHUYỂN / BỔ NHIỆM / THĂNG CHỨC -->
+<div class="modal fade" id="createTransferModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: var(--vnm-radius-lg);">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold">
+                    <i class="ti ti-arrows-transfer-up text-primary me-2"></i>Tạo Quyết định Điều chuyển / Bổ nhiệm / Thăng chức
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Transfers" asp-action="CreateTransfer" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold">Số Quyết định <span class="text-danger">*</span></label>
+                            <input type="text" name="decisionNumber" class="form-control font-monospace" value="QĐ-BN-2026/088" required />
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold">Loại Quyết định</label>
+                            <select name="transferType" class="form-select">
+                                <option value="Promotion">Bổ nhiệm & Thăng chức (Promotion)</option>
+                                <option value="Transfer">Điều chuyển Đơn vị Công tác (Transfer)</option>
+                                <option value="Appointment">Luân chuyển Cán bộ Quản lý (Rotation)</option>
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Chọn Nhân sự được Điều chuyển / Bổ nhiệm <span class="text-danger">*</span></label>
+                            <select name="employeeId" class="form-select" required>
+                                @foreach (var emp in Model.AllEmployees)
+                                {
+                                    <option value="@emp.Id" selected="@(preEmpId == emp.Id)">
+                                        @emp.EmployeeCode — @emp.FullName (Hiện tại: @(emp.Position?.PositionName) - @(emp.OrganizationUnit?.UnitName))
+                                    </option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Đơn vị Mới (`ToUnitId`) <span class="text-danger">*</span></label>
+                            <select name="toUnitId" class="form-select" required>
+                                @foreach (var u in Model.Units)
+                                {
+                                    <option value="@u.Id">@u.UnitCode — @u.UnitName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Chức danh Mới (`ToPositionId`) <span class="text-danger">*</span></label>
+                            <select name="toPositionId" class="form-select" required>
+                                @foreach (var p in Model.Positions)
+                                {
+                                    <option value="@p.Id">@p.PositionName (PC: @p.DefaultPositionAllowance.ToString("N0") ₫)</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Ngày có hiệu lực</label>
+                            <input type="date" name="effectiveDate" class="form-control font-monospace" value="2026-12-01" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Mức lương cơ bản mới đề xuất (VNĐ)</label>
+                            <input type="number" name="proposedNewSalary" class="form-control font-monospace fw-bold text-primary" value="42000000" />
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Căn cứ & Lý do Điều chuyển / Bổ nhiệm</label>
+                            <textarea name="reason" class="form-control" rows="2">Kiện toàn đội ngũ cán bộ quản lý cấp trung phục vụ chiến lược chuyển đổi số nhà máy thông minh 2026-2030.</textarea>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="approveImmediately" value="true" id="chkApproveNow" checked />
+                                <label class="form-check-label fw-semibold text-success" for="chkApproveNow">
+                                    Phê duyệt & Áp dụng ngay vào Hồ sơ Nhân sự (Bỏ tích nếu muốn tạo ở trạng thái Chờ duyệt)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn vnm-btn-primary">
+                        <i class="ti ti-check me-1"></i>Lưu & Ban hành Quyết định
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL THỦ TỤC NGHỈ VIỆC / OFFBOARDING -->
+<div class="modal fade" id="offboardingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: var(--vnm-radius-lg);">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold text-danger">
+                    <i class="ti ti-user-minus me-2"></i>Thủ tục Nghỉ việc / Nghỉ hưu (Offboarding)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Transfers" asp-action="ProcessOffboarding" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Chọn Nhân sự</label>
+                        <select name="employeeId" class="form-select">
+                            @foreach (var emp in Model.AllEmployees.TakeLast(15))
+                            {
+                                <option value="@emp.Id">@emp.EmployeeCode — @emp.FullName</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Hình thức chấm dứt</label>
+                            <select name="offboardingType" class="form-select">
+                                <option value="Resigned">Thôi việc theo nguyện vọng</option>
+                                <option value="Retired">Nghỉ hưu hưởng chế độ BHXH</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Ngày chấm dứt HĐLĐ</label>
+                            <input type="date" name="terminationDate" class="form-control font-monospace" value="2026-11-30" required />
+                        </div>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label fw-semibold">Biên bản bàn giao tài sản & Chốt sổ BHXH</label>
+                        <textarea name="reason" class="form-control" rows="2">Đã hoàn tất bàn giao Laptop, thẻ từ ra vào nhà máy và chốt sổ BHXH.</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-danger">Xác nhận Chấm dứt HĐLĐ & Khóa Tài khoản</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+

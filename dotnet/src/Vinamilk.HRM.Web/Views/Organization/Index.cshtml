@@ -1,0 +1,560 @@
+@model Vinamilk.HRM.Application.CoreHR.Organization.OrganizationOverviewDto
+@{
+    ViewData["Title"] = "Cơ cấu Tổ chức Đa cấp, Sơ đồ Tổ chức, Chức danh & Ngạch bậc lương";
+    var totalActual = Model.Units.Sum(u => u.ActualHeadcount);
+    var totalPlanned = Model.Units.Where(u => u.UnitLevel >= 2).Sum(u => u.PlannedHeadcount);
+}
+
+<!-- CORE HR NAVIGATION BAR -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Organization" class="btn vnm-btn-primary">
+            <i class="ti ti-sitemap me-1"></i>1. Cơ cấu Tổ chức & Ngạch lương
+        </a>
+        <a href="/Employees" class="btn btn-outline-primary">
+            <i class="ti ti-users me-1"></i>2. Danh sách & Hồ sơ 360° (55 NV)
+        </a>
+        <a href="/Contracts" class="btn btn-outline-primary">
+            <i class="ti ti-file-certificate me-1"></i>3. Hợp đồng & Cảnh báo Hết hạn
+        </a>
+        <a href="/Transfers" class="btn btn-outline-primary">
+            <i class="ti ti-arrows-transfer-up me-1"></i>4. Điều chuyển, Thử việc & Nghỉ hưu
+        </a>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="button" class="btn vnm-btn-primary" onclick="openUnitModal()">
+            <i class="ti ti-plus me-1"></i>Thêm Đơn vị Mới
+        </button>
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#positionModal">
+            <i class="ti ti-badge me-1"></i>Thêm Chức danh
+        </button>
+    </div>
+</div>
+
+@if (TempData["CoreHrSuccess"] != null)
+{
+    <div class="alert alert-success border-0 shadow-sm d-flex align-items-center gap-2 mb-4">
+        <i class="ti ti-circle-check fs-4"></i>
+        <div class="fw-medium">@TempData["CoreHrSuccess"]</div>
+    </div>
+}
+
+<!-- KPI SUMMARY ROW -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <vnm-stat-card title="Tổng số Đơn vị / Nhà máy / Trang trại"
+                       value="@Model.Units.Count"
+                       suffix=" Đơn vị"
+                       subtitle="Cây phân cấp 4 tầng (TreePath)"
+                       trend="100% Active"
+                       trend-type="success"
+                       icon="ti-sitemap"
+                       accent="primary" />
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <vnm-stat-card title="Nhân sự Thực tế / Định biên"
+                       value="@totalActual"
+                       suffix=" NV"
+                       subtitle="Định biên kế hoạch: @totalPlanned NV"
+                       trend="Đạt định biên"
+                       trend-type="info"
+                       icon="ti-users-group"
+                       accent="info" />
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <vnm-stat-card title="Hệ thống Chức danh Công việc"
+                       value="@Model.Positions.Count"
+                       suffix=" Chức danh"
+                       subtitle="Gắn phụ cấp chức vụ chuẩn"
+                       trend="Job Grading"
+                       trend-type="success"
+                       icon="ti-id-badge-2"
+                       accent="success" />
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <vnm-stat-card title="Thang Bảng Lương 3P"
+                       value="@Model.SalaryScales.Count"
+                       suffix=" Ngạch (50 Bậc)"
+                       subtitle="Hệ số lương & định kỳ xét duyệt"
+                       trend="Chuẩn Korn Ferry"
+                       trend-type="warning"
+                       icon="ti-stairs-up"
+                       accent="warning" />
+    </div>
+</div>
+
+<!-- TABS NAVIGATION -->
+<ul class="nav nav-tabs mb-3 fw-semibold" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-tree" type="button" role="tab">
+            <i class="ti ti-list-tree me-1 text-primary"></i>1. Cây Tổ chức Đa cấp (CRUD & Kéo thả Sắp xếp)
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-orgchart" type="button" role="tab">
+            <i class="ti ti-hierarchy-2 me-1 text-primary"></i>2. Sơ đồ Tổ chức Trực quan (Interactive OrgChart)
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-positions" type="button" role="tab">
+            <i class="ti ti-stairs-up me-1 text-primary"></i>3. Chức danh (@Model.Positions.Count) & Ngạch Bậc Lương (@Model.SalaryScales.Count Ngạch)
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- TAB 1: CÂY CƠ CẤU TỔ CHỨC (DRAG & DROP REORDER + CRUD) -->
+    <div class="tab-pane fade show active" id="tab-tree" role="tabpanel">
+        <div class="vnm-card p-4">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                <div>
+                    <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                        Cây Cơ cấu Tổ chức Đa cấp (`Công ty > Khối > Phòng/Nhà máy/Trang trại > Tổ`)
+                    </h2>
+                    <p class="text-secondary fs-6 mb-0">
+                        Kéo thả biểu tượng <i class="ti ti-grip-vertical"></i> để sắp xếp thứ tự hiển thị đơn vị (Tự động lưu qua CQRS <code>ReorderOrganizationUnitsCommand</code>).
+                    </p>
+                </div>
+                <span class="vnm-badge vnm-badge-info"><i class="ti ti-arrows-sort me-1"></i>SortableJS Enabled</span>
+            </div>
+
+            <div class="vnm-table-wrapper">
+                <table class="vnm-table vnm-table-mobile-cards">
+                    <thead>
+                        <tr>
+                            <th style="width: 42px;"></th>
+                            <th>Mã ĐV</th>
+                            <th>Tên Đơn vị / Phân cấp Cây (`TreePath`)</th>
+                            <th>Loại hình</th>
+                            <th>Cấp</th>
+                            <th>Trưởng Đơn vị</th>
+                            <th>Thực tế / Định biên</th>
+                            <th class="text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orgUnitsSortableBody">
+                        @foreach (var u in Model.Units)
+                        {
+                            var indentPx = Math.Max(0, (u.UnitLevel - 1) * 24);
+                            var levelBadge = u.UnitLevel switch
+                            {
+                                1 => "bg-primary text-white",
+                                2 => "bg-info-subtle text-info",
+                                3 => "bg-success-subtle text-success",
+                                _ => "bg-secondary-subtle text-secondary"
+                            };
+
+                            <tr data-unit-id="@u.Id">
+                                <td class="text-center text-muted" style="cursor: grab;" title="Kéo thả để đổi thứ tự">
+                                    <i class="ti ti-grip-vertical fs-5"></i>
+                                </td>
+                                <td data-label="Mã ĐV">
+                                    <span class="badge bg-primary-subtle text-primary font-monospace fw-bold">@u.UnitCode</span>
+                                </td>
+                                <td data-label="Tên Đơn vị">
+                                    <div style="padding-left: @(indentPx)px;" class="d-flex align-items-center gap-2">
+                                        @if (u.UnitLevel > 1)
+                                        {
+                                            <span class="text-muted font-monospace">└─</span>
+                                        }
+                                        <div>
+                                            <div class="fw-bold">@u.UnitName</div>
+                                            <div class="text-muted font-monospace" style="font-size: 0.7rem;">TreePath: @u.TreePath • CostCenter: @(u.CostCenterCode ?? "CC-VNM")</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td data-label="Loại hình">
+                                    <span class="badge @levelBadge">@u.UnitType</span>
+                                </td>
+                                <td data-label="Cấp" class="font-monospace fw-bold">Cấp @u.UnitLevel</td>
+                                <td data-label="Trưởng Đơn vị" class="fs-7">
+                                    @(u.ManagerName ?? "Ban Tổng Giám đốc")
+                                </td>
+                                <td data-label="Định biên">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="font-monospace fw-bold text-primary">@u.ActualHeadcount</span>
+                                        <span class="text-muted">/</span>
+                                        <span class="font-monospace text-secondary">@u.PlannedHeadcount</span>
+                                    </div>
+                                </td>
+                                <td data-label="Thao tác" class="text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="/Employees?OrganizationUnitId=@u.Id" class="btn btn-outline-secondary" title="Xem nhân sự thuộc đơn vị">
+                                            <i class="ti ti-users"></i>
+                                        </a>
+                                        <button type="button"
+                                                class="btn btn-outline-primary"
+                                                title="Chỉnh sửa đơn vị"
+                                                onclick="openUnitModal(@u.Id, '@u.UnitCode', '@Html.Raw(u.UnitName.Replace("'", "\\'"))', '@u.UnitType', @(u.ParentUnitId?.ToString() ?? "null"), '@(u.CostCenterCode ?? "")', @u.PlannedHeadcount, @u.SortOrder)">
+                                            <i class="ti ti-edit"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: SƠ ĐỒ TỔ CHỨC TRỰC QUAN (INTERACTIVE ORGCHART / D3 TREE) -->
+    <div class="tab-pane fade" id="tab-orgchart" role="tabpanel">
+        <div class="vnm-card p-4">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                <div>
+                    <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                        Sơ đồ Tổ chức Trực quan Công ty Cổ phần Sữa Việt Nam (Interactive OrgChart)
+                    </h2>
+                    <p class="text-secondary fs-6 mb-0">
+                        Hỗ trợ tìm kiếm đánh dấu nhánh, phóng to / thu nhỏ (Zoom) và nhấp vào từng khối để xem danh sách Phòng ban / Nhà máy / Trang trại trực thuộc.
+                    </p>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                    <input type="text"
+                           id="orgChartSearchInput"
+                           class="form-control form-control-sm"
+                           placeholder="Tìm tên khối, nhà máy, trang trại..."
+                           oninput="filterOrgChartNodes(this.value)"
+                           style="width: 240px;" />
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="zoomOrgChart(0.1)">
+                        <i class="ti ti-zoom-in"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="zoomOrgChart(-0.1)">
+                        <i class="ti ti-zoom-out"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetOrgChartZoom()">
+                        100%
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-4 rounded-3 border overflow-auto" style="background: var(--vnm-bg-subtle); min-height: 520px;">
+                <div id="orgChartCanvas" style="transform-origin: top center; transition: transform 0.2s ease;">
+                    @{
+                        var rootUnits = Model.Units.Where(u => u.UnitLevel == 1).ToList();
+                        var level2Units = Model.Units.Where(u => u.UnitLevel == 2).ToList();
+                    }
+
+                    <!-- CẤP 1: TỔNG CÔNG TY -->
+                    <div class="d-flex justify-content-center mb-4">
+                        @foreach (var root in rootUnits)
+                        {
+                            <div class="vnm-card p-3 text-center text-white shadow org-node-card"
+                                 data-node-name="@root.UnitName @root.UnitCode"
+                                 style="background: linear-gradient(135deg, #0213B0, #1E3A8A); min-width: 340px; border: 2px solid #FFF;">
+                                <div class="badge bg-warning text-dark font-monospace mb-1">@root.UnitCode • CẤP 1 (TỔNG CÔNG TY)</div>
+                                <div class="fw-extrabold fs-5">@root.UnitName</div>
+                                <div class="fs-7 text-white-50 mt-1">Tổng Giám đốc: Mai Kiều Liên • Toàn hệ thống: @totalActual NV</div>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- ĐƯỜNG NỐI TRỤC CHÍNH -->
+                    <div class="text-center text-primary mb-3">
+                        <i class="ti ti-arrow-Badge-down fs-2"></i>
+                    </div>
+
+                    <!-- CẤP 2 & CẤP 3: CÁC KHỐI & PHÒNG BAN / NHÀ MÁY / TRANG TRẠI TRỰC THUỘC -->
+                    <div class="row g-3 justify-content-center">
+                        @foreach (var div in level2Units)
+                        {
+                            var children = Model.Units.Where(c => c.ParentUnitId == div.Id).ToList();
+                            <div class="col-md-6 col-xl-3">
+                                <div class="vnm-card p-3 h-100 border-top border-4 border-primary org-node-card"
+                                     data-node-name="@div.UnitName @div.UnitCode">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="badge bg-primary font-monospace">@div.UnitCode</span>
+                                        <span class="fs-7 text-muted">Cấp 2 • @children.Count ĐV con</span>
+                                    </div>
+                                    <div class="fw-bold text-primary fs-6 mb-2">@div.UnitName</div>
+
+                                    <div class="d-flex flex-column gap-2 mt-2 pt-2 border-top">
+                                        @foreach (var child in children)
+                                        {
+                                            <a href="/Employees?OrganizationUnitId=@child.Id"
+                                               class="p-2 rounded-2 border text-decoration-none text-body d-flex align-items-center justify-content-between org-node-card"
+                                               data-node-name="@child.UnitName @child.UnitCode"
+                                               style="background: var(--vnm-bg-subtle);">
+                                                <div class="text-truncate pe-2">
+                                                    <div class="fw-semibold fs-7 text-truncate">@child.UnitName</div>
+                                                    <code class="text-muted" style="font-size: 0.68rem;">@child.UnitCode</code>
+                                                </div>
+                                                <span class="badge bg-success-subtle text-success font-monospace">@child.ActualHeadcount NV</span>
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: CHỨC DANH & THANG BẢNG LƯƠNG 10 NGẠCH / 50 BẬC -->
+    <div class="tab-pane fade" id="tab-positions" role="tabpanel">
+        <div class="row g-4">
+            <!-- Danh mục Chức danh -->
+            <div class="col-lg-5">
+                <div class="vnm-card p-4 h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3 class="fw-bold mb-0" style="font-size: var(--vnm-fs-md);">
+                            <i class="ti ti-id-badge-2 text-primary me-2"></i>Danh mục Chức danh (@Model.Positions.Count)
+                        </h3>
+                        <button type="button" class="btn btn-sm vnm-btn-primary" data-bs-toggle="modal" data-bs-target="#positionModal">
+                            <i class="ti ti-plus me-1"></i>Thêm
+                        </button>
+                    </div>
+
+                    <div class="vnm-table-wrapper">
+                        <table class="vnm-table">
+                            <thead>
+                                <tr>
+                                    <th>Mã</th>
+                                    <th>Tên Chức danh</th>
+                                    <th>Nhóm</th>
+                                    <th class="text-end">Phụ cấp Chức vụ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var p in Model.Positions)
+                                {
+                                    <tr>
+                                        <td class="font-monospace fw-bold text-primary">@p.PositionCode</td>
+                                        <td class="fw-semibold">@p.PositionName</td>
+                                        <td><span class="badge bg-secondary-subtle text-secondary">@p.PositionGroup (L@p.PositionLevel)</span></td>
+                                        <td class="text-end font-monospace fw-bold text-success">@p.DefaultPositionAllowance.ToString("N0") ₫</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Thang bảng lương 10 ngạch / 50 bậc -->
+            <div class="col-lg-7">
+                <div class="vnm-card p-4 h-100">
+                    <h3 class="fw-bold mb-3" style="font-size: var(--vnm-fs-md);">
+                        <i class="ti ti-stairs-up text-primary me-2"></i>Hệ thống Thang Bảng Lương 3P (@Model.SalaryScales.Count Ngạch × 5 Bậc)
+                    </h3>
+
+                    <div class="vnm-table-wrapper" style="max-height: 540px; overflow-y: auto;">
+                        <table class="vnm-table">
+                            <thead>
+                                <tr>
+                                    <th>Ngạch lương</th>
+                                    <th>Bậc 1</th>
+                                    <th>Bậc 2</th>
+                                    <th>Bậc 3</th>
+                                    <th>Bậc 4</th>
+                                    <th>Bậc 5</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var sc in Model.SalaryScales)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="fw-bold text-primary font-monospace">@sc.ScaleCode</div>
+                                            <div class="fs-7 text-secondary">@sc.ScaleName</div>
+                                        </td>
+                                        @foreach (var st in sc.Steps.OrderBy(x => x.StepOrder).Take(5))
+                                        {
+                                            <td class="font-monospace">
+                                                <div class="fw-bold">@((st.StandardSalary / 1_000_000m).ToString("0.0")) Tr</div>
+                                                <div class="text-muted" style="font-size: 0.7rem;">HS: @st.SalaryCoefficient.ToString("0.00")</div>
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL THÊM / SỬA ĐƠN VỊ TỔ CHỨC -->
+<div class="modal fade" id="unitModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: var(--vnm-radius-lg);">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold" id="unitModalTitle">Thêm / Cập nhật Đơn vị Tổ chức</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Organization" asp-action="SaveUnit" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" id="unitIdInput" />
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold">Mã Đơn vị <span class="text-danger">*</span></label>
+                            <input type="text" name="unitCode" id="unitCodeInput" class="form-control font-monospace" required placeholder="VD: NM_TIENSON" />
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold">Loại Đơn vị</label>
+                            <select name="unitType" id="unitTypeInput" class="form-select">
+                                <option value="Department">Phòng ban (Department)</option>
+                                <option value="Division">Khối chức năng (Division)</option>
+                                <option value="Factory">Nhà máy Sữa (Factory)</option>
+                                <option value="Farm">Trang trại Bò sữa (Farm)</option>
+                                <option value="Branch">Chi nhánh Kinh doanh (Branch)</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Tên Đơn vị / Phòng ban / Nhà máy <span class="text-danger">*</span></label>
+                            <input type="text" name="unitName" id="unitNameInput" class="form-control" required placeholder="VD: Phòng Nghiên cứu & Phát triển Sữa công thức" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Đơn vị Cấp trên (`ParentUnitId`)</label>
+                            <select name="parentUnitId" id="parentUnitIdInput" class="form-select">
+                                <option value="">-- Cấp 1 (Trực thuộc Tổng Công ty) --</option>
+                                @foreach (var u in Model.Units.Where(x => x.UnitLevel <= 2))
+                                {
+                                    <option value="@u.Id">[Cấp @u.UnitLevel] @u.UnitCode — @u.UnitName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Cost Center</label>
+                            <input type="text" name="costCenterCode" id="costCenterInput" class="form-control font-monospace" value="CC-VNM-2026" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Định biên NV</label>
+                            <input type="number" name="plannedHeadcount" id="plannedHcInput" class="form-control font-monospace" value="25" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Thứ tự sắp xếp</label>
+                            <input type="number" name="sortOrder" id="sortOrderInput" class="form-control font-monospace" value="10" required />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn vnm-btn-primary">
+                        <i class="ti ti-device-floppy me-1"></i>Lưu Đơn vị & Tính TreePath
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL THÊM CHỨC DANH -->
+<div class="modal fade" id="positionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: var(--vnm-radius-lg);">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold">Thêm Chức danh Công việc Mới</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Organization" asp-action="SavePosition" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold">Mã Chức danh <span class="text-danger">*</span></label>
+                            <input type="text" name="positionCode" class="form-control font-monospace" required placeholder="VD: TRUONG_CA" />
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold">Nhóm Chức danh</label>
+                            <select name="positionGroup" class="form-select">
+                                <option value="Executive">Ban Điều hành (Executive)</option>
+                                <option value="Management">Quản lý Cấp trung (Management)</option>
+                                <option value="Specialist">Chuyên gia / Kỹ sư (Specialist)</option>
+                                <option value="Staff">Chuyên viên / Nhân viên (Staff)</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Tên Chức danh <span class="text-danger">*</span></label>
+                            <input type="text" name="positionName" class="form-control" required placeholder="VD: Trưởng ca Sản xuất Sữa tiệt trùng UHT" />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold">Cấp bậc (Level 1-7)</label>
+                            <input type="number" name="positionLevel" class="form-control font-monospace" value="4" min="1" max="7" />
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold">Phụ cấp Chức vụ chuẩn (VNĐ)</label>
+                            <input type="number" name="defaultPositionAllowance" class="form-control font-monospace" value="4500000" step="500000" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn vnm-btn-primary">Lưu Chức danh</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let currentZoom = 1;
+        function zoomOrgChart(delta) {
+            currentZoom = Math.min(1.5, Math.max(0.6, currentZoom + delta));
+            document.getElementById('orgChartCanvas').style.transform = `scale(${currentZoom})`;
+        }
+        function resetOrgChartZoom() {
+            currentZoom = 1;
+            document.getElementById('orgChartCanvas').style.transform = 'scale(1)';
+        }
+
+        function filterOrgChartNodes(query) {
+            const q = (query || '').trim().toLowerCase();
+            document.querySelectorAll('.org-node-card').forEach(card => {
+                const name = (card.getAttribute('data-node-name') || '').toLowerCase();
+                if (!q) {
+                    card.style.opacity = '1';
+                    card.style.outline = 'none';
+                } else if (name.includes(q)) {
+                    card.style.opacity = '1';
+                    card.style.outline = '3px solid var(--vnm-warning)';
+                } else {
+                    card.style.opacity = '0.35';
+                    card.style.outline = 'none';
+                }
+            });
+        }
+
+        function openUnitModal(id, code, name, type, parentId, costCenter, plannedHc, sortOrder) {
+            document.getElementById('unitIdInput').value = id || '';
+            document.getElementById('unitCodeInput').value = code || '';
+            document.getElementById('unitNameInput').value = name || '';
+            document.getElementById('unitTypeInput').value = type || 'Department';
+            document.getElementById('parentUnitIdInput').value = parentId || '';
+            document.getElementById('costCenterInput').value = costCenter || 'CC-VNM-2026';
+            document.getElementById('plannedHcInput').value = plannedHc || 25;
+            document.getElementById('sortOrderInput').value = sortOrder || 10;
+            new bootstrap.Modal(document.getElementById('unitModal')).show();
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const tbody = document.getElementById('orgUnitsSortableBody');
+            if (tbody && window.Sortable) {
+                new Sortable(tbody, {
+                    animation: 150,
+                    onEnd: async function () {
+                        const ids = Array.from(tbody.querySelectorAll('tr[data-unit-id]'))
+                            .map(tr => parseInt(tr.getAttribute('data-unit-id'), 10));
+                        try {
+                            await fetch('/Organization/ReorderUnits', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(ids)
+                            });
+                            VnmUI.toast('Đã lưu thứ tự sắp xếp cây đơn vị vào SQL Server!', 'success');
+                        } catch (e) { }
+                    }
+                });
+            }
+        });
+    </script>
+}
+

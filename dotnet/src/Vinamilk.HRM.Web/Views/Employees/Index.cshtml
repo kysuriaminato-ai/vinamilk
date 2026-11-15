@@ -1,0 +1,583 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@model Vinamilk.HRM.Application.CoreHR.Employees.EmployeeListResultDto
+@{
+    ViewData["Title"] = "Danh sách Nhân sự Đa điều kiện, Import/Export Excel & In Mẫu 2C";
+    var filter = ViewBag.Filter as Vinamilk.HRM.Application.CoreHR.Employees.GetEmployeesAdvancedQuery
+                 ?? new Vinamilk.HRM.Application.CoreHR.Employees.GetEmployeesAdvancedQuery();
+    var importReport = ViewBag.ImportReport as Vinamilk.HRM.Infrastructure.Services.ExcelImportSummaryReport;
+}
+
+<!-- CORE HR NAVIGATION BAR -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Organization" class="btn btn-outline-primary">
+            <i class="ti ti-sitemap me-1"></i>1. Cơ cấu Tổ chức & Ngạch lương
+        </a>
+        <a href="/Employees" class="btn vnm-btn-primary">
+            <i class="ti ti-users me-1"></i>2. Danh sách & Hồ sơ 360° (@Model.TotalCount NV)
+        </a>
+        <a href="/Contracts" class="btn btn-outline-primary">
+            <i class="ti ti-file-certificate me-1"></i>3. Hợp đồng & Cảnh báo Hết hạn
+        </a>
+        <a href="/Transfers" class="btn btn-outline-primary">
+            <i class="ti ti-arrows-transfer-up me-1"></i>4. Điều chuyển, Thử việc & Nghỉ hưu
+        </a>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#importExcelModal">
+            <i class="ti ti-file-import me-1"></i>Import Excel (Báo lỗi dòng)
+        </button>
+        <a href="/Employees/ExportExcel?Keyword=@filter.Keyword&OrganizationUnitId=@filter.OrganizationUnitId&PositionId=@filter.PositionId&WorkStatus=@filter.WorkStatus"
+           class="btn btn-outline-primary">
+            <i class="ti ti-file-spreadsheet me-1"></i>Xuất Excel (.xlsx)
+        </a>
+        <button type="button" class="btn vnm-btn-primary" data-bs-toggle="modal" data-bs-target="#createEmployeeModal">
+            <i class="ti ti-user-plus me-1"></i>Thêm Nhân viên Mới
+        </button>
+    </div>
+</div>
+
+<!-- EXCEL IMPORT ROW-LEVEL ERROR REPORT (IF PRESENT) -->
+@if (importReport != null)
+{
+    <div class="vnm-card p-4 mb-4 border-start border-4 border-primary">
+        <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+            <div>
+                <h3 class="fw-bold mb-1" style="font-size: var(--vnm-fs-md);">
+                    <i class="ti ti-file-check text-primary me-2"></i>Báo cáo Kết quả Import Excel Từng Dòng (`ClosedXML`)
+                </h3>
+                <div class="text-secondary fs-6">
+                    Tổng số dòng đọc: <strong>@importReport.TotalRows</strong> •
+                    Thành công: <strong class="text-success">@importReport.SuccessCount dòng</strong> •
+                    Lỗi bị từ chối: <strong class="text-danger">@importReport.ErrorCount dòng</strong>
+                </div>
+            </div>
+        </div>
+        <div class="vnm-table-wrapper">
+            <table class="vnm-table">
+                <thead>
+                    <tr>
+                        <th>Dòng Excel</th>
+                        <th>Mã NV</th>
+                        <th>Họ và Tên</th>
+                        <th>Kết quả</th>
+                        <th>Chi tiết Kiểm tra / Nguyên nhân Lỗi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in importReport.RowReports)
+                    {
+                        <tr>
+                            <td class="font-monospace fw-bold">Dòng #@r.RowNumber</td>
+                            <td class="font-monospace">@r.EmployeeCode</td>
+                            <td class="fw-semibold">@r.FullName</td>
+                            <td>
+                                @if (r.IsSuccess)
+                                {
+                                    <vnm-status-badge status="success" text="Hợp lệ (Đã lưu)" />
+                                }
+                                else
+                                {
+                                    <vnm-status-badge status="danger" text="Lỗi dữ liệu" />
+                                }
+                            </td>
+                            <td class="@(r.IsSuccess ? "text-success" : "text-danger fw-semibold") fs-7">
+                                @r.Message
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<!-- ADVANCED MULTI-CONDITION FILTER BAR + SAVED FILTERS + COLUMN SELECTOR -->
+<div class="vnm-card p-3 mb-4">
+    <form method="get" action="/Employees" id="empFilterForm">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold fs-7 text-uppercase text-muted mb-1">Từ khóa (Mã NV, Họ tên, Email, SĐT)</label>
+                <input type="text" name="Keyword" value="@filter.Keyword" class="form-control form-control-sm" placeholder="VD: VNM-0001, Hùng, @@vinamilk..." />
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label fw-semibold fs-7 text-uppercase text-muted mb-1">Đơn vị / Khối / Nhà máy (Bao gồm cấp con)</label>
+                <select name="OrganizationUnitId" class="form-select form-select-sm">
+                    <option value="">-- Tất cả 32 Đơn vị --</option>
+                    @foreach (var u in Model.Units)
+                    {
+                        <option value="@u.Id" selected="@(filter.OrganizationUnitId == u.Id)">
+                            @u.UnitCode — @u.UnitName
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label fw-semibold fs-7 text-uppercase text-muted mb-1">Chức danh</label>
+                <select name="PositionId" class="form-select form-select-sm">
+                    <option value="">-- Tất cả --</option>
+                    @foreach (var p in Model.Positions)
+                    {
+                        <option value="@p.Id" selected="@(filter.PositionId == p.Id)">@p.PositionName</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label fw-semibold fs-7 text-uppercase text-muted mb-1">Trạng thái</label>
+                <select name="WorkStatus" class="form-select form-select-sm">
+                    <option value="">-- Tất cả --</option>
+                    <option value="Official" selected="@(filter.WorkStatus == "Official")">Đang làm việc (Official)</option>
+                    <option value="Probation" selected="@(filter.WorkStatus == "Probation")">Đang thử việc (Probation)</option>
+                    <option value="Maternity" selected="@(filter.WorkStatus == "Maternity")">Nghỉ thai sản</option>
+                    <option value="Resigned" selected="@(filter.WorkStatus == "Resigned")">Đã thôi việc</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label fw-semibold fs-7 text-uppercase text-muted mb-1">Sắp xếp theo</label>
+                <select name="SortBy" class="form-select form-select-sm">
+                    <option value="EmployeeCode" selected="@(filter.SortBy == "EmployeeCode")">Mã NV (Tăng dần)</option>
+                    <option value="FullName" selected="@(filter.SortBy == "FullName")">Họ và Tên (A-Z)</option>
+                    <option value="SalaryDesc" selected="@(filter.SortBy == "SalaryDesc")">Mức lương (Cao -> Thấp)</option>
+                    <option value="HireDateDesc" selected="@(filter.SortBy == "HireDateDesc")">Ngày vào làm (Mới nhất)</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label fw-semibold fs-7 text-uppercase text-muted mb-1">Giới tính</label>
+                <select name="Gender" class="form-select form-select-sm">
+                    <option value="">-- Tất cả --</option>
+                    <option value="Nam" selected="@(filter.Gender == "Nam")">Nam</option>
+                    <option value="Nữ" selected="@(filter.Gender == "Nữ")">Nữ</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label fw-semibold fs-7 text-uppercase text-muted mb-1">Loại Hợp đồng</label>
+                <select name="ContractType" class="form-select form-select-sm">
+                    <option value="">-- Tất cả --</option>
+                    <option value="Indefinite" selected="@(filter.ContractType == "Indefinite")">Không xác định thời hạn</option>
+                    <option value="Fixed36M" selected="@(filter.ContractType == "Fixed36M")">Xác định thời hạn 36T</option>
+                    <option value="Fixed12M" selected="@(filter.ContractType == "Fixed12M")">Xác định thời hạn 12T</option>
+                    <option value="Probation" selected="@(filter.ContractType == "Probation")">Hợp đồng Thử việc</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label fw-semibold fs-7 text-uppercase text-muted mb-1">Lương tối thiểu (VNĐ)</label>
+                <input type="number" name="MinSalary" value="@filter.MinSalary" class="form-control form-control-sm font-monospace" placeholder="VD: 15000000" />
+            </div>
+
+            <div class="col-md-6 d-flex flex-wrap gap-2 justify-content-end">
+                <button type="submit" class="btn btn-sm vnm-btn-primary px-3">
+                    <i class="ti ti-filter me-1"></i>Lọc Dữ liệu
+                </button>
+                <a href="/Employees" class="btn btn-sm btn-outline-secondary">
+                    <i class="ti ti-refresh me-1"></i>Xóa lọc
+                </a>
+
+                <!-- Lưu bộ lọc cá nhân -->
+                <button type="button" class="btn btn-sm btn-outline-info" onclick="saveCurrentFilterPreset()">
+                    <i class="ti ti-bookmark-plus me-1"></i>Lưu Bộ lọc
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-info" onclick="applySavedFilterPreset()">
+                    <i class="ti ti-bookmark me-1"></i>Bộ lọc đã lưu
+                </button>
+
+                <!-- Chọn cột hiển thị -->
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-dark dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="ti ti-columns me-1"></i>Chọn Cột Hiển thị
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end p-3 shadow" style="min-width: 220px;">
+                        <div class="fw-bold fs-7 text-uppercase text-muted mb-2">Bật / Tắt Cột Bảng</div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" checked onchange="toggleTableCol('col-unit', this.checked)" id="chkUnit" />
+                            <label class="form-check-label fs-7" for="chkUnit">Đơn vị công tác</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" checked onchange="toggleTableCol('col-pos', this.checked)" id="chkPos" />
+                            <label class="form-check-label fs-7" for="chkPos">Chức danh</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" checked onchange="toggleTableCol('col-contract', this.checked)" id="chkContract" />
+                            <label class="form-check-label fs-7" for="chkContract">Loại HĐLĐ</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" checked onchange="toggleTableCol('col-salary', this.checked)" id="chkSalary" />
+                            <label class="form-check-label fs-7" for="chkSalary">Mức lương & Phụ cấp</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- EMPLOYEES TABLE -->
+<div class="vnm-card p-4">
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+        <div>
+            <h2 class="fw-bold mb-0" style="font-size: var(--vnm-fs-lg);">
+                Danh sách Hồ sơ Nhân sự (@Model.Items.Count / @Model.TotalCount Nhân viên)
+            </h2>
+        </div>
+        <span class="text-secondary fs-7">Nhấp vào Mã NV hoặc nút <strong>360°</strong> để mở Hồ sơ 11 Tab chi tiết</span>
+    </div>
+
+    <div class="vnm-table-wrapper">
+        <table class="vnm-table vnm-table-mobile-cards">
+            <thead>
+                <tr>
+                    <th>Mã NV</th>
+                    <th>Họ và Tên</th>
+                    <th class="col-unit">Đơn vị / Phòng ban</th>
+                    <th class="col-pos">Chức danh</th>
+                    <th class="col-contract">Hợp đồng</th>
+                    <th class="col-salary text-end">Lương cơ bản</th>
+                    <th>Trạng thái</th>
+                    <th class="text-end">Hồ sơ 360° & Mẫu 2C</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var e in Model.Items)
+                {
+                    var badgeStatus = e.WorkStatus switch
+                    {
+                        "Official" => "success",
+                        "Probation" => "warning",
+                        "Resigned" or "Terminated" => "danger",
+                        _ => "info"
+                    };
+
+                    <tr>
+                        <td data-label="Mã NV">
+                            <a href="/Employees/Details/@e.Id" class="badge bg-primary-subtle text-primary font-monospace fw-bold text-decoration-none fs-6">
+                                @e.EmployeeCode
+                            </a>
+                        </td>
+                        <td data-label="Họ và Tên">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white flex-shrink-0"
+                                     style="width: 34px; height: 34px; background: var(--vnm-primary); font-size: 0.78rem;">
+                                    @(e.FullName.Split(' ').LastOrDefault()?[..1] ?? "V")
+                                </div>
+                                <div>
+                                    <a href="/Employees/Details/@e.Id" class="fw-bold text-body text-decoration-none">@e.FullName</a>
+                                    <div class="text-muted fs-7 font-monospace">@e.Gender • @e.DateOfBirth.ToString("dd/MM/yyyy") • @(e.WorkEmail ?? "vnm@vinamilk.com.vn")</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td data-label="Đơn vị" class="col-unit">
+                            <div class="fw-semibold">@(e.OrganizationUnit?.UnitName ?? "Trụ sở Chính")</div>
+                            <code class="text-muted" style="font-size: 0.7rem;">@(e.OrganizationUnit?.UnitCode ?? "VNM")</code>
+                        </td>
+                        <td data-label="Chức danh" class="col-pos">@(e.Position?.PositionName ?? "Chuyên viên")</td>
+                        <td data-label="Hợp đồng" class="col-contract">
+                            <span class="badge bg-secondary-subtle text-secondary font-monospace">@e.CurrentContractType</span>
+                        </td>
+                        <td data-label="Lương cơ bản" class="col-salary text-end font-monospace fw-bold text-primary">
+                            @e.BaseSalary.ToString("N0") ₫
+                        </td>
+                        <td data-label="Trạng thái">
+                            <vnm-status-badge status="@badgeStatus" text="@e.WorkStatus" />
+                        </td>
+                        <td data-label="Thao tác" class="text-end">
+                            <div class="btn-group btn-group-sm">
+                                <a href="/Employees/Details/@e.Id" class="btn vnm-btn-primary" title="Mở Hồ sơ 360° (11 Tab)">
+                                    <i class="ti ti-id me-1"></i>360°
+                                </a>
+                                <a href="/Employees/Print2C/@e.Id" target="_blank" class="btn btn-outline-primary" title="In Sơ yếu lý lịch Mẫu 2C khổ A4">
+                                    <i class="ti ti-printer"></i> 2C
+                                </a>
+                                <a href="/Employees/Export2CPdf/@e.Id" class="btn btn-outline-danger" title="Tải file PDF Mẫu 2C (QuestPDF)">
+                                    <i class="ti ti-file-type-pdf"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- PAGING -->
+    @if (Model.TotalCount > Model.PageSize)
+    {
+        var totalPages = (int)Math.Ceiling((double)Model.TotalCount / Model.PageSize);
+        <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+            <div class="text-muted fs-7">Trang @Model.PageNumber / @totalPages (Tổng @Model.TotalCount hồ sơ)</div>
+            <div class="btn-group btn-group-sm">
+                @for (int p = 1; p <= totalPages; p++)
+                {
+                    <a href="/Employees?PageNumber=@p&PageSize=@Model.PageSize&Keyword=@filter.Keyword&OrganizationUnitId=@filter.OrganizationUnitId"
+                       class="btn @(p == Model.PageNumber ? "vnm-btn-primary" : "btn-outline-secondary")">@p</a>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<!-- MODAL IMPORT EXCEL CÓ BÁO LỖI TỪNG DÒNG -->
+<div class="modal fade" id="importExcelModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: var(--vnm-radius-lg);">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold">
+                    <i class="ti ti-file-spreadsheet text-success me-2"></i>Import Hồ sơ Nhân sự từ Excel (`.xlsx`)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Employees" asp-action="ImportExcel" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="p-3 rounded-3 border mb-3" style="background: var(--vnm-bg-subtle);">
+                        <div class="fw-bold mb-1">Bước 1: Tải file Excel Mẫu chuẩn Vinamilk</div>
+                        <p class="text-secondary fs-7 mb-2">
+                            File mẫu gồm 1 dòng hợp lệ (<code>VNM-0091</code>) và 1 dòng cố tình chứa lỗi (trùng mã <code>VNM-0001</code>, sai CCCD, sai mã đơn vị, lương âm) để kiểm thử tính năng báo lỗi từng dòng.
+                        </p>
+                        <a href="/Employees/DownloadTemplate" class="btn btn-sm btn-outline-primary">
+                            <i class="ti ti-download me-1"></i>Tải File Excel Mẫu (`Vinamilk_HRM_Mau_Import_NhanSu.xlsx`)
+                        </a>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Bước 2: Chọn tệp `.xlsx` để tải lên (Hoặc để trống để chạy thử bằng File Mẫu)</label>
+                        <input type="file" name="excelFile" class="form-control" accept=".xlsx" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="btn vnm-btn-primary">
+                        <i class="ti ti-upload me-1"></i>Thực hiện Import & Kiểm tra Lỗi Từng Dòng
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL THÊM NHÂN VIÊN MỚI -->
+<div class="modal fade" id="createEmployeeModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: var(--vnm-radius-lg);">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold">
+                    <i class="ti ti-user-plus text-primary me-2"></i>Tiếp nhận & Tạo Hồ sơ Nhân viên Mới
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Employees" asp-action="Save" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Mã Nhân viên <span class="text-danger">*</span></label>
+                            <input type="text" name="employeeCode" class="form-control font-monospace" value="VNM-0056" required />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold">Họ và Tên <span class="text-danger">*</span></label>
+                            <input type="text" name="fullName" class="form-control" value="Lê Hoàng Minh Khuê" required />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Giới tính</label>
+                            <select name="gender" class="form-select">
+                                <option value="Nữ">Nữ</option>
+                                <option value="Nam">Nam</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Ngày sinh</label>
+                            <input type="date" name="dateOfBirth" class="form-control font-monospace" value="1997-05-20" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Số CCCD (Mã hóa AES-256) <span class="text-danger">*</span></label>
+                            <input type="text" name="citizenId" class="form-control font-monospace" value="079197005599" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Số điện thoại</label>
+                            <input type="text" name="phoneNumber" class="form-control font-monospace" value="0909887766" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Đơn vị công tác <span class="text-danger">*</span></label>
+                            <select name="organizationUnitId" class="form-select" required>
+                                @foreach (var u in Model.Units)
+                                {
+                                    <option value="@u.Id">@u.UnitCode — @u.UnitName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Chức danh công việc <span class="text-danger">*</span></label>
+                            <select name="positionId" class="form-select" required>
+                                @foreach (var p in Model.Positions)
+                                {
+                                    <option value="@p.Id">@p.PositionName (PC: @p.DefaultPositionAllowance.ToString("N0") ₫)</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Email công việc</label>
+                            <input type="email" name="workEmail" class="form-control" value="khue.lhm@vinamilk.com.vn" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Lương cơ bản (VNĐ) <span class="text-danger">*</span></label>
+                            <input type="number" name="baseSalary" class="form-control font-monospace" value="25000000" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Phụ cấp chức vụ (VNĐ)</label>
+                            <input type="number" name="positionAllowance" class="form-control font-monospace" value="3000000" />
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Ngày vào làm</label>
+                            <input type="date" name="hireDate" class="form-control font-monospace" value="2026-11-15" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Trạng thái làm việc</label>
+                            <select name="workStatus" class="form-select">
+                                <option value="Official">Chính thức (Official)</option>
+                                <option value="Probation">Thử việc (Probation)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Loại HĐLĐ</label>
+                            <select name="currentContractType" class="form-select">
+                                <option value="Fixed12M">Xác định thời hạn 12 tháng</option>
+                                <option value="Indefinite">Không xác định thời hạn</option>
+                                <option value="Probation">Hợp đồng Thử việc (2 tháng)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn vnm-btn-primary">
+                        <i class="ti ti-device-floppy me-1"></i>Tạo Hồ sơ & Sinh Hợp đồng Tự động
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function toggleTableCol(colClass, visible) {
+            document.querySelectorAll('.' + colClass).forEach(el => {
+                el.style.display = visible ? '' : 'none';
+            });
+        }
+
+        function saveCurrentFilterPreset() {
+            const qs = window.location.search;
+            localStorage.setItem('vnm_emp_saved_filter', qs);
+            VnmUI.toast('Đã lưu bộ lọc hiện tại vào bộ nhớ cá nhân!', 'success');
+        }
+
+        function applySavedFilterPreset() {
+            const saved = localStorage.getItem('vnm_emp_saved_filter');
+            if (saved) {
+                window.location.href = '/Employees' + saved;
+            } else {
+                VnmUI.toast('Bạn chưa lưu bộ lọc nào trước đó.', 'info');
+            }
+        }
+    </script>
+}

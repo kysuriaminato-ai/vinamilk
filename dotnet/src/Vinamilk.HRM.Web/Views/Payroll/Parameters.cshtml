@@ -1,0 +1,345 @@
+@model Vinamilk.HRM.Application.Payroll.PayrollManagementOverviewDto
+@using System.Globalization
+@{
+    ViewData["Title"] = "Quản trị Tham số Lương, LTTV 4 Vùng & Biểu thuế TNCN theo Hiệu lực";
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Payroll" class="btn btn-outline-primary">
+            <i class="ti ti-cash me-1"></i>1. Bảng lương & Kỳ tính lương
+        </a>
+        <a href="/Payroll/Parameters" class="btn vnm-btn-primary">
+            <i class="ti ti-adjustments-horizontal me-1"></i>2. Tham số Luật 2026 & Biểu thuế TNCN
+        </a>
+        <a href="/Security/AuditLogs" class="btn btn-outline-secondary">
+            <i class="ti ti-history me-1"></i>3. AuditLog Thay đổi Tham số
+        </a>
+    </div>
+    <span class="vnm-badge vnm-badge-warning">
+        <span class="vnm-badge-dot"></span>Mọi thay đổi đều ghi AuditLog & chặn sửa giai đoạn đã có kỳ lương bị khóa
+    </span>
+</div>
+
+@if (TempData["PayrollSuccess"] != null)
+{
+    <div class="alert alert-success border-0 shadow-sm d-flex align-items-center gap-2 mb-3">
+        <i class="ti ti-circle-check fs-4"></i>
+        <div class="fw-medium">@TempData["PayrollSuccess"]</div>
+    </div>
+}
+@if (TempData["PayrollError"] != null)
+{
+    <div class="alert alert-danger border-0 shadow-sm d-flex align-items-center gap-2 mb-3">
+        <i class="ti ti-alert-triangle fs-4"></i>
+        <div class="fw-medium">@TempData["PayrollError"]</div>
+    </div>
+}
+
+<!-- SECTION 1: STATUTORY PARAMETERS BY EFFECTIVE PERIOD -->
+<div class="vnm-card p-4 mb-4">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+            <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                <i class="ti ti-scale text-primary me-2"></i>1. Tham số Pháp lý Lương Cơ sở, LTTV 4 Vùng, Tỷ lệ BH & Giảm trừ Gia cảnh
+            </h2>
+            <p class="text-secondary fs-6 mb-0">
+                Engine tự động chọn bộ tham số khớp với <strong>Ngày cuối kỳ lương</strong>. Trần BHXH/BHYT = <code>Hệ số × Lương cơ sở</code>; Trần BHTN = <code>Hệ số × LTTV theo vùng của nhân viên</code>.
+            </p>
+        </div>
+        <button type="button" class="btn btn-sm vnm-btn-primary" onclick="resetParamForm()">
+            <i class="ti ti-plus me-1"></i>Thêm Giai đoạn Mới
+        </button>
+    </div>
+
+    <div class="table-responsive mb-4">
+        <table class="table table-sm table-bordered align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Hiệu lực từ</th>
+                    <th>Đến ngày</th>
+                    <th class="text-end">Lương cơ sở</th>
+                    <th class="text-end">LTTV Vùng I</th>
+                    <th class="text-end">LTTV Vùng II / III / IV</th>
+                    <th class="text-end">GT Bản thân</th>
+                    <th class="text-end">GT NPT</th>
+                    <th>Tỷ lệ BH (NLĐ / DN+CĐ)</th>
+                    <th>Trạng thái</th>
+                    <th class="text-center">Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in Model.StatutoryParameters)
+                {
+                    <tr>
+                        <td class="fw-semibold">@p.EffectiveFrom.ToString("dd/MM/yyyy")</td>
+                        <td>@(p.EffectiveTo?.ToString("dd/MM/yyyy") ?? "Vô thời hạn")</td>
+                        <td class="text-end">@p.StatutoryBaseSalary.ToString("N0")</td>
+                        <td class="text-end">@p.MinWageRegion1.ToString("N0")</td>
+                        <td class="text-end small">
+                            @p.MinWageRegion2.ToString("N0") / @p.MinWageRegion3.ToString("N0") / @p.MinWageRegion4.ToString("N0")
+                        </td>
+                        <td class="text-end">@p.SelfDeduction.ToString("N0")</td>
+                        <td class="text-end">@p.DependentDeduction.ToString("N0")</td>
+                        <td class="small">
+                            NLĐ: @(((p.EmployeeSiRate + p.EmployeeHiRate + p.EmployeeUiRate) * 100m).ToString("0.#"))% |
+                            DN: @(((p.CompanySiRate + p.CompanyHiRate + p.CompanyUiRate + p.CompanyUnionFeeRate) * 100m).ToString("0.#"))%
+                        </td>
+                        <td>
+                            @if (p.HasLockedPayrollPeriod)
+                            {
+                                <span class="badge bg-danger"><i class="ti ti-lock me-1"></i>Đã có kỳ khóa</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success">Cho phép sửa</span>
+                            }
+                        </td>
+                        <td class="text-center">
+                            <button type="button"
+                                    class="btn btn-sm @(p.HasLockedPayrollPeriod ? "btn-outline-secondary" : "btn-outline-primary")"
+                                    @(p.HasLockedPayrollPeriod ? "disabled" : "")
+                                    onclick='loadParamToForm(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(p)))'>
+                                <i class="ti ti-edit"></i> Sửa
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <form asp-controller="Payroll" asp-action="SaveParameter" method="post" class="border rounded p-3 bg-light">
+        @Html.AntiForgeryToken()
+        <input type="hidden" id="paramId" name="id" value="" />
+        <h6 class="fw-bold mb-3" id="paramFormTitle">Thêm / Cập nhật Giai đoạn Tham số Pháp lý</h6>
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="form-label fs-7 fw-semibold">Hiệu lực từ ngày</label>
+                <input type="date" id="paramEffectiveFrom" name="effectiveFrom" class="form-control form-control-sm" value="2027-01-01" required />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fs-7 fw-semibold">Đến ngày (để trống = đang hiệu lực)</label>
+                <input type="date" id="paramEffectiveTo" name="effectiveTo" class="form-control form-control-sm" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fs-7 fw-semibold">Căn cứ pháp lý</label>
+                <input type="text" id="paramLegalRef" name="legalReference" class="form-control form-control-sm" placeholder="VD: Luật 109/2025/QH15, NQ 110/2025/UBTVQH15, NĐ 293/2025..." />
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label fs-7 fw-semibold">Lương cơ sở (đ)</label>
+                <input type="number" id="paramBaseSalary" name="statutoryBaseSalary" class="form-control form-control-sm" value="2530000" step="1000" required />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fs-7 fw-semibold">LTTV Vùng I (đ)</label>
+                <input type="number" id="paramMin1" name="minWageRegion1" class="form-control form-control-sm" value="5310000" step="1000" required />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fs-7 fw-semibold">LTTV Vùng II (đ)</label>
+                <input type="number" id="paramMin2" name="minWageRegion2" class="form-control form-control-sm" value="4730000" step="1000" required />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fs-7 fw-semibold">LTTV Vùng III (đ)</label>
+                <input type="number" id="paramMin3" name="minWageRegion3" class="form-control form-control-sm" value="4140000" step="1000" required />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fs-7 fw-semibold">LTTV Vùng IV (đ)</label>
+                <input type="number" id="paramMin4" name="minWageRegion4" class="form-control form-control-sm" value="3700000" step="1000" required />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fs-7 fw-semibold">Hệ số trần BHXH / BHTN</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" id="paramSiMult" name="socialInsuranceCapMultiplier" class="form-control" value="20" step="1" required />
+                    <input type="number" id="paramUiMult" name="unemploymentInsuranceCapMultiplier" class="form-control" value="20" step="1" required />
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label fs-7 fw-semibold">Giảm trừ bản thân (đ/tháng)</label>
+                <input type="number" id="paramSelfDed" name="selfDeduction" class="form-control form-control-sm" value="15500000" step="100000" required />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fs-7 fw-semibold">Giảm trừ mỗi NPT (đ/tháng)</label>
+                <input type="number" id="paramDepDed" name="dependentDeduction" class="form-control form-control-sm" value="6200000" step="100000" required />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fs-7 fw-semibold">NLĐ: BHXH / BHYT / BHTN (%)</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" id="paramEmpSi" name="employeeSiRatePercent" class="form-control" value="8" step="0.1" required />
+                    <input type="number" id="paramEmpHi" name="employeeHiRatePercent" class="form-control" value="1.5" step="0.1" required />
+                    <input type="number" id="paramEmpUi" name="employeeUiRatePercent" class="form-control" value="1" step="0.1" required />
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fs-7 fw-semibold">DN: BHXH / BHYT / BHTN / Công đoàn (%)</label>
+                <div class="input-group input-group-sm">
+                    <input type="number" id="paramCompSi" name="companySiRatePercent" class="form-control" value="17.5" step="0.1" required />
+                    <input type="number" id="paramCompHi" name="companyHiRatePercent" class="form-control" value="3" step="0.1" required />
+                    <input type="number" id="paramCompUi" name="companyUiRatePercent" class="form-control" value="1" step="0.1" required />
+                    <input type="number" id="paramCompUnion" name="companyUnionFeeRatePercent" class="form-control" value="2" step="0.1" required />
+                </div>
+            </div>
+            <div class="col-12 mt-2 d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetParamForm()">Xóa trắng</button>
+                <button type="submit" class="btn btn-sm vnm-btn-primary">
+                    <i class="ti ti-device-floppy me-1"></i>Lưu Tham số & Ghi AuditLog
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- SECTION 2: PIT BRACKETS BY EFFECTIVE PERIOD -->
+<div class="vnm-card p-4">
+    <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+        <i class="ti ti-percentage text-primary me-2"></i>2. Biểu Thuế TNCN Lũy tiến theo Giai đoạn Hiệu lực
+    </h2>
+    <p class="text-secondary fs-6 mb-3">
+        Hỗ trợ chuyển đổi tự động giữa Biểu 7 bậc (trước 01/01/2026) và Biểu 5 bậc theo Luật 109/2025/QH15 (từ 01/01/2026). Các giai đoạn đã có kỳ lương khóa không được chỉnh sửa.
+    </p>
+
+    <div class="row g-3 mb-4">
+        @foreach (var grp in Model.PitBracketGroups)
+        {
+            <div class="col-12 col-lg-6">
+                <div class="border rounded p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <span class="fw-bold">Từ @grp.EffectiveFrom.ToString("dd/MM/yyyy")</span>
+                            <span class="text-secondary"> → @(grp.EffectiveTo?.ToString("dd/MM/yyyy") ?? "Hiện hành")</span>
+                            <div class="small text-muted">@grp.LegalReference</div>
+                        </div>
+                        @if (grp.HasLockedPayrollPeriod)
+                        {
+                            <span class="badge bg-danger"><i class="ti ti-lock me-1"></i>Đã có kỳ khóa</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-success">Có thể sửa</span>
+                        }
+                    </div>
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Bậc</th>
+                                <th class="text-end">Ngưỡng dưới (đ)</th>
+                                <th class="text-end">Ngưỡng trên (đ)</th>
+                                <th class="text-end">Thuế suất</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var b in grp.Brackets)
+                            {
+                                <tr>
+                                    <td>Bậc @b.BracketLevel</td>
+                                    <td class="text-end">@b.LowerBound.ToString("N0")</td>
+                                    <td class="text-end">@(b.UpperBound?.ToString("N0") ?? "Không giới hạn")</td>
+                                    <td class="text-end fw-semibold">@((b.TaxRate * 100m).ToString("0.#"))%</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </div>
+
+    <form asp-controller="Payroll" asp-action="SavePitBrackets" method="post" class="border rounded p-3 bg-light">
+        @Html.AntiForgeryToken()
+        <h6 class="fw-bold mb-3">Thêm Biểu Thuế TNCN Mới Theo Ngày Hiệu Lực</h6>
+        <div class="row g-2 mb-3">
+            <div class="col-md-3">
+                <label class="form-label fs-7 fw-semibold">Hiệu lực từ ngày</label>
+                <input type="date" name="effectiveFrom" class="form-control form-control-sm" value="2027-01-01" required />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fs-7 fw-semibold">Đến ngày (trống = đang hiệu lực)</label>
+                <input type="date" name="effectiveTo" class="form-control form-control-sm" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fs-7 fw-semibold">Căn cứ pháp lý</label>
+                <input type="text" name="legalReference" class="form-control form-control-sm" value="Biểu thuế TNCN 5 bậc sửa đổi" />
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered bg-white mb-2">
+                <thead class="table-light">
+                    <tr>
+                        <th>Bậc</th>
+                        <th>Ngưỡng dưới (đ)</th>
+                        <th>Ngưỡng trên (đ, trống = vô cực)</th>
+                        <th>Thuế suất (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{
+                        var preset = new (int Level, decimal Low, string Up, decimal Rate)[]
+                        {
+                            (1, 0m, "10000000", 5m),
+                            (2, 10000000m, "30000000", 10m),
+                            (3, 30000000m, "60000000", 20m),
+                            (4, 60000000m, "100000000", 30m),
+                            (5, 100000000m, "", 35m)
+                        };
+                    }
+                    @foreach (var item in preset)
+                    {
+                        <tr>
+                            <td>
+                                <input type="number" name="bracketLevel" class="form-control form-control-sm" value="@item.Level" required />
+                            </td>
+                            <td>
+                                <input type="number" name="lowerBound" class="form-control form-control-sm" value="@item.Low.ToString(CultureInfo.InvariantCulture)" step="100000" required />
+                            </td>
+                            <td>
+                                <input type="text" name="upperBound" class="form-control form-control-sm" value="@item.Up" placeholder="Không giới hạn" />
+                            </td>
+                            <td>
+                                <input type="number" name="taxRatePercent" class="form-control form-control-sm" value="@item.Rate.ToString(CultureInfo.InvariantCulture)" step="0.5" required />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="d-flex justify-content-end">
+            <button type="submit" class="btn btn-sm vnm-btn-primary">
+                <i class="ti ti-device-floppy me-1"></i>Lưu Biểu thuế & Ghi AuditLog
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+    function loadParamToForm(p) {
+        document.getElementById('paramFormTitle').innerText = 'Chỉnh sửa Tham số Pháp lý #' + p.Id;
+        document.getElementById('paramId').value = p.Id;
+        document.getElementById('paramEffectiveFrom').value = p.EffectiveFrom;
+        document.getElementById('paramEffectiveTo').value = p.EffectiveTo ?? '';
+        document.getElementById('paramLegalRef').value = p.LegalReference ?? '';
+        document.getElementById('paramBaseSalary').value = p.StatutoryBaseSalary;
+        document.getElementById('paramMin1').value = p.MinWageRegion1;
+        document.getElementById('paramMin2').value = p.MinWageRegion2;
+        document.getElementById('paramMin3').value = p.MinWageRegion3;
+        document.getElementById('paramMin4').value = p.MinWageRegion4;
+        document.getElementById('paramSiMult').value = p.SocialInsuranceCapMultiplier;
+        document.getElementById('paramUiMult').value = p.UnemploymentInsuranceCapMultiplier;
+        document.getElementById('paramSelfDed').value = p.SelfDeduction;
+        document.getElementById('paramDepDed').value = p.DependentDeduction;
+        document.getElementById('paramEmpSi').value = (p.EmployeeSiRate * 100).toFixed(2);
+        document.getElementById('paramEmpHi').value = (p.EmployeeHiRate * 100).toFixed(2);
+        document.getElementById('paramEmpUi').value = (p.EmployeeUiRate * 100).toFixed(2);
+        document.getElementById('paramCompSi').value = (p.CompanySiRate * 100).toFixed(2);
+        document.getElementById('paramCompHi').value = (p.CompanyHiRate * 100).toFixed(2);
+        document.getElementById('paramCompUi').value = (p.CompanyUiRate * 100).toFixed(2);
+        document.getElementById('paramCompUnion').value = (p.CompanyUnionFeeRate * 100).toFixed(2);
+    }
+
+    function resetParamForm() {
+        document.getElementById('paramFormTitle').innerText = 'Thêm Giai đoạn Tham số Pháp lý Mới';
+        document.getElementById('paramId').value = '';
+        document.getElementById('paramEffectiveTo').value = '';
+    }
+</script>
+

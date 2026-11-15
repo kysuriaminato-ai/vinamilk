@@ -1,0 +1,10 @@
+{
+  "name": "Vinamilk HRM - ESS & MSS",
+  "short_name": "VNM ESS",
+  "start_url": "/ESS",
+  "display": "standalone",
+  "background_color": "#F4F6FB",
+  "theme_color": "#0213B0",
+  "icons": []
+}
+

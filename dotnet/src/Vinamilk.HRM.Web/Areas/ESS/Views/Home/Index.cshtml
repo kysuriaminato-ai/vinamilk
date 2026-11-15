@@ -1,0 +1,203 @@
+@model Vinamilk.HRM.Application.Analytics.EssMssPortalDto
+@{
+    Layout = "~/Areas/ESS/Views/Shared/_LayoutEss.cshtml";
+    ViewData["Title"] = "Cổng Nhân viên (ESS/MSS)";
+    var activeTab = (string)(ViewBag.ActiveTab ?? "home");
+}
+
+@if (TempData["EssMessage"] is string msg)
+{
+    <div class="alert alert-success alert-dismissible fade show py-2 small">
+        <i class="ti ti-circle-check me-1"></i>@msg
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- PROFILE HERO -->
+<div class="ess-card p-3 mb-3">
+    <div class="d-flex align-items-center gap-3">
+        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold"
+             style="width: 52px; height: 52px; font-size: 18px;">
+            @Model.Profile.FullName.Split(' ').LastOrDefault()?.FirstOrDefault()
+        </div>
+        <div class="flex-grow-1">
+            <div class="fw-bold fs-6">@Model.Profile.FullName</div>
+            <div class="text-muted small">@Model.Profile.EmployeeCode • @Model.Profile.PositionName</div>
+            <div class="text-primary small fw-semibold">@Model.Profile.UnitName</div>
+        </div>
+        <span class="badge bg-success-subtle text-success">@Model.Profile.WorkStatus</span>
+    </div>
+</div>
+
+@if (activeTab == "home")
+{
+    <div class="row g-2 mb-3">
+        <div class="col-6">
+            <div class="ess-card p-3 h-100">
+                <div class="text-muted small">Công tính lương (@Model.CurrentAttendance.Month/@Model.CurrentAttendance.Year)</div>
+                <div class="fs-4 fw-extrabold text-primary mt-1">@Model.CurrentAttendance.PayableWorkdays.ToString("0.#") ngày</div>
+                <div class="small text-muted">OT: @Model.CurrentAttendance.TotalOtHours.ToString("0.#")h • Trễ: @Model.CurrentAttendance.LateCount</div>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="ess-card p-3 h-100">
+                <div class="text-muted small">Phép năm còn lại</div>
+                <div class="fs-4 fw-extrabold text-success mt-1">@Model.CurrentAttendance.RemainingAnnualLeave.ToString("0.#") ngày</div>
+                <div class="small text-muted">QLTT: @Model.Profile.DirectManagerName</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="ess-card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="fw-bold mb-0"><i class="ti ti-wallet me-1 text-primary"></i>Phiếu lương gần nhất</h6>
+            @if (Model.LatestPayslip is not null)
+            {
+                <span class="badge bg-success-subtle text-success">@Model.LatestPayslip.PaymentStatus</span>
+            }
+        </div>
+        @if (Model.LatestPayslip is null)
+        {
+            <div class="text-muted small">Chưa có dữ liệu kỳ lương.</div>
+        }
+        else
+        {
+            <div class="small text-muted mb-2">@Model.LatestPayslip.PeriodTitle</div>
+            <div class="d-flex justify-content-between py-1 border-bottom small">
+                <span>Thu nhập Gross</span>
+                <strong>@Model.LatestPayslip.GrossIncome.ToString("N0") đ</strong>
+            </div>
+            <div class="d-flex justify-content-between py-1 border-bottom small">
+                <span>BHXH/BHYT/BHTN (10.5%)</span>
+                <span class="text-danger">-@Model.LatestPayslip.TotalEmployeeInsurance.ToString("N0") đ</span>
+            </div>
+            <div class="d-flex justify-content-between py-1 border-bottom small">
+                <span>Thuế TNCN</span>
+                <span class="text-danger">-@Model.LatestPayslip.PersonalIncomeTax.ToString("N0") đ</span>
+            </div>
+            <div class="d-flex justify-content-between pt-2">
+                <span class="fw-bold">Thực nhận (Net)</span>
+                <span class="fw-extrabold text-success fs-5">@Model.LatestPayslip.NetSalary.ToString("N0") đ</span>
+            </div>
+        }
+    </div>
+}
+else if (activeTab == "requests")
+{
+    <div class="ess-card p-3 mb-3">
+        <h6 class="fw-bold mb-2"><i class="ti ti-calendar-plus me-1 text-primary"></i>Gửi Đơn Nghỉ phép</h6>
+        <form asp-action="SubmitLeave" method="post" class="row g-2">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="employeeId" value="@Model.Profile.EmployeeId" />
+            <div class="col-12">
+                <select name="leaveTypeId" class="form-select form-select-sm" required>
+                    @foreach (var lt in Model.LeaveTypes) { <option value="@lt.Id">@lt.LeaveName</option> }
+                </select>
+            </div>
+            <div class="col-6">
+                <label class="form-label small mb-0">Từ ngày</label>
+                <input type="date" name="startDate" class="form-control form-control-sm" value="@DateTime.Today.AddDays(1).ToString("yyyy-MM-dd")" required />
+            </div>
+            <div class="col-6">
+                <label class="form-label small mb-0">Đến ngày</label>
+                <input type="date" name="endDate" class="form-control form-control-sm" value="@DateTime.Today.AddDays(1).ToString("yyyy-MM-dd")" required />
+            </div>
+            <div class="col-12">
+                <input type="text" name="reason" class="form-control form-control-sm" placeholder="Lý do nghỉ phép..." required />
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary btn-sm w-100">Gửi Đơn Nghỉ phép</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="ess-card p-3 mb-3">
+        <h6 class="fw-bold mb-2"><i class="ti ti-clock-plus me-1 text-warning"></i>Đăng ký Tăng ca (OT)</h6>
+        <form asp-action="SubmitOvertime" method="post" class="row g-2">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="employeeId" value="@Model.Profile.EmployeeId" />
+            <div class="col-6">
+                <input type="date" name="overtimeDate" class="form-control form-control-sm" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+            </div>
+            <div class="col-6">
+                <select name="overtimeRateType" class="form-select form-select-sm">
+                    <option value="Normal150">Ngày thường (150%)</option>
+                    <option value="Weekend200">Cuối tuần (200%)</option>
+                    <option value="Holiday300">Ngày Lễ (300%)</option>
+                </select>
+            </div>
+            <div class="col-6"><input type="time" name="startTime" class="form-control form-control-sm" value="18:00" required /></div>
+            <div class="col-6"><input type="time" name="endTime" class="form-control form-control-sm" value="20:00" required /></div>
+            <div class="col-12"><input type="text" name="reason" class="form-control form-control-sm" placeholder="Nội dung công việc OT..." required /></div>
+            <div class="col-12"><button type="submit" class="btn btn-warning btn-sm w-100 fw-semibold">Đăng ký OT</button></div>
+        </form>
+    </div>
+
+    <div class="ess-card p-3">
+        <h6 class="fw-bold mb-2">Trạng thái đơn từ của tôi (@Model.MyRequests.Count)</h6>
+        @foreach (var r in Model.MyRequests)
+        {
+            <div class="border-bottom py-2 d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="fw-semibold small">@r.RequestType • @r.Code</div>
+                    <div class="text-muted" style="font-size: 12px;">@r.PeriodText — @r.Reason</div>
+                </div>
+                <span class="badge @(r.Status == "Approved" ? "bg-success" : r.Status == "Rejected" ? "bg-danger" : "bg-warning text-dark")">@r.Status</span>
+            </div>
+        }
+    </div>
+}
+else if (activeTab == "mss")
+{
+    <div class="ess-card p-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="fw-bold mb-0"><i class="ti ti-checks me-1 text-primary"></i>Duyệt nhanh Quản lý (MSS)</h6>
+            <span class="badge bg-primary">@Model.PendingApprovals.Count chờ duyệt</span>
+        </div>
+        @if (Model.PendingApprovals.Count == 0)
+        {
+            <div class="text-muted small">Không có yêu cầu nào đang chờ phê duyệt.</div>
+        }
+        else
+        {
+            @foreach (var p in Model.PendingApprovals)
+            {
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <div class="d-flex justify-content-between">
+                        <strong class="small">@p.DocumentTitle</strong>
+                        <span class="badge bg-warning text-dark">@p.StepName</span>
+                    </div>
+                    <div class="text-muted small mb-2">@p.EntityType • @p.CreatedAt.ToString("dd/MM HH:mm")</div>
+                    <form asp-action="ProcessMssApproval" method="post" class="d-flex gap-2">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="employeeId" value="@Model.Profile.EmployeeId" />
+                        <input type="hidden" name="workflowInstanceId" value="@p.WorkflowInstanceId" />
+                        <input type="text" name="comment" class="form-control form-control-sm" placeholder="Ghi chú duyệt..." />
+                        <button type="submit" name="actionType" value="Approve" class="btn btn-sm btn-success">Duyệt</button>
+                        <button type="submit" name="actionType" value="Reject" class="btn btn-sm btn-outline-danger">Từ chối</button>
+                    </form>
+                </div>
+            }
+        }
+    </div>
+}
+
+<!-- BOTTOM MOBILE NAVIGATION -->
+<nav class="ess-bottom-nav">
+    <a href="@Url.Action("Index", new { employeeId = Model.Profile.EmployeeId, tab = "home" })"
+       class="ess-nav-item @(activeTab == "home" ? "active" : "")">
+        <i class="ti ti-home"></i><span>Tổng quan</span>
+    </a>
+    <a href="@Url.Action("Index", new { employeeId = Model.Profile.EmployeeId, tab = "requests" })"
+       class="ess-nav-item @(activeTab == "requests" ? "active" : "")">
+        <i class="ti ti-file-plus"></i><span>Đơn từ</span>
+    </a>
+    <a href="@Url.Action("Index", new { employeeId = Model.Profile.EmployeeId, tab = "mss" })"
+       class="ess-nav-item @(activeTab == "mss" ? "active" : "")">
+        <i class="ti ti-checks"></i><span>Duyệt (MSS)</span>
+    </a>
+    <a href="/AiExpert" class="ess-nav-item">
+        <i class="ti ti-sparkles"></i><span>Hỏi AI</span>
+    </a>
+</nav>
+

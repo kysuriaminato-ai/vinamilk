@@ -1,0 +1,98 @@
+@model Vinamilk.HRM.Domain.Entities.Core.PersonnelTransfer
+@{
+    Layout = "~/Views/Shared/_LayoutPrint.cshtml";
+    var e = Model.Employee;
+}
+
+<!-- QUỐC HIỆU & TIÊU NGỮ -->
+<div class="vnm-print-header-grid">
+    <div>
+        <div class="vnm-print-org">CÔNG TY CỔ PHẦN SỮA VIỆT NAM</div>
+        <div class="fw-bold">(VINAMILK)</div>
+        <div class="mt-1">Số: <strong>@Model.DecisionNumber</strong></div>
+    </div>
+    <div>
+        <div class="vnm-print-nation">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+        <div class="vnm-print-motto">Độc lập - Tự do - Hạnh phúc</div>
+        <div class="mt-1 fst-italic">TP. Hồ Chí Minh, ngày @Model.DecisionDate.Day tháng @Model.DecisionDate.Month năm @Model.DecisionDate.Year</div>
+    </div>
+</div>
+
+<div class="text-center my-4">
+    <h1 class="fw-bold mb-1" style="font-size: 16pt;">QUYẾT ĐỊNH</h1>
+    <div class="fw-bold" style="font-size: 13pt;">
+        Về việc @(Model.TransferType == "Promotion" ? "Bổ nhiệm và Thăng chức Cán bộ Quản lý" : "Điều chuyển và Phân công Công tác Nhân sự")
+    </div>
+    <div style="border-bottom: 1px solid #000; width: 150px; margin: 8px auto;"></div>
+</div>
+
+<div class="text-center fw-bold mb-3" style="font-size: 13pt;">
+    TỔNG GIÁM ĐỐC CÔNG TY CỔ PHẦN SỮA VIỆT NAM
+</div>
+
+<div class="mb-3 fst-italic" style="text-align: justify;">
+    <div>- Căn cứ Bộ luật Lao động nước Cộng hòa Xã hội Chủ nghĩa Việt Nam năm 2019;</div>
+    <div>- Căn cứ Điều lệ Tổ chức và Hoạt động của Công ty Cổ phần Sữa Việt Nam (Vinamilk);</div>
+    <div>- Xét năng lực chuyên môn, phẩm chất đạo đức của cán bộ và đề nghị của Giám đốc Khối Nhân sự.</div>
+</div>
+
+<div class="text-center fw-bold my-3" style="font-size: 14pt;">
+    QUYẾT ĐỊNH:
+</div>
+
+<div style="font-size: 12pt; line-height: 1.7; text-align: justify;">
+    <p class="mb-2">
+        <strong>Điều 1.</strong> Nay điều chuyển và bổ nhiệm ông/bà <strong>@e.FullName</strong> (Mã số nhân viên: <strong>@e.EmployeeCode</strong>):
+    </p>
+</div>
+
+<table class="table table-bordered border-dark my-3" style="font-size: 11.5pt;">
+    <thead>
+        <tr class="text-center fw-bold">
+            <th style="width: 28%;">Nội dung</th>
+            <th style="width: 36%;">Trước khi Điều chuyển</th>
+            <th style="width: 36%;">Sau khi Bổ nhiệm (Từ @Model.EffectiveDate.ToString("dd/MM/yyyy"))</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td class="fw-bold">Đơn vị công tác</td>
+            <td>@Model.FromUnit.UnitName (@Model.FromUnit.UnitCode)</td>
+            <td class="fw-bold">@Model.ToUnit.UnitName (@Model.ToUnit.UnitCode)</td>
+        </tr>
+        <tr>
+            <td class="fw-bold">Chức danh / Chức vụ</td>
+            <td>@Model.FromPosition.PositionName</td>
+            <td class="fw-bold">@Model.ToPosition.PositionName</td>
+        </tr>
+        <tr>
+            <td class="fw-bold">Mức lương & Phụ cấp</td>
+            <td>Theo quy định chức danh cũ</td>
+            <td class="fw-bold">Lương CB: @e.BaseSalary.ToString("N0") ₫ + PC: @Model.ToPosition.DefaultPositionAllowance.ToString("N0") ₫</td>
+        </tr>
+    </tbody>
+</table>
+
+<div style="font-size: 12pt; line-height: 1.7; text-align: justify;">
+    <p class="mb-2">
+        <strong>Điều 2. Lý do điều chuyển / bổ nhiệm:</strong> @(Model.Reason ?? "Đáp ứng nhu cầu điều hành sản xuất kinh doanh của Công ty.")
+    </p>
+    <p class="mb-3">
+        <strong>Điều 3.</strong> Giám đốc Khối Nhân sự, Giám đốc Khối Tài chính – Kế toán, Trưởng các đơn vị có liên quan và ông/bà <strong>@e.FullName</strong> chịu trách nhiệm thi hành Quyết định này kể từ ngày <strong>@Model.EffectiveDate.ToString("dd/MM/yyyy")</strong>.
+    </p>
+</div>
+
+<div class="row mt-4 pt-2" style="font-size: 11.5pt;">
+    <div class="col-6">
+        <div class="fw-bold fst-italic">Nơi nhận:</div>
+        <div>- Như Điều 3;</div>
+        <div>- Lưu: VT, Hồ sơ Nhân sự (@e.EmployeeCode).</div>
+    </div>
+    <div class="col-6 text-center">
+        <div class="fw-bold">TỔNG GIÁM ĐỐC</div>
+        <div class="fst-italic" style="font-size: 10pt;">(Ký tên và đóng dấu)</div>
+        <div style="height: 75px;"></div>
+        <div class="fw-bold">MAI KIỀU LIÊN</div>
+    </div>
+</div>
+

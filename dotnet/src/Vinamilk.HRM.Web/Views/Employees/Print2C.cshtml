@@ -1,0 +1,131 @@
+@model Vinamilk.HRM.Application.CoreHR.Employees.Employee360ProfileDto
+@{
+    Layout = "~/Views/Shared/_LayoutPrint.cshtml";
+    var e = Model.Employee;
+}
+
+<!-- HEADER QUỐC HIỆU & MẪU 2C-BNV/2008 -->
+<div class="vnm-print-header-grid">
+    <div>
+        <div class="vnm-print-org">CÔNG TY CỔ PHẦN SỮA VIỆT NAM</div>
+        <div class="fw-bold">@(e.OrganizationUnit?.UnitName.ToUpperInvariant() ?? "TRỤ SỞ CHÍNH")</div>
+        <div class="mt-1">Số hiệu nhân viên: <strong>@e.EmployeeCode</strong></div>
+    </div>
+    <div>
+        <div class="vnm-print-nation">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+        <div class="vnm-print-motto">Độc lập - Tự do - Hạnh phúc</div>
+        <div class="mt-1 fst-italic" style="font-size: 10pt;">Mẫu số: 2C-BNV/2008</div>
+    </div>
+</div>
+
+<!-- KHUNG ẢNH 4x6 & TIÊU ĐỀ SƠ YẾU LÝ LỊCH -->
+<div class="row align-items-center my-3">
+    <div class="col-3 text-center">
+        <div class="border border-dark d-inline-flex align-items-center justify-content-center"
+             style="width: 35mm; height: 45mm; font-size: 10pt;">
+            Ảnh màu<br />(4 × 6 cm)
+        </div>
+    </div>
+    <div class="col-9 text-center">
+        <h1 class="fw-bold mb-1" style="font-size: 17pt;">SƠ YẾU LÝ LỊCH NHÂN SỰ</h1>
+        <div class="fst-italic mb-2">(Dành cho Cán bộ, Chuyên gia và Người lao động Vinamilk)</div>
+    </div>
+</div>
+
+<!-- NỘI DUNG MẪU 2C -->
+<div style="line-height: 1.75; font-size: 11.5pt;">
+    <div><strong>1) Họ và tên khai sinh (viết chữ in hoa):</strong> @e.FullName.ToUpperInvariant() &nbsp;&nbsp;&nbsp;&nbsp; <strong>2) Giới tính:</strong> @e.Gender</div>
+    <div><strong>3) Sinh ngày:</strong> @e.DateOfBirth.Day tháng @e.DateOfBirth.Month năm @e.DateOfBirth.Year &nbsp;&nbsp;&nbsp;&nbsp; <strong>4) Dân tộc:</strong> @e.Ethnicity &nbsp;&nbsp;&nbsp;&nbsp; <strong>5) Tôn giáo:</strong> @e.Religion</div>
+    <div><strong>6) Số Căn cước công dân (CCCD):</strong> @Model.DecryptedCitizenId &nbsp;&nbsp;&nbsp;&nbsp; <strong>Mã số thuế TNCN:</strong> @(string.IsNullOrWhiteSpace(Model.DecryptedTaxCode) ? "Đang cập nhật" : Model.DecryptedTaxCode)</div>
+    <div><strong>7) Số sổ Bảo hiểm xã hội (BHXH):</strong> @(e.SocialInsuranceNumber ?? "7915002849") &nbsp;&nbsp;&nbsp;&nbsp; <strong>Điện thoại:</strong> @e.PhoneNumber</div>
+    <div><strong>8) Nơi đăng ký hộ khẩu thường trú:</strong> @(e.PermanentAddress ?? "TP. Hồ Chí Minh")</div>
+    <div><strong>9) Nơi ở hiện nay:</strong> @(e.CurrentAddress ?? e.PermanentAddress ?? "TP. Hồ Chí Minh")</div>
+    <div><strong>10) Đơn vị công tác hiện tại:</strong> @(e.OrganizationUnit?.UnitName ?? "Công ty Cổ phần Sữa Việt Nam")</div>
+    <div><strong>11) Chức vụ / Chức danh hiện tại:</strong> @(e.Position?.PositionName ?? "Chuyên viên")</div>
+    <div><strong>12) Ngày tuyển dụng vào Vinamilk:</strong> @e.HireDate.ToString("dd/MM/yyyy") &nbsp;&nbsp;&nbsp;&nbsp; <strong>Loại HĐLĐ:</strong> @e.CurrentContractType</div>
+    <div><strong>13) Trình độ giáo dục phổ thông:</strong> 12/12 &nbsp;&nbsp;&nbsp;&nbsp; <strong>Trình độ chuyên môn cao nhất:</strong> @(e.EducationLevel?.LevelName ?? "Đại học") (@(e.Major ?? "Chuyên ngành Quản trị/Kỹ thuật"))</div>
+    <div><strong>14) Ngạch / Bậc lương hiện hưởng:</strong> @(e.SalaryStep?.SalaryScale?.ScaleCode ?? "M1") - @(e.SalaryStep?.StepName ?? "Bậc 3") &nbsp;&nbsp;&nbsp;&nbsp; <strong>Mức lương cơ bản:</strong> @e.BaseSalary.ToString("N0") VNĐ/tháng</div>
+</div>
+
+<!-- BẢNG TÓM TẮT QUÁ TRÌNH CÔNG TÁC -->
+<div class="fw-bold mt-3 mb-1">15) TÓM TẮT QUÁ TRÌNH CÔNG TÁC:</div>
+<table class="table table-bordered border-dark" style="font-size: 10.5pt;">
+    <thead>
+        <tr class="text-center fw-bold">
+            <th style="width: 26%;">Từ tháng, năm đến tháng, năm</th>
+            <th style="width: 44%;">Chức danh, Chức vụ, Đơn vị công tác</th>
+            <th style="width: 30%;">Ghi chú</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (e.EmploymentHistories.Any())
+        {
+            foreach (var h in e.EmploymentHistories.OrderBy(x => x.FromDate))
+            {
+                <tr>
+                    <td class="text-center">@h.FromDate.ToString("MM/yyyy") - @(h.ToDate?.ToString("MM/yyyy") ?? "Nay")</td>
+                    <td><strong>@h.PositionName</strong> — @h.DepartmentName</td>
+                    <td>@h.Notes</td>
+                </tr>
+            }
+        }
+        else
+        {
+            <tr>
+                <td class="text-center">@e.HireDate.ToString("MM/yyyy") - Nay</td>
+                <td><strong>@(e.Position?.PositionName)</strong> — @(e.OrganizationUnit?.UnitName)</td>
+                <td>Đang công tác chính thức</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<!-- BẢNG QUAN HỆ GIA ĐÌNH -->
+<div class="fw-bold mt-3 mb-1">16) QUAN HỆ GIA ĐÌNH & NGƯỜI PHỤ THUỘC:</div>
+<table class="table table-bordered border-dark" style="font-size: 10.5pt;">
+    <thead>
+        <tr class="text-center fw-bold">
+            <th style="width: 20%;">Mối quan hệ</th>
+            <th style="width: 35%;">Họ và tên</th>
+            <th style="width: 15%;">Năm sinh</th>
+            <th style="width: 30%;">Chế độ Giảm trừ Gia cảnh</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (e.Dependents.Any())
+        {
+            foreach (var d in e.Dependents)
+            {
+                <tr>
+                    <td class="text-center">@d.Relationship</td>
+                    <td class="fw-bold">@d.FullName</td>
+                    <td class="text-center">@(d.DateOfBirth?.Year.ToString() ?? "-")</td>
+                    <td>@(d.IsTaxDeductible ? "Đăng ký giảm trừ thuế TNCN" : "Không giảm trừ")</td>
+                </tr>
+            }
+        }
+        else
+        {
+            <tr>
+                <td colspan="4" class="text-center fst-italic">Chưa đăng ký người phụ thuộc</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<!-- CAM ĐOAN & XÁC NHẬN -->
+<div class="row mt-4 pt-2" style="font-size: 11pt;">
+    <div class="col-6 text-center">
+        <div class="fw-bold">Người khai ký tên</div>
+        <div class="fst-italic" style="font-size: 10pt;">(Tôi xin cam đoan lời khai trên là đúng sự thật)</div>
+        <div style="height: 65px;"></div>
+        <div class="fw-bold">@e.FullName</div>
+    </div>
+    <div class="col-6 text-center">
+        <div class="fst-italic">TP. Hồ Chí Minh, ngày @DateTime.Today.Day tháng @DateTime.Today.Month năm @DateTime.Today.Year</div>
+        <div class="fw-bold">XÁC NHẬN CỦA KHỐI NHÂN SỰ VINAMILK</div>
+        <div style="height: 65px;"></div>
+        <div class="fw-bold">GIÁM ĐỐC KHỐI NHÂN SỰ</div>
+    </div>
+</div>
+

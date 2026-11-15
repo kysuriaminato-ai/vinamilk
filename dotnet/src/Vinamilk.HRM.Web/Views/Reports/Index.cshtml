@@ -1,0 +1,340 @@
+@using Vinamilk.HRM.Application.Analytics
+@{
+    ViewData["Title"] = "Trung tâm Báo cáo BM01–BM04 & Dynamic Report Builder";
+    var tab = (string)(ViewBag.Tab ?? "BM01");
+    var units = ViewBag.Units as IEnumerable<dynamic> ?? Array.Empty<dynamic>();
+    var allCols = ViewBag.AllColumns as List<DynamicReportColumnOption> ?? new();
+    var selectedCols = ViewBag.SelectedCols as List<string> ?? new();
+    int? unitId = ViewBag.UnitId;
+    int year = (int)(ViewBag.Year ?? DateTime.Today.Year);
+    int month = (int)(ViewBag.Month ?? DateTime.Today.Month);
+    string? workStatus = ViewBag.WorkStatus;
+    string? recordType = ViewBag.RecordType;
+    string groupBy = (string)(ViewBag.GroupBy ?? "None");
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h2 class="fw-extrabold mb-1"><i class="ti ti-file-spreadsheet me-2 text-primary"></i>Trung tâm Báo cáo Nhân sự & Thống kê</h2>
+        <p class="text-muted mb-0">Hệ thống biểu mẫu chuẩn BM01–BM04, Dynamic Report Builder (kéo/chọn cột & nhóm) và Lịch gửi Email tự động</p>
+    </div>
+    @if (tab != "SCHEDULE")
+    {
+        <a href="@Url.Action("ExportExcel", new { tab, unitId, year, month, workStatus, recordType, cols = selectedCols, groupBy })"
+           class="btn btn-success fw-semibold">
+            <i class="ti ti-download me-1"></i>Xuất Excel (.xlsx)
+        </a>
+    }
+</div>
+
+@if (TempData["SuccessMessage"] is string okMsg)
+{
+    <div class="alert alert-success alert-dismissible fade show">
+        <i class="ti ti-circle-check me-2"></i>@okMsg
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- TABS -->
+<ul class="nav nav-pills mb-3 gap-2">
+    @foreach (var item in new[] {
+        ("BM01", "BM01 - Hồ sơ Nhân sự"),
+        ("BM02", "BM02 - Biến động & Điều chuyển"),
+        ("BM03", "BM03 - Khen thưởng & Kỷ luật"),
+        ("BM04", "BM04 - Tổng hợp Quỹ lương & BHXH"),
+        ("DYNAMIC", "Dynamic Report Builder"),
+        ("SCHEDULE", "Lịch gửi Email định kỳ")
+    })
+    {
+        <li class="nav-item">
+            <a class="nav-link @(tab == item.Item1 ? "active fw-bold" : "bg-white border")"
+               href="@Url.Action("Index", new { tab = item.Item1 })">@item.Item2</a>
+        </li>
+    }
+</ul>
+
+@if (tab == "BM01")
+{
+    var rows = ViewBag.Bm01 as List<Bm01EmployeeRowDto> ?? new();
+    <div class="vnm-card p-3 mb-3">
+        <form method="get" class="row g-2 align-items-end">
+            <input type="hidden" name="tab" value="BM01" />
+            <div class="col-md-4">
+                <label class="form-label fs-7 fw-semibold">Đơn vị</label>
+                <select name="unitId" class="form-select form-select-sm">
+                    <option value="">-- Tất cả đơn vị --</option>
+                    @foreach (var u in units) { <option value="@u.Id" selected="@(unitId == (int)u.Id)">@u.UnitName</option> }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fs-7 fw-semibold">Trạng thái</label>
+                <select name="workStatus" class="form-select form-select-sm">
+                    <option value="">-- Tất cả --</option>
+                    <option value="Official" selected="@(workStatus == "Official")">Chính thức</option>
+                    <option value="Probation" selected="@(workStatus == "Probation")">Thử việc</option>
+                    <option value="Terminated" selected="@(workStatus == "Terminated")">Đã nghỉ việc</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary btn-sm w-100" type="submit"><i class="ti ti-filter me-1"></i>Lọc</button>
+            </div>
+        </form>
+    </div>
+    <div class="vnm-card p-3 table-responsive">
+        <div class="fw-bold mb-2">BM01 - Danh sách nhân sự (@rows.Count bản ghi)</div>
+        <table class="table table-sm table-hover align-middle">
+            <thead class="table-light">
+                <tr><th>Mã NV</th><th>Họ tên</th><th>Giới tính</th><th>Ngày sinh</th><th>Đơn vị</th><th>Chức danh</th><th>Trình độ</th><th>Ngày vào</th><th>Trạng thái</th><th class="text-end">Lương CB</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in rows)
+                {
+                    <tr>
+                        <td class="font-monospace fw-semibold">@r.EmployeeCode</td>
+                        <td>@r.FullName</td>
+                        <td>@r.Gender</td>
+                        <td>@r.DateOfBirth.ToString("dd/MM/yyyy")</td>
+                        <td>@r.UnitName</td>
+                        <td>@r.PositionName</td>
+                        <td>@r.EducationLevel</td>
+                        <td>@r.HireDate.ToString("dd/MM/yyyy")</td>
+                        <td><span class="badge bg-primary-subtle text-primary">@r.WorkStatus</span></td>
+                        <td class="text-end fw-semibold">@r.BaseSalary.ToString("N0")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else if (tab == "BM02")
+{
+    var rows = ViewBag.Bm02 as List<Bm02MovementRowDto> ?? new();
+    <div class="vnm-card p-3 table-responsive">
+        <div class="fw-bold mb-2">BM02 - Biến động nhân sự & Điều chuyển năm @year (@rows.Count quyết định)</div>
+        <table class="table table-sm table-hover align-middle">
+            <thead class="table-light">
+                <tr><th>Số QĐ</th><th>Nhân viên</th><th>Loại</th><th>Đơn vị cũ</th><th>Đơn vị mới</th><th>Chức danh mới</th><th>Hiệu lực</th><th>Trạng thái</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in rows)
+                {
+                    <tr>
+                        <td class="font-monospace">@r.DecisionNumber</td>
+                        <td>@r.EmployeeCode - @r.FullName</td>
+                        <td>@r.TransferType</td>
+                        <td>@r.FromUnitName</td>
+                        <td class="fw-semibold text-primary">@r.ToUnitName</td>
+                        <td>@r.ToPositionName</td>
+                        <td>@r.EffectiveDate.ToString("dd/MM/yyyy")</td>
+                        <td><span class="badge bg-info-subtle text-info">@r.ApprovalStatus</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else if (tab == "BM03")
+{
+    var rows = ViewBag.Bm03 as List<Bm03RewardDisciplineRowDto> ?? new();
+    <div class="vnm-card p-3 table-responsive">
+        <div class="fw-bold mb-2">BM03 - Khen thưởng & Kỷ luật năm @year (@rows.Count quyết định)</div>
+        <table class="table table-sm table-hover align-middle">
+            <thead class="table-light">
+                <tr><th>Số QĐ</th><th>Nhân viên</th><th>Đơn vị</th><th>Phân loại</th><th>Hình thức</th><th class="text-end">Số tiền</th><th>Hiệu lực</th><th>Lý do</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in rows)
+                {
+                    <tr>
+                        <td class="font-monospace">@r.DecisionNumber</td>
+                        <td>@r.EmployeeCode - @r.FullName</td>
+                        <td>@r.UnitName</td>
+                        <td><span class="badge @(r.RecordType == "Reward" ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger")">@r.RecordType</span></td>
+                        <td>@r.CategoryName</td>
+                        <td class="text-end fw-semibold">@r.Amount.ToString("N0")</td>
+                        <td>@r.EffectiveDate.ToString("dd/MM/yyyy")</td>
+                        <td>@r.Reason</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else if (tab == "BM04")
+{
+    var rows = ViewBag.Bm04 as List<Bm04PayrollSummaryRowDto> ?? new();
+    <div class="vnm-card p-3 table-responsive">
+        <div class="fw-bold mb-2">BM04 - Tổng hợp Quỹ lương, BHXH & Thuế TNCN kỳ @month/@year</div>
+        <table class="table table-sm table-hover align-middle">
+            <thead class="table-light">
+                <tr><th>Mã ĐV</th><th>Đơn vị</th><th class="text-center">Số NV</th><th class="text-end">Tổng Gross</th><th class="text-end">BHXH NV</th><th class="text-end">BHXH DN</th><th class="text-end">Thuế TNCN</th><th class="text-end">Thực nhận Net</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in rows)
+                {
+                    <tr>
+                        <td class="font-monospace">@r.UnitCode</td>
+                        <td class="fw-semibold">@r.UnitName</td>
+                        <td class="text-center">@r.Headcount</td>
+                        <td class="text-end">@r.TotalGross.ToString("N0")</td>
+                        <td class="text-end">@r.TotalEmployeeSi.ToString("N0")</td>
+                        <td class="text-end">@r.TotalCompanySi.ToString("N0")</td>
+                        <td class="text-end">@r.TotalPit.ToString("N0")</td>
+                        <td class="text-end fw-bold text-success">@r.TotalNet.ToString("N0")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else if (tab == "DYNAMIC")
+{
+    var dyn = ViewBag.Dynamic as DynamicReportResultDto;
+    <div class="vnm-card p-3 mb-3">
+        <form method="get">
+            <input type="hidden" name="tab" value="DYNAMIC" />
+            <div class="fw-bold mb-2"><i class="ti ti-columns me-1 text-primary"></i>Chọn cột hiển thị:</div>
+            <div class="d-flex flex-wrap gap-3 mb-3">
+                @foreach (var col in allCols)
+                {
+                    var isChecked = selectedCols.Contains(col.Key);
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="cols" value="@col.Key" id="col_@col.Key" checked="@isChecked" />
+                        <label class="form-check-label fs-7" for="col_@col.Key">@col.Label</label>
+                    </div>
+                }
+            </div>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label fs-7 fw-semibold">Đơn vị</label>
+                    <select name="unitId" class="form-select form-select-sm">
+                        <option value="">-- Tất cả đơn vị --</option>
+                        @foreach (var u in units) { <option value="@u.Id" selected="@(unitId == (int)u.Id)">@u.UnitName</option> }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fs-7 fw-semibold">Nhóm theo (Group By)</label>
+                    <select name="groupBy" class="form-select form-select-sm">
+                        <option value="None" selected="@(groupBy == "None")">Không nhóm</option>
+                        <option value="UnitName" selected="@(groupBy == "UnitName")">Đơn vị</option>
+                        <option value="PositionName" selected="@(groupBy == "PositionName")">Chức danh</option>
+                        <option value="WorkStatus" selected="@(groupBy == "WorkStatus")">Trạng thái</option>
+                        <option value="Gender" selected="@(groupBy == "Gender")">Giới tính</option>
+                        <option value="EducationLevel" selected="@(groupBy == "EducationLevel")">Trình độ</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary btn-sm w-100"><i class="ti ti-player-play me-1"></i>Chạy Báo cáo</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    @if (dyn is not null)
+    {
+        if (dyn.Groups.Count > 0)
+        {
+            <div class="vnm-card p-3 mb-3">
+                <div class="fw-bold mb-2">Tổng hợp theo nhóm (@dyn.GroupBy)</div>
+                <div class="row g-2">
+                    @foreach (var g in dyn.Groups)
+                    {
+                        <div class="col-md-3">
+                            <div class="border rounded p-2 bg-light">
+                                <div class="fw-semibold fs-7">@g.GroupKey</div>
+                                <div class="fs-5 fw-bold text-primary">@g.Count NV</div>
+                                <div class="fs-7 text-muted">Tổng lương CB: @g.TotalBaseSalary.ToString("N0") đ</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="vnm-card p-3 table-responsive">
+            <div class="fw-bold mb-2">Kết quả chi tiết (@dyn.Rows.Count dòng)</div>
+            <table class="table table-sm table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        @foreach (var c in dyn.Columns) { <th>@c.Label</th> }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in dyn.Rows)
+                    {
+                        <tr>
+                            @foreach (var c in dyn.Columns) { <td>@(r.TryGetValue(c.Key, out var val) ? val : "")</td> }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+else if (tab == "SCHEDULE")
+{
+    var schedules = ViewBag.Schedules as List<ReportScheduleConfigDto> ?? new();
+    <div class="row g-3">
+        <div class="col-lg-5">
+            <div class="vnm-card p-3">
+                <h5 class="fw-bold mb-3"><i class="ti ti-calendar-time me-2 text-primary"></i>Cấu hình Lịch gửi Email tự động</h5>
+                <form asp-action="SaveSchedule" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="mb-2">
+                        <label class="form-label fs-7 fw-semibold">Mẫu báo cáo</label>
+                        <select name="reportCode" class="form-select form-select-sm">
+                            <option value="BM01">BM01 - Danh sách nhân sự</option>
+                            <option value="BM02">BM02 - Biến động nhân sự</option>
+                            <option value="BM03">BM03 - Khen thưởng & Kỷ luật</option>
+                            <option value="BM04">BM04 - Quỹ lương & BHXH</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fs-7 fw-semibold">Chu kỳ gửi (Hangfire Cron)</label>
+                        <select name="frequency" class="form-select form-select-sm">
+                            <option value="Weekly">Hàng tuần (Thứ 2 lúc 08:00)</option>
+                            <option value="Monthly" selected>Hàng tháng (Ngày 01 lúc 08:00)</option>
+                            <option value="Quarterly">Hàng quý</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fs-7 fw-semibold">Danh sách Email người nhận (cách nhau dấu ;)</label>
+                        <input type="text" name="recipients" class="form-control form-control-sm" value="hr-director@vinamilk.com.vn; ceo@vinamilk.com.vn" required />
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm w-100"><i class="ti ti-device-floppy me-1"></i>Lưu lịch gửi</button>
+                </form>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="vnm-card p-3 table-responsive">
+                <h5 class="fw-bold mb-3">Danh sách Lịch gửi đang hoạt động</h5>
+                <table class="table table-sm align-middle">
+                    <thead class="table-light">
+                        <tr><th>Báo cáo</th><th>Chu kỳ</th><th>Người nhận</th><th>Trạng thái</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in schedules)
+                        {
+                            <tr>
+                                <td class="fw-semibold">@s.ReportName</td>
+                                <td><span class="badge bg-info-subtle text-info">@s.Frequency</span></td>
+                                <td class="fs-7">@s.Recipients</td>
+                                <td class="fs-7">@s.LastStatus</td>
+                                <td>
+                                    <form asp-action="SendScheduleNow" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="scheduleId" value="@s.Id" />
+                                        <button type="submit" class="btn btn-sm btn-outline-primary">
+                                            <i class="ti ti-send me-1"></i>Gửi ngay
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+

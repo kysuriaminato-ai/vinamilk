@@ -1,0 +1,70 @@
+@{
+    var code = (int)(ViewBag.StatusCode ?? 500);
+    var title = (string)(ViewBag.ErrorTitle ?? "Đã xảy ra lỗi");
+    var subtitle = (string)(ViewBag.ErrorSubtitle ?? "");
+    var badge = (string)(ViewBag.ErrorBadge ?? "System Alert");
+}
+
+<div class="container py-5">
+    <div class="vnm-card mx-auto p-4 p-md-5 text-center" style="max-width: 680px;">
+        <!-- Vector SVG Illustration -->
+        <div class="mb-4">
+            @if (code == 403)
+            {
+                <svg width="160" height="130" viewBox="0 0 160 130" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <circle cx="80" cy="65" r="54" fill="var(--vnm-danger-bg)" />
+                    <path d="M80 22L118 38V66C118 90.5 101.8 112.1 80 118C58.2 112.1 42 90.5 42 66V38L80 22Z" fill="var(--vnm-bg-surface)" stroke="var(--vnm-danger)" stroke-width="4" />
+                    <rect x="66" y="62" width="28" height="22" rx="4" fill="var(--vnm-danger)" />
+                    <path d="M72 62V54C72 49.5817 75.5817 46 80 46C84.4183 46 88 49.5817 88 54V62" stroke="var(--vnm-danger)" stroke-width="4" stroke-linecap="round" />
+                </svg>
+            }
+            else if (code == 404)
+            {
+                <svg width="160" height="130" viewBox="0 0 160 130" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <circle cx="80" cy="65" r="54" fill="var(--vnm-primary-soft)" />
+                    <rect x="42" y="34" width="64" height="52" rx="8" fill="var(--vnm-bg-surface)" stroke="var(--vnm-primary)" stroke-width="3.5" />
+                    <circle cx="96" cy="76" r="20" fill="var(--vnm-bg-surface)" stroke="var(--vnm-primary)" stroke-width="4" />
+                    <path d="M110 90L124 104" stroke="var(--vnm-primary)" stroke-width="5" stroke-linecap="round" />
+                    <path d="M90 70L102 82M102 70L90 82" stroke="var(--vnm-danger)" stroke-width="3.5" stroke-linecap="round" />
+                </svg>
+            }
+            else
+            {
+                <svg width="160" height="130" viewBox="0 0 160 130" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <circle cx="80" cy="65" r="54" fill="var(--vnm-warning-bg)" />
+                    <path d="M80 26L126 104H34L80 26Z" fill="var(--vnm-bg-surface)" stroke="var(--vnm-warning)" stroke-width="4" stroke-linejoin="round" />
+                    <path d="M80 54V76" stroke="var(--vnm-warning)" stroke-width="5" stroke-linecap="round" />
+                    <circle cx="80" cy="90" r="3.5" fill="var(--vnm-warning)" />
+                </svg>
+            }
+        </div>
+
+        <div class="mb-2">
+            <span class="vnm-badge @(code == 403 ? "vnm-badge-danger" : code == 404 ? "vnm-badge-info" : "vnm-badge-warning")">
+                <span class="vnm-badge-dot"></span>HTTP @code • @badge
+            </span>
+        </div>
+
+        <h1 class="fw-extrabold mb-2" style="font-size: var(--vnm-fs-2xl);">@title</h1>
+        <p class="text-secondary fs-6 mx-auto mb-4" style="max-width: 540px;">@subtitle</p>
+
+        <div class="d-flex flex-wrap justify-content-center gap-2">
+            <a href="/" class="btn vnm-btn-primary px-4">
+                <i class="ti ti-home me-1"></i>Về Bảng điều khiển
+            </a>
+            <a href="/dev/styleguide" class="btn btn-outline-secondary px-4">
+                <i class="ti ti-palette me-1"></i>Mở Style Guide
+            </a>
+        </div>
+
+        <div class="mt-4 pt-3 border-top d-flex flex-wrap justify-content-center gap-3 fs-7 text-muted"
+             style="border-color: var(--vnm-border-subtle) !important;">
+            <span>Chuyển nhanh trang lỗi mẫu:</span>
+            <a href="/Error/403" class="text-decoration-none">403 Forbidden</a> •
+            <a href="/Error/404" class="text-decoration-none">404 Not Found</a> •
+            <a href="/Error/500" class="text-decoration-none">500 Server Error</a> •
+            <a href="/Error/Maintenance" class="text-decoration-none">Maintenance</a>
+        </div>
+    </div>
+</div>
+

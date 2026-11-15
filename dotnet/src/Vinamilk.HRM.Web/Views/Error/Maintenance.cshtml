@@ -1,0 +1,59 @@
+@{
+    ViewData["Title"] = "Bảo trì Hệ thống Định kỳ";
+}
+
+<div class="container py-5">
+    <div class="vnm-card mx-auto p-4 p-md-5 text-center" style="max-width: 700px;">
+        <div class="mb-4">
+            <svg width="160" height="130" viewBox="0 0 160 130" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <circle cx="80" cy="65" r="54" fill="var(--vnm-primary-soft)" />
+                <circle cx="68" cy="62" r="22" fill="var(--vnm-bg-surface)" stroke="var(--vnm-primary)" stroke-width="4" />
+                <circle cx="68" cy="62" r="8" fill="var(--vnm-primary)" />
+                <circle cx="102" cy="82" r="15" fill="var(--vnm-bg-surface)" stroke="var(--vnm-info)" stroke-width="3.5" />
+                <circle cx="102" cy="82" r="5" fill="var(--vnm-info)" />
+            </svg>
+        </div>
+
+        <span class="vnm-badge vnm-badge-info mb-2">
+            <span class="vnm-badge-dot"></span>Scheduled Maintenance Window
+        </span>
+
+        <h1 class="fw-extrabold mb-2" style="font-size: var(--vnm-fs-2xl);">
+            Hệ thống đang nâng cấp Cơ sở dữ liệu & Tính lương tự động
+        </h1>
+        <p class="text-secondary fs-6 mx-auto mb-4" style="max-width: 560px;">
+            Đội ngũ Hạ tầng CNTT Vinamilk đang thực hiện tối ưu hóa chỉ mục SQL Server và đồng bộ dữ liệu máy chấm công từ 13 nhà máy. Dịch vụ sẽ hoạt động trở lại sau ít phút.
+        </p>
+
+        <div class="row g-3 text-start mb-4">
+            <div class="col-md-4">
+                <div class="p-3 rounded-3 border h-100" style="background: var(--vnm-bg-subtle);">
+                    <div class="text-muted fs-7">Trạng thái SQL Server</div>
+                    <div class="fw-bold text-success mt-1"><i class="ti ti-circle-check me-1"></i>Online (99.98%)</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 rounded-3 border h-100" style="background: var(--vnm-bg-subtle);">
+                    <div class="text-muted fs-7">Hangfire Background Jobs</div>
+                    <div class="fw-bold text-primary mt-1"><i class="ti ti-refresh me-1"></i>Đang đồng bộ...</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 rounded-3 border h-100" style="background: var(--vnm-bg-subtle);">
+                    <div class="text-muted fs-7">Thời gian hoàn tất dự kiến</div>
+                    <div class="fw-bold font-monospace mt-1">~ 05 phút</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-center gap-2">
+            <a href="/" class="btn vnm-btn-primary px-4">
+                <i class="ti ti-refresh me-1"></i>Kiểm tra lại & Về trang chủ
+            </a>
+            <a href="/dev/styleguide" class="btn btn-outline-secondary px-4">
+                <i class="ti ti-palette me-1"></i>Xem Design System
+            </a>
+        </div>
+    </div>
+</div>
+

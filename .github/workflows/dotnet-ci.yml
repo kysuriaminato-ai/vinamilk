@@ -1,0 +1,68 @@
+name: Vinamilk HRM .NET 8 CI/CD
+
+on:
+  push:
+    branches: [ main, master ]
+    paths: [ 'dotnet/**' ]
+  pull_request:
+    branches: [ main, master ]
+    paths: [ 'dotnet/**' ]
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dotnet
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore Vinamilk.HRM.sln
+
+      - name: Build solution
+        run: dotnet build Vinamilk.HRM.sln --no-restore -c Release
+
+      - name: Run Unit & Integration Tests
+        run: |
+          rm -rf ./TestResults
+          dotnet test Vinamilk.HRM.sln --no-build -c Release --collect:"XPlat Code Coverage" --results-directory ./TestResults
+
+      - name: Enforce Minimum Coverage (Application >= 70%)
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path ./TestResults -Recurse -Filter "coverage.cobertura.xml"
+          if (-not $files) {
+            Write-Error "No coverage.cobertura.xml file was generated."
+            exit 1
+          }
+          [xml]$xml = Get-Content $files[0].FullName
+          $appPkg = $xml.coverage.packages.package | Where-Object { $_.name -eq "Vinamilk.HRM.Application" }
+          if (-not $appPkg) {
+            Write-Error "Package Vinamilk.HRM.Application not found in Cobertura report."
+            exit 1
+          }
+          $linePct = [math]::Round([double]$appPkg.'line-rate' * 100, 2)
+          $branchPct = [math]::Round([double]$appPkg.'branch-rate' * 100, 2)
+          Write-Host "Vinamilk.HRM.Application coverage -> Line: $linePct%, Branch: $branchPct% (Minimum required: 70%)"
+          if ($linePct -lt 70.0) {
+            Write-Error "Code coverage threshold failed: Vinamilk.HRM.Application is $linePct% (< 70%)."
+            exit 1
+          }
+
+      - name: Publish Web Artifact
+        run: dotnet publish src/Vinamilk.HRM.Web/Vinamilk.HRM.Web.csproj --no-build -c Release -o ./publish
+
+      - name: Upload Publish Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vinamilk-hrm-web-release
+          path: dotnet/publish
+

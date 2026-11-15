@@ -1,0 +1,624 @@
+@model Vinamilk.HRM.Application.Talent.AtsOverviewDto
+@{
+    ViewData["Title"] = "Quản trị Tuyển dụng (ATS) — Pipeline Kanban, Phỏng vấn, Offer & Tiếp nhận";
+    ViewData["BreadcrumbParent"] = "Phát triển Nhân tài (Phiên 8)";
+    string activeTab = ViewBag.ActiveTab as string ?? "kanban";
+
+    var stages = new (string Code, string Title, string Color)[]
+    {
+        ("Applied", "Mới ứng tuyển", "primary"),
+        ("Screening", "Sơ lọc CV", "info"),
+        ("Interview1", "Phỏng vấn Vòng 1", "warning"),
+        ("Interview2", "Phỏng vấn Vòng 2", "dark"),
+        ("Offered", "Đã gửi Offer", "success"),
+        ("Hired", "Đã nhận việc (NV)", "success"),
+        ("Rejected", "Không phù hợp", "danger")
+    };
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">
+            <i class="ti ti-user-search text-primary me-2"></i>Hệ thống Tuyển dụng Doanh nghiệp (ATS)
+        </h2>
+        <p class="text-secondary mb-0">
+            Yêu cầu tuyển dụng • Tin tuyển dụng • Trang Careers công khai • Pipeline Kanban kéo-thả • Phỏng vấn & Offer Letter • Chuyển thành Nhân viên
+        </p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Careers" target="_blank" class="btn btn-outline-success">
+            <i class="ti ti-world-www me-1"></i>Mở Trang Careers Công khai (SEO)
+        </a>
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalCreateJobPosting">
+            <i class="ti ti-speakerphone me-1"></i>Đăng Tin Tuyển dụng
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCreateReq">
+            <i class="ti ti-plus me-1"></i>Tạo Yêu cầu Tuyển dụng
+        </button>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-circle-check me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-alert-triangle me-2"></i>@TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-primary">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Tin Tuyển dụng Đang mở</div>
+            <div class="fs-2 fw-bold text-primary mt-1">@Model.OpenJobsCount tin</div>
+            <div class="fs-7 text-muted">Hiển thị công khai trên /Careers</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-info">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Tổng Hồ sơ Ứng viên</div>
+            <div class="fs-2 fw-bold text-info mt-1">@Model.TotalCandidatesCount UV</div>
+            <div class="fs-7 text-muted">Nguồn Careers Portal & LinkedIn</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-warning">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Đang Phỏng vấn</div>
+            <div class="fs-2 fw-bold text-warning mt-1">@Model.InterviewingCount UV</div>
+            <div class="fs-7 text-muted">Có phiếu đánh giá Technical & Culture</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-success">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Đã Chuyển thành Nhân viên</div>
+            <div class="fs-2 fw-bold text-success mt-1">@Model.HiredCount NV</div>
+            <div class="fs-7 text-muted">Tự động sinh HĐ Thử việc & Onboarding</div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "kanban" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-kanban" type="button">
+            <i class="ti ti-layout-kanban me-1"></i>Pipeline Kanban Kéo-Thả (@Model.Candidates.Count UV)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "requests" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-requests" type="button">
+            <i class="ti ti-clipboard-check me-1"></i>Yêu cầu Tuyển dụng (@Model.Requests.Count)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "postings" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-postings" type="button">
+            <i class="ti ti-speakerphone me-1"></i>Tin Tuyển dụng (@Model.JobPostings.Count)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "offers" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-offers" type="button">
+            <i class="ti ti-mail-star me-1"></i>Thư mời Nhận việc - Offer (@Model.Offers.Count)
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- TAB 1: PIPELINE KANBAN KÉO THẢ -->
+    <div class="tab-pane fade @(activeTab == "kanban" ? "show active" : "")" id="tab-kanban">
+        <div class="d-flex gap-3 overflow-auto pb-3" style="min-height: 480px;">
+            @foreach (var st in stages)
+            {
+                var colCandidates = Model.Candidates.Where(c => c.Stage == st.Code).ToList();
+                <div class="flex-shrink-0 rounded border p-2 d-flex flex-column" style="width: 280px; background: var(--vnm-bg-subtle);">
+                    <div class="d-flex justify-content-between align-items-center px-2 py-1 mb-2 border-bottom">
+                        <span class="fw-bold text-@st.Color">@st.Title</span>
+                        <span class="badge bg-@st.Color rounded-pill">@colCandidates.Count</span>
+                    </div>
+                    <div class="kanban-column flex-grow-1 d-flex flex-column gap-2" data-stage="@st.Code" style="min-height: 360px;">
+                        @foreach (var c in colCandidates)
+                        {
+                            <div class="vnm-card p-3 shadow-sm border" data-candidate-id="@c.Id" style="cursor: grab;">
+                                <div class="d-flex justify-content-between align-items-start mb-1">
+                                    <span class="badge bg-light text-dark border font-monospace">@c.CandidateCode</span>
+                                    @if (c.OverallScore > 0)
+                                    {
+                                        <span class="badge bg-success-subtle text-success fw-bold">@c.OverallScore.ToString("0.#") đ</span>
+                                    }
+                                </div>
+                                <div class="fw-bold fs-6">@c.FullName</div>
+                                <div class="text-primary fs-7 fw-semibold mb-1">@c.JobTitle</div>
+                                <div class="text-muted fs-7">
+                                    <i class="ti ti-briefcase me-1"></i>@c.YearsOfExperience.ToString("0.#") năm KN • Lương: @((c.ExpectedSalary / 1000000m).ToString("0.#"))tr
+                                </div>
+                                <div class="text-muted fs-7 mb-2"><i class="ti ti-mail me-1"></i>@c.Email</div>
+
+                                <div class="d-flex flex-wrap gap-1 pt-2 border-top">
+                                    <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2 fs-7"
+                                            onclick="openInterviewModal(@c.Id, '@Html.Raw(c.FullName.Replace("'", "\\'"))')">
+                                        <i class="ti ti-calendar-event me-1"></i>Phỏng vấn
+                                    </button>
+                                    @if (c.Stage != "Hired" && c.Stage != "Rejected")
+                                    {
+                                        <button type="button" class="btn btn-xs btn-outline-success py-0 px-2 fs-7"
+                                                onclick="openOfferModal(@c.Id, '@Html.Raw(c.FullName.Replace("'", "\\'"))', @c.ExpectedSalary)">
+                                            <i class="ti ti-file-dollar me-1"></i>Offer
+                                        </button>
+                                    }
+                                    @if (!c.ConvertedEmployeeId.HasValue && (c.Stage == "Offered" || c.Stage == "Interview2" || c.Stage == "Interview1"))
+                                    {
+                                        <form asp-action="ConvertToEmployee" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="candidateId" value="@c.Id" />
+                                            <button type="submit" class="btn btn-xs btn-success py-0 px-2 fs-7" title="Chuyển ứng viên thành Nhân viên chính thức">
+                                                <i class="ti ti-user-check me-1"></i>Tuyển NV
+                                            </button>
+                                        </form>
+                                    }
+                                    @if (c.ConvertedEmployeeId.HasValue)
+                                    {
+                                        <a href="/Employees/Details/@c.ConvertedEmployeeId" class="badge bg-success text-white text-decoration-none">
+                                            Đã thành NV <i class="ti ti-external-link"></i>
+                                        </a>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- TAB 2: YÊU CẦU TUYỂN DỤNG -->
+    <div class="tab-pane fade @(activeTab == "requests" ? "show active" : "")" id="tab-requests">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mã Yêu cầu</th>
+                            <th>Đơn vị & Vị trí cần tuyển</th>
+                            <th>Số lượng (Đã tuyển/Cần)</th>
+                            <th>Ngân sách Lương</th>
+                            <th>Ngày dự kiến nhận việc</th>
+                            <th>Trạng thái</th>
+                            <th class="text-end">Thao tác Duyệt</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in Model.Requests)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold text-primary">@r.RequestCode</td>
+                                <td>
+                                    <div class="fw-bold">@r.PositionName</div>
+                                    <div class="text-muted fs-7">@r.UnitName • Lý do: @r.ReasonType</div>
+                                </td>
+                                <td><span class="badge bg-dark">@r.HiredCount / @r.Quantity người</span></td>
+                                <td class="font-monospace">@r.BudgetMinSalary.ToString("N0") - @r.BudgetMaxSalary.ToString("N0") đ</td>
+                                <td class="font-monospace">@r.ExpectedOnboardDate?.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    @if (r.Status == "Approved")
+                                    {
+                                        <span class="badge bg-success-subtle text-success">Đã phê duyệt</span>
+                                    }
+                                    else if (r.Status == "Rejected")
+                                    {
+                                        <span class="badge bg-danger-subtle text-danger">Từ chối</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning-subtle text-warning-emphasis">Chờ duyệt</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    @if (r.Status == "Pending")
+                                    {
+                                        <form asp-action="ApproveRequest" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="requestId" value="@r.Id" />
+                                            <input type="hidden" name="isApproved" value="true" />
+                                            <button type="submit" class="btn btn-sm btn-success">Duyệt</button>
+                                        </form>
+                                        <form asp-action="ApproveRequest" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="requestId" value="@r.Id" />
+                                            <input type="hidden" name="isApproved" value="false" />
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Từ chối</button>
+                                        </form>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: TIN TUYỂN DỤNG -->
+    <div class="tab-pane fade @(activeTab == "postings" ? "show active" : "")" id="tab-postings">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mã Tin</th>
+                            <th>Tiêu đề Vị trí & Đơn vị</th>
+                            <th>Địa điểm & Mức lương</th>
+                            <th>Hạn nộp hồ sơ</th>
+                            <th>Số Ứng viên</th>
+                            <th class="text-end">Liên kết Careers</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in Model.JobPostings)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold text-primary">@p.PostingCode</td>
+                                <td>
+                                    <div class="fw-bold">@p.Title</div>
+                                    <div class="text-muted fs-7">@p.UnitName • @p.PositionName</div>
+                                </td>
+                                <td class="fs-7">
+                                    <div>@p.WorkLocation</div>
+                                    <strong class="text-success">@p.SalaryRangeText</strong>
+                                </td>
+                                <td class="font-monospace">@p.ClosingDate.ToString("dd/MM/yyyy")</td>
+                                <td><span class="badge bg-primary-subtle text-primary">@p.CandidateCount hồ sơ</span></td>
+                                <td class="text-end">
+                                    <a href="/Careers/Job/@p.Id" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="ti ti-external-link me-1"></i>Xem trên Careers
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 4: OFFER LETTER -->
+    <div class="tab-pane fade @(activeTab == "offers" ? "show active" : "")" id="tab-offers">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mã Offer</th>
+                            <th>Ứng viên</th>
+                            <th>Vị trí & Đơn vị</th>
+                            <th>Lương Thử việc / Chính thức</th>
+                            <th>Ngày nhận việc dự kiến</th>
+                            <th>Trạng thái</th>
+                            <th class="text-end">In Thư mời</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var o in Model.Offers)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold text-primary">@o.OfferCode</td>
+                                <td>
+                                    <div class="fw-bold">@o.CandidateName</div>
+                                    <div class="text-muted fs-7">@o.CandidateEmail</div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold">@o.ProposedPositionName</div>
+                                    <div class="text-muted fs-7">@o.ProposedUnitName</div>
+                                </td>
+                                <td class="font-monospace">
+                                    <div>TV: @o.OfferedProbationSalary.ToString("N0") đ</div>
+                                    <strong class="text-success">CT: @o.OfferedOfficialSalary.ToString("N0") đ</strong>
+                                </td>
+                                <td class="font-monospace">@o.ExpectedStartDate.ToString("dd/MM/yyyy")</td>
+                                <td><span class="badge bg-success-subtle text-success">@o.Status</span></td>
+                                <td class="text-end">
+                                    <a href="/Recruitment/PrintOffer/@o.Id" target="_blank" class="btn btn-sm btn-outline-dark">
+                                        <i class="ti ti-printer me-1"></i>In Offer A4
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Yêu cầu Tuyển dụng -->
+<div class="modal fade" id="modalCreateReq" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="CreateRequest" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Tạo Yêu cầu Tuyển dụng</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Đơn vị đề xuất (*)</label>
+                    <select name="organizationUnitId" class="form-select" required>
+                        @foreach (var u in Model.Units)
+                        {
+                            <option value="@u.Id">@u.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-8">
+                        <label class="form-label fw-semibold">Chức danh cần tuyển (*)</label>
+                        <select name="positionId" class="form-select" required>
+                            @foreach (var p in Model.Positions)
+                            {
+                                <option value="@p.Id">@p.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label fw-semibold">Số lượng</label>
+                        <input type="number" name="quantity" class="form-control" value="1" min="1" />
+                    </div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Ngân sách Từ (VNĐ)</label>
+                        <input type="number" name="budgetMinSalary" class="form-control" value="20000000" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Đến (VNĐ)</label>
+                        <input type="number" name="budgetMaxSalary" class="form-control" value="35000000" />
+                    </div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Lý do tuyển</label>
+                        <select name="reasonType" class="form-select">
+                            <option value="NewHeadcount">Tăng định biên mới</option>
+                            <option value="Replacement">Thay thế nhân sự nghỉ</option>
+                            <option value="Expansion">Mở rộng dự án/dây chuyền</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Ngày Onboard dự kiến</label>
+                        <input type="date" name="expectedOnboardDate" class="form-control" value="@DateTime.Today.AddDays(30).ToString("yyyy-MM-dd")" />
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Yêu cầu chuyên môn</label>
+                    <textarea name="jobRequirements" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-primary">Gửi Yêu cầu</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Đăng Tin Tuyển dụng -->
+<div class="modal fade" id="modalCreateJobPosting" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <form asp-action="CreateJobPosting" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Đăng Tin Tuyển dụng lên Trang Careers</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2">
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Tiêu đề tin tuyển dụng (*)</label>
+                        <input type="text" name="title" class="form-control" placeholder="VD: Kỹ sư Tự động hóa Dây chuyền Sản xuất Sữa" required />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Đơn vị</label>
+                        <select name="organizationUnitId" class="form-select">
+                            @foreach (var u in Model.Units)
+                            {
+                                <option value="@u.Id">@u.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Chức danh</label>
+                        <select name="positionId" class="form-select">
+                            @foreach (var p in Model.Positions)
+                            {
+                                <option value="@p.Id">@p.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Số lượng</label>
+                        <input type="number" name="vacancies" class="form-control" value="2" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Mức lương hiển thị</label>
+                        <input type="text" name="salaryRangeText" class="form-control" value="22.000.000 - 32.000.000 VNĐ" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Hạn nộp hồ sơ</label>
+                        <input type="date" name="closingDate" class="form-control" value="@DateTime.Today.AddDays(30).ToString("yyyy-MM-dd")" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Địa điểm làm việc</label>
+                        <input type="text" name="workLocation" class="form-control" value="Vinamilk Tower — Số 10 Tân Trào, Q.7, TP.HCM" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Mô tả công việc</label>
+                        <textarea name="jobDescription" class="form-control" rows="2" required></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Yêu cầu ứng viên</label>
+                        <textarea name="jobRequirements" class="form-control" rows="2" required></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Quyền lợi</label>
+                        <input type="text" name="benefits" class="form-control" value="Bảo hiểm Vinamilk Care, thưởng tháng 13 + KPI, du lịch hàng năm." />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-primary">Đăng tin Công khai</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Lịch Phỏng vấn & Phiếu Đánh giá -->
+<div class="modal fade" id="modalInterview" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="SaveInterview" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="candidateId" id="ivCandidateId" />
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Lịch Phỏng vấn & Phiếu Đánh giá: <span id="ivCandidateName" class="text-primary"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2">
+                    <div class="col-4">
+                        <label class="form-label fs-7 fw-semibold">Vòng PV</label>
+                        <input type="number" name="roundNumber" class="form-control" value="1" />
+                    </div>
+                    <div class="col-8">
+                        <label class="form-label fs-7 fw-semibold">Tên vòng phỏng vấn</label>
+                        <input type="text" name="roundTitle" class="form-control" value="Phỏng vấn Chuyên môn & Năng lực" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fs-7 fw-semibold">Thời gian</label>
+                        <input type="datetime-local" name="scheduledStartTime" class="form-control" value="@DateTime.Now.AddDays(1).ToString("yyyy-MM-ddTHH:00")" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fs-7 fw-semibold">Hình thức</label>
+                        <select name="interviewMode" class="form-select">
+                            <option value="InPerson">Trực tiếp tại VP/Nhà máy</option>
+                            <option value="OnlineTeams">Microsoft Teams</option>
+                            <option value="OnlineZoom">Zoom Meeting</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fs-7 fw-semibold">Địa điểm / Link họp</label>
+                        <input type="text" name="locationOrLink" class="form-control" value="Phòng họp 10B — Vinamilk Tower Q.7" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fs-7 fw-semibold">Điểm Chuyên môn (0-100)</label>
+                        <input type="number" name="technicalScore" class="form-control" value="85" min="0" max="100" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fs-7 fw-semibold">Điểm Văn hóa (0-100)</label>
+                        <input type="number" name="cultureFitScore" class="form-control" value="88" min="0" max="100" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fs-7 fw-semibold">Kết quả đánh giá</label>
+                        <select name="result" class="form-select">
+                            <option value="Passed">Đạt (Passed)</option>
+                            <option value="Pending">Chờ phỏng vấn</option>
+                            <option value="Hold">Cân nhắc (Hold)</option>
+                            <option value="Failed">Không đạt (Failed)</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fs-7 fw-semibold">Nhận xét hội đồng</label>
+                        <textarea name="evaluationNotes" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button>
+                <button type="submit" class="btn btn-primary">Lưu Phiếu Đánh giá</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Tạo Offer Letter -->
+<div class="modal fade" id="modalOffer" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="CreateOffer" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="candidateId" id="ofCandidateId" />
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Phát hành Offer Letter: <span id="ofCandidateName" class="text-success"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Lương Thử việc (85%)</label>
+                        <input type="number" name="offeredProbationSalary" id="ofProbSalary" class="form-control" required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Lương Chính thức (VNĐ)</label>
+                        <input type="number" name="offeredOfficialSalary" id="ofOffSalary" class="form-control" required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Ngày nhận việc dự kiến</label>
+                        <input type="date" name="expectedStartDate" class="form-control" value="@DateTime.Today.AddDays(14).ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Hạn phản hồi Offer</label>
+                        <input type="date" name="offerExpiryDate" class="form-control" value="@DateTime.Today.AddDays(5).ToString("yyyy-MM-dd")" required />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-success">Phát hành Offer Letter</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.querySelectorAll('.kanban-column').forEach(function (col) {
+            if (typeof Sortable === 'undefined') return;
+            new Sortable(col, {
+                group: 'ats-kanban',
+                animation: 150,
+                onEnd: async function (evt) {
+                    const candidateId = parseInt(evt.item.getAttribute('data-candidate-id'), 10);
+                    const newStage = evt.to.getAttribute('data-stage');
+                    try {
+                        const resp = await fetch('/Recruitment/MoveStageAjax', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ candidateId, newStage })
+                        });
+                        const data = await resp.json();
+                        if (window.VnmUI) window.VnmUI.toast(data.message, 'success');
+                    } catch (e) { }
+                }
+            });
+        });
+
+        function openInterviewModal(id, name) {
+            document.getElementById('ivCandidateId').value = id;
+            document.getElementById('ivCandidateName').textContent = name;
+            new bootstrap.Modal(document.getElementById('modalInterview')).show();
+        }
+
+        function openOfferModal(id, name, expectedSalary) {
+            document.getElementById('ofCandidateId').value = id;
+            document.getElementById('ofCandidateName').textContent = name;
+            const official = expectedSalary > 0 ? expectedSalary : 25000000;
+            document.getElementById('ofOffSalary').value = official;
+            document.getElementById('ofProbSalary').value = Math.round(official * 0.85);
+            new bootstrap.Modal(document.getElementById('modalOffer')).show();
+        }
+    </script>
+}
+

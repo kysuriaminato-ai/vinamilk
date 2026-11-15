@@ -1,0 +1,185 @@
+@model IReadOnlyList<Vinamilk.HRM.Domain.Entities.Identity.UserSession>
+@{
+    ViewData["Title"] = "Quản lý Phiên Đăng nhập (Sessions) & Mã hóa Dữ liệu Nhạy cảm (AES-256)";
+    var piiItems = ViewBag.PiiItems as IReadOnlyList<Vinamilk.HRM.Web.Controllers.PiiSampleDisplayItem>
+                   ?? Array.Empty<Vinamilk.HRM.Web.Controllers.PiiSampleDisplayItem>();
+    var decryptSample = (bool)(ViewBag.DecryptSample ?? false);
+}
+
+<!-- TOP NAVIGATION TABS FOR SECURITY SUITE -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Security/RbacMatrix" class="btn btn-outline-primary">
+            <i class="ti ti-shield-lock me-1"></i>1. Ma trận RBAC & Data Scope
+        </a>
+        <a href="/Security/Sessions" class="btn vnm-btn-primary">
+            <i class="ti ti-devices me-1"></i>2. Quản lý Phiên & Mã hóa PII
+        </a>
+        <a href="/Security/AuditLogs" class="btn btn-outline-primary">
+            <i class="ti ti-history me-1"></i>3. Nhật ký Kiểm toán (AuditLog JSON Diff)
+        </a>
+        <a href="/Auth/Setup2FA" class="btn btn-outline-secondary">
+            <i class="ti ti-device-mobile-lock me-1"></i>4. Cấu hình 2FA TOTP
+        </a>
+    </div>
+    <span class="vnm-badge vnm-badge-info">
+        <span class="vnm-badge-dot"></span>Zero-Trust Session Control & AES-256-GCM PII Protection
+    </span>
+</div>
+
+@if (TempData["SecuritySuccess"] != null)
+{
+    <div class="alert alert-success border-0 shadow-sm d-flex align-items-center gap-2 mb-4">
+        <i class="ti ti-circle-check fs-4"></i>
+        <div class="fw-medium">@TempData["SecuritySuccess"]</div>
+    </div>
+}
+
+<!-- SECTION 1: QUẢN LÝ PHIÊN ĐĂNG NHẬP & THIẾT BỊ (USERSESSIONS) -->
+<div class="vnm-card p-4 mb-4">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+            <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                <i class="ti ti-devices-pc text-primary me-2"></i>1. Quản lý Phiên Đăng nhập & Đăng xuất Thiết bị Từ xa (`identity.UserSessions`)
+            </h2>
+            <p class="text-secondary fs-6 mb-0">
+                Khi thu hồi một phiên, <code>SecurityHeadersAndSessionMiddleware</code> sẽ tự động ngắt phiên thiết bị đó ngay ở request kế tiếp.
+            </p>
+        </div>
+    </div>
+
+    <div class="vnm-table-wrapper">
+        <table class="vnm-table vnm-table-mobile-cards">
+            <thead>
+                <tr>
+                    <th>Session ID</th>
+                    <th>Tài khoản / Nhân sự</th>
+                    <th>Địa chỉ IP</th>
+                    <th>Thiết bị & Trình duyệt (User-Agent)</th>
+                    <th>Đăng nhập lúc</th>
+                    <th>Hết hạn</th>
+                    <th>Trạng thái</th>
+                    <th class="text-end">Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in Model)
+                {
+                    var isRevoked = s.RevokedAt.HasValue;
+                    var isExpired = s.ExpiresAt <= DateTime.UtcNow;
+                    <tr>
+                        <td data-label="Session ID" class="font-monospace fw-bold text-primary">#@s.Id</td>
+                        <td data-label="Tài khoản">
+                            <div class="fw-bold">@(s.User?.Username ?? "admin")</div>
+                            <div class="text-muted fs-7">@(s.User?.Employee?.FullName ?? "SuperAdmin")</div>
+                        </td>
+                        <td data-label="Địa chỉ IP" class="font-monospace">@s.IpAddress</td>
+                        <td data-label="Thiết bị" class="fs-7 text-secondary" style="max-width: 300px;">
+                            <i class="ti @(s.UserAgent != null && s.UserAgent.Contains("Mobile") ? "ti-device-mobile text-info" : "ti-device-desktop text-primary") me-1"></i>
+                            @s.UserAgent
+                        </td>
+                        <td data-label="Đăng nhập" class="font-monospace fs-7">@s.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                        <td data-label="Hết hạn" class="font-monospace fs-7">@s.ExpiresAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                        <td data-label="Trạng thái">
+                            @if (isRevoked)
+                            {
+                                <vnm-status-badge status="danger" text="Đã thu hồi (Revoked)" />
+                            }
+                            else if (isExpired)
+                            {
+                                <vnm-status-badge status="warning" text="Đã hết hạn" />
+                            }
+                            else
+                            {
+                                <vnm-status-badge status="success" text="Đang hoạt động" />
+                            }
+                        </td>
+                        <td data-label="Thao tác" class="text-end">
+                            @if (!isRevoked && !isExpired)
+                            {
+                                <form asp-controller="Security" asp-action="RevokeSession" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="sessionId" value="@s.Id" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="ti ti-plug-connected-x me-1"></i>Đăng xuất thiết bị
+                                    </button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="text-muted fs-7 font-monospace">
+                                    @(s.RevokedAt?.ToLocalTime().ToString("dd/MM HH:mm") ?? "-")
+                                </span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- SECTION 2: MÃ HÓA CỘT NHẠY CẢM (AES-256-GCM / DATA PROTECTION) -->
+<div class="vnm-card p-4">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+            <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                <i class="ti ti-file-shredder text-primary me-2"></i>2. Bảo vệ Dữ liệu Cá nhân Nhạy cảm (AES-256-GCM Column Encryption — Nghị định 13/2023/NĐ-CP)
+            </h2>
+            <p class="text-secondary fs-6 mb-0">
+                Các cột <code>CitizenIdEncrypted</code> (CCCD), <code>BankAccountEncrypted</code> (Số TK) và <code>TaxCodeEncrypted</code> (MST) được mã hóa ở mức ứng dụng trước khi lưu xuống SQL Server.
+            </p>
+        </div>
+        <div>
+            @if (!decryptSample)
+            {
+                <a href="/Security/Sessions?decryptSample=true" class="btn vnm-btn-primary">
+                    <i class="ti ti-lock-open me-1"></i>Giải mã Có Kiểm toán (Ghi AuditLog)
+                </a>
+            }
+            else
+            {
+                <a href="/Security/Sessions" class="btn btn-outline-secondary">
+                    <i class="ti ti-lock me-1"></i>Ẩn dữ liệu nhạy cảm (Mask PII)
+                </a>
+            }
+        </div>
+    </div>
+
+    <div class="vnm-table-wrapper">
+        <table class="vnm-table vnm-table-mobile-cards">
+            <thead>
+                <tr>
+                    <th>Mã NV</th>
+                    <th>Họ và Tên</th>
+                    <th>Đơn vị</th>
+                    <th>Bản mã trong SQL Server (`CitizenIdEncrypted`)</th>
+                    <th>CCCD Che mặt nạ (Masked)</th>
+                    <th>CCCD Giải mã (`AES-256-GCM`)</th>
+                    <th>Tài khoản Ngân hàng Giải mã</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in piiItems)
+                {
+                    <tr>
+                        <td data-label="Mã NV">
+                            <span class="badge bg-primary-subtle text-primary font-monospace fw-bold">@item.EmployeeCode</span>
+                        </td>
+                        <td data-label="Họ và Tên" class="fw-bold">@item.FullName</td>
+                        <td data-label="Đơn vị">@item.UnitName</td>
+                        <td data-label="Bản mã SQL" class="font-monospace fs-7 text-muted">@item.CipherCitizenId</td>
+                        <td data-label="CCCD Masked" class="font-monospace fw-semibold">@item.MaskedCitizenId</td>
+                        <td data-label="CCCD Giải mã" class="font-monospace fw-bold @(decryptSample ? "text-success" : "text-secondary")">
+                            @item.DecryptedCitizenId
+                        </td>
+                        <td data-label="TK Ngân hàng" class="font-monospace @(decryptSample ? "text-primary fw-semibold" : "text-secondary")">
+                            @item.DecryptedBankAccount
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+

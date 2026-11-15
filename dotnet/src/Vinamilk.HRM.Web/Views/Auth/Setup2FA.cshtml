@@ -1,0 +1,118 @@
+@model Vinamilk.HRM.Domain.Entities.Identity.User
+@{
+    ViewData["Title"] = "Cấu hình Xác thực 2 yếu tố (2FA TOTP Authenticator)";
+    var otpUri = (string)(ViewBag.OtpAuthUri ?? "");
+    var currentTotp = (string)(ViewBag.CurrentTotpCode ?? "826904");
+}
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="vnm-card p-4 h-100">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <div>
+                    <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                        <i class="ti ti-device-mobile-lock text-primary me-2"></i>Cấu hình 2FA TOTP Authenticator (RFC 6238)
+                    </h2>
+                    <p class="text-secondary fs-6 mb-0">
+                        Tài khoản: <strong class="font-monospace text-primary">@Model.Email</strong> (@(Model.Employee?.FullName ?? "SuperAdmin"))
+                    </p>
+                </div>
+                @if (Model.TwoFactorEnabled)
+                {
+                    <vnm-status-badge status="success" text="2FA Đang BẬT" />
+                }
+                else
+                {
+                    <vnm-status-badge status="warning" text="2FA Đang TẮT" />
+                }
+            </div>
+
+            @if (TempData["AuthError"] != null)
+            {
+                <div class="alert alert-danger border-0">@TempData["AuthError"]</div>
+            }
+            @if (TempData["AuthSuccess"] != null)
+            {
+                <div class="alert alert-success border-0">@TempData["AuthSuccess"]</div>
+            }
+            @if (TempData["AuthWarning"] != null)
+            {
+                <div class="alert alert-warning border-0">@TempData["AuthWarning"]</div>
+            }
+
+            <div class="p-3 rounded-3 border mb-3" style="background: var(--vnm-bg-subtle);">
+                <div class="text-uppercase text-muted fw-bold fs-7 mb-1">Khóa Bí mật Base32 (Secret Key)</div>
+                <div class="d-flex align-items-center justify-content-between">
+                    <code class="fs-4 fw-bold text-primary font-monospace">@Model.TwoFactorSecret</code>
+                    <span class="badge bg-info-subtle text-info font-monospace">HMAC-SHA1 • 30s</span>
+                </div>
+                <div class="text-muted fs-7 mt-2 text-break font-monospace">@otpUri</div>
+            </div>
+
+            <div class="p-3 rounded-3 border mb-4 d-flex align-items-center justify-content-between"
+                 style="background: var(--vnm-primary-soft);">
+                <div>
+                    <div class="fw-bold text-primary">Mã TOTP 6 số hiện tại (Live RFC 6238 Generator)</div>
+                    <div class="fs-7 text-secondary">Sử dụng mã này hoặc mã từ ứng dụng Authenticator để kích hoạt:</div>
+                </div>
+                <span class="badge bg-primary fs-4 font-monospace px-3 py-2">@currentTotp</span>
+            </div>
+
+            <form asp-controller="Auth" asp-action="Setup2FASubmit" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="userId" value="@Model.Id" />
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Nhập mã xác thực 6 chữ số từ Authenticator <span class="text-danger">*</span></label>
+                    <input type="text"
+                           name="verificationCode"
+                           class="form-control font-monospace fw-bold fs-5"
+                           value="@currentTotp"
+                           maxlength="6"
+                           required />
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" name="enable2FA" value="true" class="btn vnm-btn-primary">
+                        <i class="ti ti-shield-check me-1"></i>Kích hoạt 2FA TOTP
+                    </button>
+                    @if (Model.TwoFactorEnabled)
+                    {
+                        <button type="submit" name="enable2FA" value="false" class="btn btn-outline-danger">
+                            <i class="ti ti-shield-off me-1"></i>Tắt 2FA
+                        </button>
+                    }
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="vnm-card p-4 h-100">
+            <h3 class="fw-bold mb-3" style="font-size: var(--vnm-fs-md);">
+                <i class="ti ti-info-circle text-primary me-2"></i>Cơ chế Bảo mật Đa yếu tố tại Vinamilk HRM
+            </h3>
+            <ul class="list-unstyled d-flex flex-column gap-3 mb-0 fs-6">
+                <li class="d-flex gap-2">
+                    <i class="ti ti-circle-check text-success fs-4 mt-1"></i>
+                    <div>
+                        <strong>Chuẩn quốc tế RFC 6238 (TOTP):</strong> Tương thích 100% với Google Authenticator, Microsoft Authenticator và 1Password.
+                    </div>
+                </li>
+                <li class="d-flex gap-2">
+                    <i class="ti ti-circle-check text-success fs-4 mt-1"></i>
+                    <div>
+                        <strong>Chống tấn công Replay & Brute-force:</strong> Cửa sổ thời gian 30 giây (±1 bước lệch đồng hồ) kết hợp khóa tài khoản 15 phút sau 5 lần sai.
+                    </div>
+                </li>
+                <li class="d-flex gap-2">
+                    <i class="ti ti-circle-check text-success fs-4 mt-1"></i>
+                    <div>
+                        <strong>Ghi vết Kiểm toán (AuditLog):</strong> Mọi lần bật/tắt 2FA và xác thực OTP đều được ghi nhận IP, User-Agent vào <code>system.AuditLogs</code>.
+                    </div>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+

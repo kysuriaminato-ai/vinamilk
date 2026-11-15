@@ -1,0 +1,249 @@
+@model Vinamilk.HRM.Application.Talent.RewardsAndBm03OverviewDto
+@{
+    ViewData["Title"] = $"Khen thưởng, Kỷ luật, In Quyết định & Báo cáo BM03 ({Model.Year})";
+    ViewData["BreadcrumbParent"] = "Phát triển Nhân tài (Phiên 8)";
+    string activeTab = ViewBag.ActiveTab as string ?? "decisions";
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">
+            <i class="ti ti-award text-primary me-2"></i>Khen thưởng, Kỷ luật, In Quyết định A4 & Báo cáo BM03
+        </h2>
+        <p class="text-secondary mb-0">
+            Ban hành quyết định khen thưởng sáng kiến / thi đua & xử lý kỷ luật lao động • In Quyết định chuẩn Quốc hiệu • Báo cáo tổng hợp BM03
+        </p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Rewards/ExportBm03Excel?year=@Model.Year" class="btn btn-outline-success">
+            <i class="ti ti-file-spreadsheet me-1"></i>Xuất Báo cáo BM03 (.xlsx)
+        </a>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCreateReward">
+            <i class="ti ti-plus me-1"></i>Lập Quyết định Khen thưởng / Kỷ luật
+        </button>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-circle-check me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-success">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Số Quyết định Khen thưởng</div>
+            <div class="fs-2 fw-bold text-success mt-1">@Model.TotalRewardCount QĐ</div>
+            <div class="fs-7 text-muted">Thi đua, Bằng khen, Sáng kiến</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-primary">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Tổng Quỹ Khen thưởng</div>
+            <div class="fs-3 fw-bold text-primary mt-1 font-monospace">@Model.TotalRewardAmount.ToString("N0") đ</div>
+            <div class="fs-7 text-muted">Đồng bộ cộng vào thu nhập kỳ lương</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-danger">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Số Quyết định Kỷ luật</div>
+            <div class="fs-2 fw-bold text-danger mt-1">@Model.TotalDisciplineCount QĐ</div>
+            <div class="fs-7 text-muted">Khiển trách, Cảnh cáo, Sa thải</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-warning">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Tổng Khấu trừ Kỷ luật</div>
+            <div class="fs-3 fw-bold text-warning mt-1 font-monospace">@Model.TotalDisciplineAmount.ToString("N0") đ</div>
+            <div class="fs-7 text-muted">Theo Nội quy Lao động Vinamilk</div>
+        </div>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "decisions" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-decisions" type="button">
+            <i class="ti ti-gavel me-1"></i>Danh sách Quyết định Khen thưởng & Kỷ luật (@Model.Items.Count)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "bm03" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-bm03" type="button">
+            <i class="ti ti-report-analytics me-1"></i>Báo cáo Tổng hợp BM03 theo Đơn vị (@Model.Bm03UnitSummaries.Count ĐV)
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- TAB 1: DECISIONS -->
+    <div class="tab-pane fade @(activeTab == "decisions" ? "show active" : "")" id="tab-decisions">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Số Quyết định</th>
+                            <th>Loại & Hình thức</th>
+                            <th>Nhân viên & Đơn vị</th>
+                            <th>Ngày QĐ / Hiệu lực</th>
+                            <th class="text-end">Số tiền</th>
+                            <th>Lý do</th>
+                            <th class="text-end">In Quyết định</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold text-primary">@item.DecisionNumber</td>
+                                <td>
+                                    <span class="badge @(item.Type == "Reward" ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger")">
+                                        @(item.Type == "Reward" ? "Khen thưởng" : "Kỷ luật")
+                                    </span>
+                                    <div class="fw-semibold mt-1">@item.CategoryName</div>
+                                </td>
+                                <td>
+                                    <div class="fw-bold">@item.EmployeeName</div>
+                                    <div class="text-muted fs-7">@item.EmployeeCode • @item.UnitName</div>
+                                </td>
+                                <td class="font-monospace fs-7">
+                                    <div>QĐ: @item.DecisionDate.ToString("dd/MM/yyyy")</div>
+                                    <div class="text-muted">HL: @item.EffectiveDate.ToString("dd/MM/yyyy")</div>
+                                </td>
+                                <td class="text-end font-monospace fw-bold @(item.Type == "Reward" ? "text-success" : "text-danger")">
+                                    @(item.Type == "Reward" ? "+" : "-")@item.Amount.ToString("N0") đ
+                                </td>
+                                <td class="fs-7">@item.Reason</td>
+                                <td class="text-end">
+                                    <a href="/Rewards/PrintDecision/@item.Id" target="_blank" class="btn btn-sm btn-outline-dark">
+                                        <i class="ti ti-printer me-1"></i>In QĐ A4
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: BM03 REPORT -->
+    <div class="tab-pane fade @(activeTab == "bm03" ? "show active" : "")" id="tab-bm03">
+        <div class="vnm-card overflow-hidden">
+            <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                <div class="fw-bold text-primary">
+                    BIỂU MẪU BM03 — TỔNG HỢP TÌNH HÌNH KHEN THƯỞNG & KỶ LUẬT THEO ĐƠN VỊ
+                </div>
+                <a href="/Rewards/ExportBm03Excel?year=@Model.Year" class="btn btn-sm btn-success">
+                    <i class="ti ti-download me-1"></i>Tải Excel BM03
+                </a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mã Đơn vị</th>
+                            <th>Tên Đơn vị / Phòng ban / Nhà máy</th>
+                            <th class="text-center">Số lượt Khen thưởng</th>
+                            <th class="text-end">Tổng tiền Khen thưởng</th>
+                            <th class="text-center">Số lượt Kỷ luật</th>
+                            <th class="text-end">Tổng Khấu trừ Kỷ luật</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var u in Model.Bm03UnitSummaries)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold">@u.UnitCode</td>
+                                <td class="fw-semibold">@u.UnitName</td>
+                                <td class="text-center"><span class="badge bg-success-subtle text-success">@u.RewardCount</span></td>
+                                <td class="text-end font-monospace text-success fw-bold">@u.TotalRewardAmount.ToString("N0") đ</td>
+                                <td class="text-center"><span class="badge bg-danger-subtle text-danger">@u.DisciplineCount</span></td>
+                                <td class="text-end font-monospace text-danger fw-bold">@u.TotalDisciplineAmount.ToString("N0") đ</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-light fw-bold">
+                        <tr>
+                            <td colspan="2" class="text-end">TỔNG CỘNG TOÀN CÔNG TY:</td>
+                            <td class="text-center text-success">@Model.TotalRewardCount</td>
+                            <td class="text-end font-monospace text-success">@Model.TotalRewardAmount.ToString("N0") đ</td>
+                            <td class="text-center text-danger">@Model.TotalDisciplineCount</td>
+                            <td class="text-end font-monospace text-danger">@Model.TotalDisciplineAmount.ToString("N0") đ</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Lập Quyết định -->
+<div class="modal fade" id="modalCreateReward" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="CreateDecision" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Lập Quyết định Khen thưởng / Kỷ luật</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Nhân viên (*)</label>
+                    <select name="employeeId" class="form-select" required>
+                        @foreach (var emp in Model.ActiveEmployees)
+                        {
+                            <option value="@emp.Id">@emp.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Hình thức Khen thưởng / Kỷ luật (*)</label>
+                    <select name="categoryId" class="form-select" onchange="onCategoryChanged(this)" required>
+                        @foreach (var cat in Model.Categories)
+                        {
+                            <option value="@cat.Id" data-amount="@cat.DefaultAmount">
+                                [@(cat.CategoryType == "Reward" ? "Khen thưởng" : "Kỷ luật")] @cat.CategoryName (Định mức @cat.DefaultAmount.ToString("N0") đ)
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Ngày quyết định</label>
+                        <input type="date" name="decisionDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Ngày hiệu lực</label>
+                        <input type="date" name="effectiveDate" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Số tiền Thưởng / Khấu trừ (VNĐ)</label>
+                    <input type="number" name="amount" id="rdAmountInput" class="form-control" value="5000000" required />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Lý do cụ thể (*)</label>
+                    <textarea name="reason" class="form-control" rows="2" placeholder="Ghi rõ thành tích hoặc nội dung vi phạm..." required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-primary">Ban hành Quyết định</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function onCategoryChanged(sel) {
+            const opt = sel.options[sel.selectedIndex];
+            const amt = opt.getAttribute('data-amount');
+            if (amt) document.getElementById('rdAmountInput').value = amt;
+        }
+    </script>
+}
+

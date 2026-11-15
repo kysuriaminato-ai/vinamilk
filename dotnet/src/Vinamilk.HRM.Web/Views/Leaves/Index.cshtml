@@ -1,0 +1,454 @@
+@model Vinamilk.HRM.Application.TimeAttendance.LeaveManagementOverviewDto
+@{
+    ViewData["Title"] = $"Quản lý Nghỉ phép, Thâm niên, Phép tồn & Lịch nghỉ Team ({Model.Month:D2}/{Model.Year})";
+    ViewData["BreadcrumbParent"] = "Chấm công & Nghỉ phép (Phiên 6)";
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">
+            <i class="ti ti-beach text-primary me-2"></i>Chính sách Nghỉ phép Thâm niên, Phép tồn, Nghỉ chế độ & Lịch nghỉ Team
+        </h2>
+        <p class="text-secondary mb-0">
+            Tính phép năm theo thâm niên (+1 ngày / 5 năm theo Điều 114 BLLĐ 2019) • Phép tồn chuyển năm • Đơn nghỉ qua Workflow • Lịch nghỉ Team
+        </p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <form asp-action="RecalculateEntitlement" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="year" value="@Model.Year" />
+            <input type="hidden" name="carryForwardCap" value="5.0" />
+            <button type="submit" class="btn btn-outline-primary">
+                <i class="ti ti-calculator me-1"></i>Tính lại Quỹ phép Thâm niên & Phép tồn @Model.Year
+            </button>
+        </form>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalSubmitLeave">
+            <i class="ti ti-plus me-1"></i>Đăng ký Đơn Nghỉ phép / Công tác
+        </button>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-circle-check me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-alert-triangle me-2"></i>@TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-warning">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Đơn Nghỉ / Công tác Chờ duyệt</div>
+            <div class="fs-2 fw-bold text-warning mt-1">@Model.TotalPendingRequests đơn</div>
+            <div class="fs-7 text-muted">Đang xử lý trên Workflow Engine</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-success">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Đơn Đã phê duyệt</div>
+            <div class="fs-2 fw-bold text-success mt-1">@Model.TotalApprovedRequests đơn</div>
+            <div class="fs-7 text-muted">Tự động cập nhật ký hiệu vào Bảng công</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-primary">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Nhân sự hưởng Phép Thâm niên</div>
+            <div class="fs-2 fw-bold text-primary mt-1">@Model.TotalEmployeesWithSeniorityBonus NV</div>
+            <div class="fs-7 text-muted">Cứ đủ 5 năm +1 ngày phép (Điều 114 BLLĐ)</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-info">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Bình quân Phép năm Còn lại</div>
+            <div class="fs-2 fw-bold text-info mt-1">@Model.AverageRemainingAnnualLeave.ToString("0.#") ngày</div>
+            <div class="fs-7 text-muted">Hạn sử dụng phép tồn: 31/03/@Model.Year</div>
+        </div>
+    </div>
+</div>
+
+<!-- Navigation Tabs -->
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-requests" type="button">
+            <i class="ti ti-file-check me-1"></i>Đơn Nghỉ phép, Nghỉ chế độ & Công tác (@Model.Requests.Count)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-calendar" type="button">
+            <i class="ti ti-calendar-Share me-1"></i>Lịch Nghỉ Team Tháng @Model.Month.ToString("D2")/@Model.Year
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-balances" type="button">
+            <i class="ti ti-award me-1"></i>Quỹ Phép Năm Thâm niên & Phép tồn (@Model.Balances.Count NV)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-policies" type="button">
+            <i class="ti ti-book me-1"></i>Danh mục Các loại Nghỉ chế độ (@Model.LeaveTypes.Count)
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- TAB 1: DANH SÁCH ĐƠN NGHỈ PHÉP & CÔNG TÁC -->
+    <div class="tab-pane fade show active" id="tab-requests">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mã Đơn</th>
+                            <th>Nhân sự & Đơn vị</th>
+                            <th>Loại Nghỉ / Chế độ</th>
+                            <th>Thời gian nghỉ & Ca nghỉ</th>
+                            <th>Số ngày</th>
+                            <th>Người nhận bàn giao & Lý do</th>
+                            <th>Trạng thái Workflow</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var req in Model.Requests)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold text-primary">#LV-@req.Id.ToString("D4")</td>
+                                <td>
+                                    <div class="fw-semibold">@req.FullName</div>
+                                    <div class="text-muted fs-7">@req.EmployeeCode • @req.UnitName</div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-primary-subtle text-primary me-1">@req.AttendanceSymbol</span>
+                                    <span class="fw-semibold">@req.LeaveTypeName</span>
+                                </td>
+                                <td>
+                                    <div class="font-monospace fw-semibold">@req.StartDate.ToString("dd/MM/yyyy") — @req.EndDate.ToString("dd/MM/yyyy")</div>
+                                    <div class="text-muted fs-7">Ca: @req.StartSession → @req.EndSession</div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-dark fs-6">@req.TotalDays.ToString("0.#") ngày</span>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(req.HandoverEmployeeName))
+                                    {
+                                        <div class="fs-7 text-primary fw-semibold"><i class="ti ti-user-check me-1"></i>Bàn giao: @req.HandoverEmployeeName</div>
+                                    }
+                                    <div class="text-secondary fs-7">@req.Reason</div>
+                                </td>
+                                <td>
+                                    @if (req.Status == "Approved")
+                                    {
+                                        <span class="badge bg-success-subtle text-success"><i class="ti ti-check me-1"></i>Đã phê duyệt</span>
+                                        <div class="text-muted fs-7 mt-1">@req.ApproverComment</div>
+                                    }
+                                    else if (req.Status == "Rejected")
+                                    {
+                                        <span class="badge bg-danger-subtle text-danger"><i class="ti ti-x me-1"></i>Từ chối</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning-subtle text-warning-emphasis"><i class="ti ti-clock me-1"></i>Chờ phê duyệt</span>
+                                        <div class="mt-1">
+                                            <a href="/Workflows?entityType=LeaveRequest" class="fs-7 fw-semibold text-primary text-decoration-none">
+                                                Mở luồng duyệt @(req.WorkflowInstanceId.HasValue ? $"#WF-{req.WorkflowInstanceId:D4}" : "") <i class="ti ti-arrow-right"></i>
+                                            </a>
+                                        </div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: LỊCH NGHỈ TEAM (TEAM LEAVE CALENDAR) -->
+    <div class="tab-pane fade" id="tab-calendar">
+        <div class="vnm-card p-3 mb-3">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label fs-7 fw-semibold">Tháng</label>
+                    <select name="month" class="form-select form-select-sm">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m" selected="@(Model.Month == m)">Tháng @m.ToString("D2")</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fs-7 fw-semibold">Năm</label>
+                    <select name="year" class="form-select form-select-sm">
+                        <option value="2025" selected="@(Model.Year == 2025)">2025</option>
+                        <option value="2026" selected="@(Model.Year == 2026)">2026</option>
+                        <option value="2027" selected="@(Model.Year == 2027)">2027</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fs-7 fw-semibold">Đơn vị / Phòng ban</label>
+                    <select name="unitId" class="form-select form-select-sm">
+                        <option value="">-- Toàn bộ đơn vị --</option>
+                        @foreach (var u in Model.Units)
+                        {
+                            <option value="@u.Id" selected="@(Model.SelectedUnitId == u.Id)">@u.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-sm btn-primary w-100">Xem Lịch Team</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm align-middle mb-0 text-center" style="font-size: 0.78rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-start" style="min-width: 210px;">Thành viên Team</th>
+                            @for (int d = 1; d <= Model.DaysInMonth; d++)
+                            {
+                                var dt = new DateOnly(Model.Year, Model.Month, d);
+                                var isSun = dt.DayOfWeek == DayOfWeek.Sunday;
+                                <th style="min-width: 34px;" class="@(isSun ? "bg-danger-subtle text-danger" : "")">@d.ToString("D2")</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.TeamCalendarRows)
+                        {
+                            <tr>
+                                <td class="text-start">
+                                    <div class="fw-bold">@row.FullName</div>
+                                    <div class="text-muted" style="font-size: 0.72rem;">@row.EmployeeCode • @row.PositionName</div>
+                                </td>
+                                @foreach (var dayCell in row.Days)
+                                {
+                                    if (!string.IsNullOrEmpty(dayCell.LeaveSymbol))
+                                    {
+                                        var badgeCls = dayCell.Status == "Approved"
+                                            ? (dayCell.LeaveSymbol == "CT" ? "bg-info text-white fw-bold" : "bg-primary text-white fw-bold")
+                                            : "bg-warning text-dark fw-bold";
+                                        <td class="@badgeCls" title="@dayCell.LeaveTypeName (@dayCell.Status)">
+                                            @dayCell.LeaveSymbol
+                                        </td>
+                                    }
+                                    else if (dayCell.IsWeekend)
+                                    {
+                                        <td class="bg-light text-muted">-</td>
+                                    }
+                                    else
+                                    {
+                                        <td class="text-success">•</td>
+                                    }
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: QUỸ PHÉP NĂM THÂM NIÊN & PHÉP TỒN CHUYỂN NĂM -->
+    <div class="tab-pane fade" id="tab-balances">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Nhân viên</th>
+                            <th>Ngày vào làm & Thâm niên</th>
+                            <th class="text-center">Phép chuẩn</th>
+                            <th class="text-center">Cộng Thâm niên (+1/5 năm)</th>
+                            <th class="text-center">Phép tồn chuyển sang</th>
+                            <th class="text-center">Đã nghỉ</th>
+                            <th class="text-center">Chờ duyệt</th>
+                            <th class="text-center">Phép còn lại</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var b in Model.Balances)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="fw-bold">@b.FullName</div>
+                                    <div class="text-muted fs-7">@b.EmployeeCode • @b.UnitName</div>
+                                </td>
+                                <td>
+                                    <div class="font-monospace">@b.HireDate.ToString("dd/MM/yyyy")</div>
+                                    <span class="badge bg-info-subtle text-info-emphasis">Thâm niên: @b.SeniorityYears năm</span>
+                                </td>
+                                <td class="text-center fw-semibold">@b.StandardEntitlement.ToString("0.#")</td>
+                                <td class="text-center">
+                                    @if (b.SeniorityExtraDays > 0)
+                                    {
+                                        <span class="badge bg-primary-subtle text-primary fw-bold">+@b.SeniorityExtraDays.ToString("0.#") ngày</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">0</span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <div class="fw-semibold">@b.CarriedForwardDays.ToString("0.#")</div>
+                                    <div class="text-muted" style="font-size: 0.7rem;">Hạn: @b.CarryForwardExpiryDate?.ToString("dd/MM/yyyy")</div>
+                                </td>
+                                <td class="text-center text-danger fw-semibold">@b.UsedDays.ToString("0.#")</td>
+                                <td class="text-center text-warning-emphasis fw-semibold">@b.PendingDays.ToString("0.#")</td>
+                                <td class="text-center">
+                                    <span class="badge bg-success-subtle text-success fs-6 fw-bold">@b.RemainingDays.ToString("0.#") ngày</span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 4: DANH MỤC LOẠI NGHỈ CHẾ ĐỘ -->
+    <div class="tab-pane fade" id="tab-policies">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mã Loại</th>
+                            <th>Ký hiệu Bảng công</th>
+                            <th>Tên Chế độ Nghỉ / Công tác</th>
+                            <th>Nguồn chi trả lương</th>
+                            <th>Số ngày tối đa / năm</th>
+                            <th>Cho phép chuyển năm sau</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var lt in Model.LeaveTypes)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold">@lt.LeaveTypeCode</td>
+                                <td><span class="badge bg-primary px-2 py-1">@lt.AttendanceSymbol</span></td>
+                                <td class="fw-semibold">@lt.LeaveTypeName</td>
+                                <td>
+                                    @if (lt.IsPaidByCompany)
+                                    {
+                                        <span class="badge bg-success-subtle text-success">Công ty trả 100% lương</span>
+                                    }
+                                    else if (lt.IsPaidBySocialInsurance)
+                                    {
+                                        <span class="badge bg-info-subtle text-info-emphasis">Quỹ BHXH chi trả (75%-100%)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary-subtle text-secondary">Không hưởng lương</span>
+                                    }
+                                </td>
+                                <td>@lt.MaxDaysPerYear.ToString("0.#") ngày</td>
+                                <td>
+                                    @if (lt.AllowCarryForward)
+                                    {
+                                        <span class="badge bg-primary-subtle text-primary">Có kết chuyển phép tồn</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Không kết chuyển</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Đăng ký Đơn Nghỉ phép / Công tác -->
+<div class="modal fade" id="modalSubmitLeave" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <form asp-action="SubmitLeaveRequest" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="ti ti-beach text-primary me-2"></i>Tạo Đơn Xin Nghỉ phép / Nghỉ chế độ / Đi công tác</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Nhân sự đăng ký (*)</label>
+                        <select name="employeeId" class="form-select" required>
+                            @foreach (var emp in Model.ActiveEmployees)
+                            {
+                                <option value="@emp.Id">@emp.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Loại Nghỉ phép / Chế độ / Công tác (*)</label>
+                        <select name="leaveTypeId" class="form-select" required>
+                            @foreach (var lt in Model.LeaveTypes)
+                            {
+                                <option value="@lt.Id">[@lt.AttendanceSymbol] @lt.LeaveTypeName (Tối đa @lt.MaxDaysPerYear.ToString("0") ngày)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Từ ngày (*)</label>
+                        <input type="date" name="startDate" class="form-control" value="@DateTime.Today.AddDays(1).ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Buổi bắt đầu</label>
+                        <select name="startSession" class="form-select">
+                            <option value="FullDay">Cả ngày (FullDay)</option>
+                            <option value="Morning">Buổi sáng (0.5 ngày)</option>
+                            <option value="Afternoon">Buổi chiều (0.5 ngày)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Đến ngày (*)</label>
+                        <input type="date" name="endDate" class="form-control" value="@DateTime.Today.AddDays(2).ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Buổi kết thúc</label>
+                        <select name="endSession" class="form-select">
+                            <option value="FullDay">Cả ngày (FullDay)</option>
+                            <option value="Morning">Buổi sáng (0.5 ngày)</option>
+                            <option value="Afternoon">Buổi chiều (0.5 ngày)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Người nhận bàn giao công việc trong thời gian vắng</label>
+                        <select name="handoverToEmployeeId" class="form-select">
+                            <option value="">-- Chọn đồng nghiệp nhận bàn giao --</option>
+                            @foreach (var emp in Model.ActiveEmployees)
+                            {
+                                <option value="@emp.Id">@emp.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Quy trình duyệt tự động</label>
+                        <input type="text" class="form-control bg-light" value="WF_LEAVE (Quản lý trực tiếp → C&B nếu >= 3 ngày)" readonly />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Lý do xin nghỉ / Nội dung chuyến công tác (*)</label>
+                        <textarea name="reason" class="form-control" rows="2" placeholder="Nhập lý do chi tiết..." required></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-primary"><i class="ti ti-send me-1"></i>Gửi Đơn & Phát Thông báo SignalR + Email</button>
+            </div>
+        </form>
+    </div>
+</div>
+

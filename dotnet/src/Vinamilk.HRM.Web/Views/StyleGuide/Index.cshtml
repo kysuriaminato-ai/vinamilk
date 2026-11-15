@@ -1,0 +1,703 @@
+@model IReadOnlyList<Vinamilk.HRM.Domain.Entities.Core.Employee>
+@{
+    ViewData["Title"] = "Vinamilk HRM Design System & Style Guide (Phiên 3)";
+}
+
+<!-- HERO HEADER -->
+<div class="vnm-card p-4 mb-4 border-0 text-white position-relative overflow-hidden"
+     style="background: linear-gradient(135deg, #0213B0 0%, #1E3A8A 60%, #010B66 100%);">
+    <div class="row align-items-center">
+        <div class="col-lg-8">
+            <div class="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill mb-3"
+                 style="background: rgba(255,255,255,0.15);">
+                <i class="ti ti-sparkles text-warning"></i>
+                <span class="fs-7 fw-semibold">PHIÊN 3 — UI/UX ARCHITECTURE & DESIGN SYSTEM SHOWCASE</span>
+            </div>
+            <h1 class="fw-extrabold mb-2" style="font-size: var(--vnm-fs-2xl); letter-spacing: -0.03em;">
+                Hệ thống Thiết kế Giao diện Vinamilk Enterprise HRM
+            </h1>
+            <p class="text-white-50 fs-6 mb-3" style="max-width: 720px;">
+                Xây dựng trên nền <strong>Tabler UI (MIT License) + Bootstrap 5.3</strong>, tối ưu hóa cho mật độ dữ liệu cao (SAP SuccessFactors / Workday), hỗ trợ <strong>Light/Dark Mode</strong>, <strong>Mobile-First Table-to-Card</strong>, <strong>WCAG 2.1 AA (11.8:1)</strong> và <strong>prefers-reduced-motion</strong>.
+            </p>
+            <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-light fw-bold text-primary" data-vnm-theme-toggle>
+                    <i class="ti ti-contrast-2 me-1"></i>Chuyển đổi Light / Dark Mode
+                </button>
+                <a href="/dev/styleguide/print-preview" target="_blank" class="btn btn-outline-light">
+                    <i class="ti ti-printer me-1"></i>Xem Layout In A4 (Quyết định / Mẫu 2C)
+                </a>
+                <a href="/Auth/Login" class="btn btn-outline-light">
+                    <i class="ti ti-shield-lock me-1"></i>Trang Login + 2FA TOTP
+                </a>
+                <button type="button" class="btn btn-outline-light" data-vnm-open-search>
+                    <i class="ti ti-search me-1"></i>Mở Command Palette (Ctrl+K)
+                </button>
+            </div>
+        </div>
+        <div class="col-lg-4 d-none d-lg-block text-end">
+            <div class="d-inline-block p-3 rounded-4 text-start" style="background: rgba(255,255,255,0.1); backdrop-filter: blur(8px);">
+                <div class="fs-7 text-white-50">Primary Brand Token</div>
+                <div class="fw-extrabold fs-4 font-monospace">#0213B0 • Vinamilk Blue</div>
+                <div class="fs-7 text-white-50 mt-2">Typography</div>
+                <div class="fw-bold fs-6">Be Vietnam Pro + JetBrains Mono</div>
+                <div class="fs-7 text-white-50 mt-2">Accessibility</div>
+                <div class="fw-bold fs-6 text-warning"><i class="ti ti-check me-1"></i>WCAG 2.1 AA • Reduced Motion</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- QUICK JUMP NAVIGATION PILLS -->
+<div class="d-flex flex-wrap gap-2 mb-4">
+    <a href="#section-themes" class="btn btn-sm btn-outline-primary rounded-pill">1. So sánh 4 Admin Themes</a>
+    <a href="#section-tokens" class="btn btn-sm btn-outline-primary rounded-pill">2. Bảng màu & Typography</a>
+    <a href="#section-statcards" class="btn btn-sm btn-outline-primary rounded-pill">3. Stat Cards & Count-Up</a>
+    <a href="#section-interactions" class="btn btn-sm btn-outline-primary rounded-pill">4. Micro-interactions & Modal</a>
+    <a href="#section-forms" class="btn btn-sm btn-outline-primary rounded-pill">5. Form Controls & Upload</a>
+    <a href="#section-workflow" class="btn btn-sm btn-outline-primary rounded-pill">6. Stepper, Timeline, Skeleton</a>
+    <a href="#section-charts" class="btn btn-sm btn-outline-primary rounded-pill">7. Biểu đồ ApexCharts</a>
+    <a href="#section-kanban" class="btn btn-sm btn-outline-primary rounded-pill">8. Kanban Drag & Drop</a>
+    <a href="#section-datatable" class="btn btn-sm btn-outline-primary rounded-pill">9. Responsive DataTable</a>
+</div>
+
+<!-- 1. SO SÁNH 4 ADMIN THEMES -->
+<section id="section-themes" class="vnm-card p-4 mb-4" data-aos="fade-up">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                <i class="ti ti-scale text-primary me-2"></i>1. Phân tích & Lựa chọn Theme Admin cho Vinamilk HRM
+            </h2>
+            <p class="text-secondary fs-6 mb-0">Đánh giá 4 framework giao diện Bootstrap 5 hàng đầu theo tiêu chí HRM doanh nghiệp.</p>
+        </div>
+        <vnm-status-badge status="success" text="Đã chọn: Tabler UI (MIT)" />
+    </div>
+
+    <div class="vnm-table-wrapper">
+        <table class="vnm-table vnm-table-mobile-cards">
+            <thead>
+                <tr>
+                    <th>Tiêu chí đánh giá</th>
+                    <th class="text-primary">Tabler UI 1.0 (ĐÃ CHỌN)</th>
+                    <th>AdminLTE 4</th>
+                    <th>CoreUI 5 Free</th>
+                    <th>Sneat / Materio BS5</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td data-label="Tiêu chí" class="fw-semibold">Giấy phép thương mại</td>
+                    <td data-label="Tabler UI"><vnm-status-badge status="success" text="MIT (100% Free)" /></td>
+                    <td data-label="AdminLTE 4"><vnm-status-badge status="success" text="MIT" /></td>
+                    <td data-label="CoreUI 5"><vnm-status-badge status="warning" text="MIT (Giới hạn Pro)" /></td>
+                    <td data-label="Sneat / Materio"><vnm-status-badge status="warning" text="Freemium / Paid Pro" /></td>
+                </tr>
+                <tr>
+                    <td data-label="Tiêu chí" class="fw-semibold">Nền tảng & Độ nhẹ</td>
+                    <td data-label="Tabler UI" class="fw-bold text-primary">Bootstrap 5.3 (~38KB gzip, 0 jQuery)</td>
+                    <td data-label="AdminLTE 4">Bootstrap 5.3 (~58KB gzip)</td>
+                    <td data-label="CoreUI 5">Custom BS5 Fork (~65KB)</td>
+                    <td data-label="Sneat / Materio">BS5 + Heavy Custom JS (~95KB)</td>
+                </tr>
+                <tr>
+                    <td data-label="Tiêu chí" class="fw-semibold">Dark Mode & RTL</td>
+                    <td data-label="Tabler UI">Native <code>data-bs-theme="dark"</code> + RTL CSS</td>
+                    <td data-label="AdminLTE 4">Hỗ trợ qua BS5 variables</td>
+                    <td data-label="CoreUI 5">Dark Mode bản Pro</td>
+                    <td data-label="Sneat / Materio">Dark Mode + RTL bản Pro</td>
+                </tr>
+                <tr>
+                    <td data-label="Tiêu chí" class="fw-semibold">Mật độ dữ liệu HRM</td>
+                    <td data-label="Tabler UI" class="fw-semibold text-success">Rất cao (Dense Tables, Timeline, Steps, KPI)</td>
+                    <td data-label="AdminLTE 4">Trung bình (hơi thưa)</td>
+                    <td data-label="CoreUI 5">Tốt</td>
+                    <td data-label="Sneat / Materio">Thiên về SaaS/E-commerce</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- 2. BRAND PALETTE & TYPOGRAPHY -->
+<section id="section-tokens" class="vnm-card p-4 mb-4" data-aos="fade-up">
+    <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+        <i class="ti ti-palette text-primary me-2"></i>2. Hệ màu Thương hiệu Vinamilk & Thang chữ Tiếng Việt (Be Vietnam Pro)
+    </h2>
+    <p class="text-secondary fs-6 mb-3">
+        Tương phản đạt <strong>11.8:1 (WCAG AAA)</strong> cho màu chủ đạo <code>#0213B0</code> trên nền trắng sữa <code>#FFFDF9</code>.
+    </p>
+
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="p-3 rounded-3 text-white shadow-sm" style="background: #0213B0;">
+                <div class="fw-bold">Vinamilk Blue</div>
+                <div class="font-monospace fs-7 mt-2">#0213B0</div>
+                <div class="fs-7 opacity-75">Contrast 11.8:1</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="p-3 rounded-3 text-white shadow-sm" style="background: #1E3A8A;">
+                <div class="fw-bold">Corporate Navy</div>
+                <div class="font-monospace fs-7 mt-2">#1E3A8A</div>
+                <div class="fs-7 opacity-75">Sidebar / Secondary</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="p-3 rounded-3 border shadow-sm" style="background: #FFFDF9; color: #0F172A;">
+                <div class="fw-bold">Milk Cream</div>
+                <div class="font-monospace fs-7 mt-2">#FFFDF9</div>
+                <div class="fs-7 text-muted">Warm Surface</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="p-3 rounded-3 text-white shadow-sm" style="background: #059669;">
+                <div class="fw-bold">Pasture Green</div>
+                <div class="font-monospace fs-7 mt-2">#059669</div>
+                <div class="fs-7 opacity-75">Success / Active</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="p-3 rounded-3 text-white shadow-sm" style="background: #D97706;">
+                <div class="fw-bold">Amber Warning</div>
+                <div class="font-monospace fs-7 mt-2">#D97706</div>
+                <div class="fs-7 opacity-75">Probation / Pending</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="p-3 rounded-3 text-white shadow-sm" style="background: #DC2626;">
+                <div class="fw-bold">Crimson Danger</div>
+                <div class="font-monospace fs-7 mt-2">#DC2626</div>
+                <div class="fs-7 opacity-75">Overdue / Resigned</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-7">
+            <div class="p-3 rounded-3 border h-100" style="background: var(--vnm-bg-subtle);">
+                <div class="text-uppercase text-muted fw-bold fs-7 mb-2">Thang chữ Be Vietnam Pro (Tối ưu dấu thanh Tiếng Việt)</div>
+                <div class="fw-extrabold mb-1" style="font-size: var(--vnm-fs-2xl);">Display 2XL (30px) — Quản trị Nguồn Nhân lực</div>
+                <div class="fw-bold mb-1" style="font-size: var(--vnm-fs-xl);">Heading XL (24px) — Khối Sản xuất & Nhà máy Sữa</div>
+                <div class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">Section LG (18px) — Quyết định Bổ nhiệm & Điều chuyển</div>
+                <div class="fw-medium mb-1" style="font-size: var(--vnm-fs-base);">Body Base (14px) — Cộng hòa Xã hội Chủ nghĩa Việt Nam • Độc lập - Tự do - Hạnh phúc</div>
+                <div class="text-secondary" style="font-size: var(--vnm-fs-xs);">Caption XS (12px) — Cập nhật lần cuối bởi VNM-0001 lúc 14:30:00</div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="p-3 rounded-3 border h-100" style="background: var(--vnm-bg-subtle);">
+                <div class="text-uppercase text-muted fw-bold fs-7 mb-2">Font số liệu JetBrains Mono (tabular-nums)</div>
+                <div class="d-flex justify-content-between py-1 border-bottom font-monospace">
+                    <span>Mã Nhân viên:</span>
+                    <strong class="text-primary">VNM-0001 → VNM-0055</strong>
+                </div>
+                <div class="d-flex justify-content-between py-1 border-bottom font-monospace">
+                    <span>Lương Gross Tháng 11:</span>
+                    <strong class="text-success">125.000.000 ₫</strong>
+                </div>
+                <div class="d-flex justify-content-between py-1 border-bottom font-monospace">
+                    <span>Thuế TNCN lũy tiến (Bậc 7):</span>
+                    <strong class="text-danger">-28.150.000 ₫</strong>
+                </div>
+                <div class="d-flex justify-content-between py-1 font-monospace">
+                    <span>Thực lĩnh (Net Pay):</span>
+                    <strong class="fs-5">92.185.000 ₫</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 3. STAT CARDS & COUNT-UP ANIMATION -->
+<section id="section-statcards" class="mb-4" data-aos="fade-up">
+    <h2 class="fw-bold mb-3" style="font-size: var(--vnm-fs-lg);">
+        <i class="ti ti-chart-infographic text-primary me-2"></i>3. Reusable Stat Cards (<code>&lt;vnm-stat-card&gt;</code>) với hiệu ứng Count-Up
+    </h2>
+    <div class="row g-3">
+        <div class="col-sm-6 col-xl-3">
+            <vnm-stat-card title="Tổng nhân sự toàn hệ thống"
+                           value="55"
+                           suffix=" NV"
+                           subtitle="32 Đơn vị • 13 Nhà máy"
+                           trend="+5.8% YoY"
+                           trend-type="success"
+                           icon="ti-users"
+                           accent="primary" />
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <vnm-stat-card title="Quỹ lương Tháng 11/2026"
+                           value="1485"
+                            decimals="0"
+                           suffix=" Tr.₫"
+                           subtitle="Đã chốt công 100% đơn vị"
+                           trend="Chuẩn ngân sách"
+                           trend-type="info"
+                           icon="ti-coin"
+                           accent="success" />
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <vnm-stat-card title="Tỷ lệ chuyên cần đi làm"
+                           value="98.6"
+                           decimals="1"
+                           suffix="%"
+                           subtitle="Ca Hành chính & 3 Ca Nhà máy"
+                           trend="+1.2% MoM"
+                           trend-type="success"
+                           icon="ti-clock-check"
+                           accent="info" />
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <vnm-stat-card title="Hợp đồng sắp đến hạn (30 ngày)"
+                           value="3"
+                           suffix=" HĐ"
+                           subtitle="Cần đánh giá tái ký ngay"
+                           trend="Cần xử lý"
+                           trend-type="warning"
+                           icon="ti-file-alert"
+                           accent="warning" />
+        </div>
+    </div>
+</section>
+
+<!-- 4. MICRO-INTERACTIONS, BADGES, TOAST, SWEETALERT2 & AJAX MODAL -->
+<section id="section-interactions" class="vnm-card p-4 mb-4" data-aos="fade-up">
+    <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+        <i class="ti ti-click text-primary me-2"></i>4. Status Badges, Ripple Buttons, Toast, Confirm Dialog & AJAX Modal
+    </h2>
+    <p class="text-secondary fs-6 mb-3">
+        Thử nghiệm trực tiếp các hiệu ứng động (tự động tắt chuyển động khi bật <code>prefers-reduced-motion: reduce</code>).
+    </p>
+
+    <div class="mb-4">
+        <div class="text-uppercase text-muted fw-bold fs-7 mb-2">Status Badges (<code>&lt;vnm-status-badge&gt;</code>)</div>
+        <div class="d-flex flex-wrap gap-2">
+            <vnm-status-badge status="active" text="Đang làm việc (Official)" />
+            <vnm-status-badge status="probation" text="Đang thử việc (Probation 85%)" />
+            <vnm-status-badge status="info" text="Nghỉ thai sản (Maternity Leave)" />
+            <vnm-status-badge status="danger" text="Đã thôi việc / Chấm dứt HĐ" />
+            <vnm-status-badge status="neutral" text="Bản nháp chờ trình ký" />
+        </div>
+    </div>
+
+    <div>
+        <div class="text-uppercase text-muted fw-bold fs-7 mb-2">Interactive Triggers (Ripple, Toast, SweetAlert2, AJAX Modal, NProgress)</div>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn vnm-btn-primary" onclick="VnmUI.toast('Đã lưu Hồ sơ Nhân sự VNM-0001 và ghi nhận AuditLog!', 'success')">
+                <i class="ti ti-check me-1"></i>Toast Thành công (Ripple)
+            </button>
+            <button type="button" class="btn btn-outline-warning" data-vnm-ripple onclick="VnmUI.toast('Hợp đồng HĐLĐ-2026-019 sẽ hết hạn sau 14 ngày.', 'warning')">
+                <i class="ti ti-alert-triangle me-1"></i>Toast Cảnh báo
+            </button>
+            <button type="button" class="btn btn-outline-danger" data-vnm-ripple onclick="VnmUI.toast('Không thể xóa kỳ lương đã khóa sổ kế toán!', 'danger')">
+                <i class="ti ti-ban me-1"></i>Toast Lỗi nghiệp vụ
+            </button>
+            <button type="button"
+                    class="btn btn-outline-primary"
+                    onclick="VnmUI.confirm({ title: 'Phê duyệt Bảng lương Tháng 11/2026?', text: 'Sau khi phê duyệt, hệ thống sẽ khóa sổ công và gửi Phiếu lương PDF có mật khẩu cho 55 nhân viên.', onConfirm: () => VnmUI.toast('Đã phê duyệt và phát hành 55 Phiếu lương!', 'success') })">
+                <i class="ti ti-shield-check me-1"></i>SweetAlert2 Confirm Dialog
+            </button>
+            <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#demoAjaxModal">
+                <i class="ti ti-window-maximize me-1"></i>Mở AJAX Modal Form (Zoom-in)
+            </button>
+        </div>
+    </div>
+</section>
+
+<!-- 5. FORM CONTROLS (FLATPICKR, TOMSELECT, DRAG & DROP UPLOAD) -->
+<section id="section-forms" class="vnm-card p-4 mb-4" data-aos="fade-up">
+    <h2 class="fw-bold mb-3" style="font-size: var(--vnm-fs-lg);">
+        <i class="ti ti-forms text-primary me-2"></i>5. Bộ điều khiển Form Chuẩn Doanh nghiệp (Flatpickr dd/MM/yyyy, TomSelect, Drag & Drop)
+    </h2>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold fs-6">Chọn Đơn vị / Phòng ban (TomSelect Search)</label>
+                    <select data-vnm-select placeholder="Tìm kiếm trong 32 đơn vị...">
+                        <option value="HO">VNM-HO — Trụ sở Chính TP.HCM</option>
+                        <option value="IT" selected>K-IT — Khối CNTT & Chuyển đổi số</option>
+                        <option value="HR">K-HR — Khối Nhân sự - Hành chính</option>
+                        <option value="FIN">K-FIN — Khối Tài chính - Kế toán</option>
+                        <option value="FAC-BD">NM-BD — Siêu Nhà máy Sữa Việt Nam (Bình Dương)</option>
+                        <option value="FARM-TN">TR-TN — Trang trại Bò sữa Tây Ninh</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold fs-6">Ngày hiệu lực Quyết định (Flatpickr dd/MM/yyyy)</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-transparent"><i class="ti ti-calendar-event text-primary"></i></span>
+                        <input type="text" class="form-control font-monospace" data-vnm-datepicker value="15/11/2026" aria-label="Ngày hiệu lực" />
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold fs-6">Ngạch / Bậc lương (TomSelect)</label>
+                    <select data-vnm-select>
+                        <option value="E1">E1 — Chuyên viên Sơ cấp (Bậc 1 - 5)</option>
+                        <option value="E3">E3 — Chuyên viên Cao cấp (Bậc 1 - 5)</option>
+                        <option value="M2" selected>M2 — Quản lý Cấp trung Cao cấp (Bậc 4/5)</option>
+                        <option value="D1">D1 — Giám đốc Khối / Nhà máy (Bậc 1 - 5)</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold fs-6">Mức lương Gross đề xuất (VNĐ)</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control font-monospace fw-bold text-end" value="48.000.000" aria-label="Mức lương đề xuất" />
+                        <span class="input-group-text font-monospace">VNĐ</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <label class="form-label fw-semibold fs-6">Đính kèm Hồ sơ / Hợp đồng Scan (Drag & Drop Upload)</label>
+            <div class="vnm-dropzone">
+                <input type="file" class="d-none" multiple accept=".pdf,.docx,.xlsx,.png,.jpg" />
+                <i class="ti ti-cloud-upload fs-1 text-primary mb-2 d-block"></i>
+                <div class="fw-bold fs-6">Kéo thả tệp PDF/Word/Excel vào đây hoặc nhấn để chọn</div>
+                <div class="text-muted fs-7 mt-1" data-vnm-dropzone-status>
+                    Hỗ trợ tối đa 25MB/tệp • Tự động kiểm tra chữ ký số & lưu trữ bảo mật
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 6. STEPPER, TIMELINE, SKELETON & EMPTY STATE -->
+<section id="section-workflow" class="mb-4" data-aos="fade-up">
+    <div class="row g-4">
+        <!-- Stepper & Timeline -->
+        <div class="col-lg-7">
+            <div class="vnm-card p-4 h-100">
+                <h3 class="fw-bold mb-3" style="font-size: var(--vnm-fs-md);">
+                    <i class="ti ti-git-Merge text-primary me-2"></i>6A. Quy trình Onboarding Đa bước (Stepper) & Lịch sử Công tác (Timeline)
+                </h3>
+
+                <!-- Stepper -->
+                <div class="vnm-stepper mb-4">
+                    <div class="vnm-step completed">
+                        <div class="vnm-step-circle"><i class="ti ti-check"></i></div>
+                        <div class="vnm-step-label">1. Nhận Offer</div>
+                    </div>
+                    <div class="vnm-step completed">
+                        <div class="vnm-step-circle"><i class="ti ti-check"></i></div>
+                        <div class="vnm-step-label">2. Cấp Email & AD</div>
+                    </div>
+                    <div class="vnm-step active">
+                        <div class="vnm-step-circle">3</div>
+                        <div class="vnm-step-label">3. Đào tạo Hội nhập</div>
+                    </div>
+                    <div class="vnm-step">
+                        <div class="vnm-step-circle">4</div>
+                        <div class="vnm-step-label">4. Đánh giá Thử việc</div>
+                    </div>
+                </div>
+
+                <!-- Timeline -->
+                <div class="text-uppercase text-muted fw-bold fs-7 mb-3">Lịch sử Thăng tiến & Điều chuyển (VNM-0005)</div>
+                <div class="vnm-timeline">
+                    <div class="vnm-timeline-item">
+                        <div class="vnm-timeline-dot"></div>
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-bold">Bổ nhiệm Giám đốc Khối CNTT & Chuyển đổi số</span>
+                            <span class="font-monospace text-primary fs-7">01/12/2026</span>
+                        </div>
+                        <div class="text-secondary fs-7">Quyết định số 118/2026/QĐ-NS-VNM • Ngạch M2 Bậc 4</div>
+                    </div>
+                    <div class="vnm-timeline-item">
+                        <div class="vnm-timeline-dot" style="border-color: var(--vnm-success);"></div>
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-bold">Đạt danh hiệu Chiến sĩ Thi đua Cấp Tổng Công ty</span>
+                            <span class="font-monospace text-muted fs-7">15/06/2025</span>
+                        </div>
+                        <div class="text-secondary fs-7">Khen thưởng đột xuất dự án ERP & Smart Factory Bình Dương</div>
+                    </div>
+                    <div class="vnm-timeline-item mb-0">
+                        <div class="vnm-timeline-dot" style="border-color: var(--vnm-text-muted);"></div>
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-bold">Gia nhập Vinamilk — Trưởng phòng Kiến trúc Hệ thống</span>
+                            <span class="font-monospace text-muted fs-7">01/03/2022</span>
+                        </div>
+                        <div class="text-secondary fs-7">Trụ sở Chính TP.HCM (VNM-HO)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Skeleton Loading & Empty State -->
+        <div class="col-lg-5">
+            <div class="vnm-card p-4 h-100 d-flex flex-column justify-content-between">
+                <div>
+                    <h3 class="fw-bold mb-2" style="font-size: var(--vnm-fs-md);">
+                        <i class="ti ti-loader text-primary me-2"></i>6B. Skeleton Shimmer & Empty State
+                    </h3>
+                    <div class="border rounded-3 mb-3">
+                        <vnm-skeleton rows="2" show-avatar="true" />
+                    </div>
+                </div>
+
+                <vnm-empty-state title="Chưa có hồ sơ Kỷ luật phát sinh"
+                                 description="Đơn vị hiện tại tuân thủ 100% Nội quy Lao động trong kỳ đánh giá."
+                                 action-text="Tạo biên bản mới"
+                                 action-href="javascript:VnmUI.toast('Đã mở biểu mẫu tạo biên bản', 'info')" />
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 7. INTERACTIVE CHARTS (APEXCHARTS) -->
+<section id="section-charts" class="mb-4" data-aos="fade-up">
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="vnm-card p-4 h-100">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div>
+                        <h3 class="fw-bold mb-0" style="font-size: var(--vnm-fs-md);">
+                            <i class="ti ti-chart-area-line text-primary me-2"></i>7A. Biến động Nhân sự & Quỹ lương 6 Tháng gần nhất (ApexCharts)
+                        </h3>
+                    </div>
+                    <span class="vnm-badge vnm-badge-info">Real-time Analytics</span>
+                </div>
+                <div id="styleguideMainChart" style="min-height: 290px;"></div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="vnm-card p-4 h-100">
+                <h3 class="fw-bold mb-3" style="font-size: var(--vnm-fs-md);">
+                    <i class="ti ti-chart-donut-3 text-primary me-2"></i>7B. Cơ cấu Nhân sự theo Khối
+                </h3>
+                <div id="styleguideDonutChart" style="min-height: 280px;"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 8. KANBAN DRAG & DROP (SORTABLEJS) -->
+<section id="section-kanban" class="vnm-card p-4 mb-4" data-aos="fade-up">
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+        <div>
+            <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                <i class="ti ti-layout-kanban text-primary me-2"></i>8. Bảng Kanban Tuyển dụng ATS (Kéo & Thả ứng viên giữa các vòng)
+            </h2>
+            <p class="text-secondary fs-6 mb-0">Kéo thả thẻ ứng viên giữa các cột để kiểm thử hiệu ứng <strong>SortableJS + Toast Notification</strong>.</p>
+        </div>
+        <span class="vnm-badge vnm-badge-info"><i class="ti ti-hand-move me-1"></i>Hỗ trợ Drag & Drop</span>
+    </div>
+
+    <div class="vnm-kanban-board">
+        <!-- Col 1 -->
+        <div class="vnm-kanban-col">
+            <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+                <span class="fw-bold fs-6">1. Sàng lọc CV (Screening)</span>
+                <span class="badge bg-secondary rounded-pill">2</span>
+            </div>
+            <div class="vnm-kanban-list" data-vnm-kanban-list data-stage-name="Sàng lọc CV">
+                <div class="vnm-kanban-card" data-candidate-name="Nguyễn Minh Quân">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="badge bg-primary-subtle text-primary font-monospace">ATS-2026-081</span>
+                        <span class="text-warning fw-bold fs-7">★ 4.8</span>
+                    </div>
+                    <div class="fw-bold">Nguyễn Minh Quân</div>
+                    <div class="text-secondary fs-7">Senior .NET 8 Solution Architect</div>
+                </div>
+                <div class="vnm-kanban-card" data-candidate-name="Lê Hoàng Bảo Trân">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="badge bg-primary-subtle text-primary font-monospace">ATS-2026-084</span>
+                        <span class="text-warning fw-bold fs-7">★ 4.6</span>
+                    </div>
+                    <div class="fw-bold">Lê Hoàng Bảo Trân</div>
+                    <div class="text-secondary fs-7">Chuyên gia C&B / Thuế TNCN</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Col 2 -->
+        <div class="vnm-kanban-col">
+            <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+                <span class="fw-bold fs-6 text-primary">2. Phỏng vấn Chuyên môn</span>
+                <span class="badge bg-primary rounded-pill">2</span>
+            </div>
+            <div class="vnm-kanban-list" data-vnm-kanban-list data-stage-name="Phỏng vấn Chuyên môn">
+                <div class="vnm-kanban-card" data-candidate-name="Phạm Quốc Anh">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="badge bg-info-subtle text-info font-monospace">ATS-2026-072</span>
+                        <span class="text-warning fw-bold fs-7">★ 4.9</span>
+                    </div>
+                    <div class="fw-bold">Phạm Quốc Anh</div>
+                    <div class="text-secondary fs-7">Kỹ sư Tự động hóa SCADA Nhà máy</div>
+                </div>
+                <div class="vnm-kanban-card" data-candidate-name="Đặng Thu Thảo">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="badge bg-info-subtle text-info font-monospace">ATS-2026-075</span>
+                        <span class="text-warning fw-bold fs-7">★ 4.7</span>
+                    </div>
+                    <div class="fw-bold">Đặng Thu Thảo</div>
+                    <div class="text-secondary fs-7">HR Business Partner (HRBP)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Col 3 -->
+        <div class="vnm-kanban-col">
+            <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+                <span class="fw-bold fs-6 text-success">3. Đề nghị Tuyển dụng (Offer)</span>
+                <span class="badge bg-success rounded-pill">1</span>
+            </div>
+            <div class="vnm-kanban-list" data-vnm-kanban-list data-stage-name="Đề nghị Tuyển dụng (Offer)">
+                <div class="vnm-kanban-card" data-candidate-name="Trương Gia Huy">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="badge bg-success-subtle text-success font-monospace">ATS-2026-068</span>
+                        <span class="text-success fw-bold fs-7">Offer Sent</span>
+                    </div>
+                    <div class="fw-bold">Trương Gia Huy</div>
+                    <div class="text-secondary fs-7">Trưởng ca QA/QC Sữa bột Trẻ em</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 9. RESPONSIVE DATATABLE (DESKTOP TABLE -> MOBILE CARDS < 768PX) -->
+<section id="section-datatable" class="vnm-card p-4 mb-2" data-aos="fade-up">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+            <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                <i class="ti ti-table text-primary me-2"></i>9. Responsive DataTable (Tự động chuyển thành Thẻ Card trên Mobile &lt; 768px)
+            </h2>
+            <p class="text-secondary fs-6 mb-0">
+                Dữ liệu truy vấn trực tiếp từ SQL Server (<code>core.Employees</code>). Thu nhỏ trình duyệt xuống <code>&lt; 768px</code> để xem chế độ Mobile Card View.
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-outline-success" onclick="VnmUI.toast('Đang kết xuất tệp Excel (ClosedXML) chuẩn Vinamilk...', 'success')">
+                <i class="ti ti-file-spreadsheet me-1"></i>Xuất Excel
+            </button>
+            <a href="/dev/styleguide/print-preview" target="_blank" class="btn btn-sm vnm-btn-primary">
+                <i class="ti ti-printer me-1"></i>In Mẫu 2C / QĐ A4
+            </a>
+        </div>
+    </div>
+
+    <div class="vnm-table-wrapper">
+        <table class="vnm-table vnm-table-mobile-cards">
+            <thead>
+                <tr>
+                    <th>Mã NV</th>
+                    <th>Họ và Tên</th>
+                    <th>Đơn vị / Phòng ban</th>
+                    <th>Chức danh</th>
+                    <th>Email Công việc</th>
+                    <th>Trạng thái</th>
+                    <th class="text-end">Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var emp in Model)
+                {
+                    <tr>
+                        <td data-label="Mã NV">
+                            <span class="badge bg-primary-subtle text-primary font-monospace fw-bold">@emp.EmployeeCode</span>
+                        </td>
+                        <td data-label="Họ và Tên" class="fw-bold">@emp.FullName</td>
+                        <td data-label="Đơn vị">@(emp.OrganizationUnit?.UnitName ?? "Trụ sở Chính")</td>
+                        <td data-label="Chức danh">@(emp.Position?.PositionName ?? "Chuyên viên")</td>
+                        <td data-label="Email" class="font-monospace fs-7">@emp.WorkEmail</td>
+                        <td data-label="Trạng thái">
+                            <vnm-status-badge status="active" text="Đang làm việc" />
+                        </td>
+                        <td data-label="Thao tác" class="text-end">
+                            <div class="btn-group btn-group-sm">
+                                <button type="button"
+                                        class="btn btn-outline-primary"
+                                        title="Sửa nhanh qua AJAX Modal"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#demoAjaxModal">
+                                    <i class="ti ti-edit"></i>
+                                </button>
+                                <a href="/dev/styleguide/print-preview"
+                                   target="_blank"
+                                   class="btn btn-outline-secondary"
+                                   title="In Quyết định A4">
+                                    <i class="ti ti-printer"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- REUSABLE AJAX MODAL FORM DEMO -->
+<div class="modal fade" id="demoAjaxModal" tabindex="-1" aria-labelledby="demoAjaxModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: var(--vnm-radius-lg);">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold" id="demoAjaxModalLabel">
+                    <i class="ti ti-user-edit text-primary me-2"></i>Cập nhật Nhanh Hồ sơ Nhân sự (AJAX Modal)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <form onsubmit="event.preventDefault(); bootstrap.Modal.getInstance(document.getElementById('demoAjaxModal')).hide(); VnmUI.toast('Đã lưu thay đổi qua AJAX và tăng RowVersion chống ghi đè!', 'success');">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Mã Nhân viên & Họ tên</label>
+                        <input type="text" class="form-control font-monospace" value="VNM-0001 — Mai Kiều Liên" readonly />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Loại điều chỉnh</label>
+                        <select class="form-select">
+                            <option>Điều chỉnh Phụ cấp Trách nhiệm</option>
+                            <option>Gia hạn Hợp đồng Lao động</option>
+                            <option>Cập nhật Người phụ thuộc giảm trừ gia cảnh</option>
+                        </select>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label fw-semibold">Ghi chú Kiểm toán (Audit Reason) <span class="text-danger">*</span></label>
+                        <textarea class="form-control" rows="2" required>Cập nhật theo Nghị quyết HĐQT Quý 4/2026.</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Hủy bỏ</button>
+                    <button type="submit" class="btn vnm-btn-primary">
+                        <i class="ti ti-device-floppy me-1"></i>Lưu & Ghi AuditLog
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (!window.ApexCharts) return;
+
+            const areaEl = document.querySelector('#styleguideMainChart');
+            if (areaEl) {
+                new ApexCharts(areaEl, {
+                    chart: { type: 'area', height: 290, fontFamily: 'Be Vietnam Pro, sans-serif', toolbar: { show: false } },
+                    colors: ['#0213B0', '#059669'],
+                    dataLabels: { enabled: false },
+                    stroke: { curve: 'smooth', width: 3 },
+                    series: [
+                        { name: 'Quỹ lương thực chi (Tỷ VNĐ)', data: [1.32, 1.36, 1.40, 1.42, 1.45, 1.48] },
+                        { name: 'Điểm KPI trung bình toàn Công ty', data: [88, 90, 91, 93, 94, 96] }
+                    ],
+                    xaxis: { categories: ['Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11'] },
+                    fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05 } }
+                }).render();
+            }
+
+            const donutEl = document.querySelector('#styleguideDonutChart');
+            if (donutEl) {
+                new ApexCharts(donutEl, {
+                    chart: { type: 'donut', height: 280, fontFamily: 'Be Vietnam Pro, sans-serif' },
+                    colors: ['#0213B0', '#0284C7', '#059669', '#D97706', '#7C3AED'],
+                    labels: ['Khối Sản xuất & Nhà máy', 'Khối Kinh doanh', 'Khối Trang trại', 'Khối CNTT & CĐS', 'Khối Quản trị & Tài chính'],
+                    series: [24, 12, 8, 6, 5],
+                    legend: { position: 'bottom' }
+                }).render();
+            }
+        });
+    </script>
+}

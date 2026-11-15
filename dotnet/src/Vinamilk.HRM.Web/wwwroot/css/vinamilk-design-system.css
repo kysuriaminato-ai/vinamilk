@@ -1,0 +1,730 @@
+/* ==========================================================================
+   VINAMILK ENTERPRISE HRM – DESIGN SYSTEM & TABLER THEME CUSTOMIZATION
+   Brand Colors: #0213B0 (Vinamilk Cobalt Blue), #1E3A8A (Deep Navy), #FFFDF9 (Milk Cream)
+   Font: Be Vietnam Pro | WCAG 2.1 AA Compliant | Mobile-First Responsive
+   ========================================================================== */
+
+:root,
+[data-bs-theme="light"] {
+    /* 1. Brand & Semantic Colors */
+    --vnm-primary: #0213B0;
+    --vnm-primary-rgb: 2, 19, 176;
+    --vnm-primary-hover: #010E85;
+    --vnm-primary-dark: #1E3A8A;
+    --vnm-primary-soft: #EEF2FF;
+    --vnm-cream: #FFFDF9;
+
+    --vnm-success: #059669;
+    --vnm-success-soft: #ECFDF5;
+    --vnm-warning: #D97706;
+    --vnm-warning-soft: #FFFBEB;
+    --vnm-danger: #DC2626;
+    --vnm-danger-soft: #FEF2F2;
+    --vnm-info: #0284C7;
+    --vnm-info-soft: #F0F9FF;
+
+    /* 2. Surfaces & Borders */
+    --vnm-bg-body: #F3F6FB;
+    --vnm-bg-surface: #FFFFFF;
+    --vnm-bg-subtle: #F8FAFC;
+    --vnm-sidebar-bg: linear-gradient(180deg, #0213B0 0%, #112266 100%);
+    --vnm-sidebar-text: rgba(255, 255, 255, 0.84);
+    --vnm-sidebar-active-bg: rgba(255, 255, 255, 0.16);
+    --vnm-border-color: #E2E8F0;
+    --vnm-text-main: #0F172A;
+    --vnm-text-secondary: #475569;
+    --vnm-text-muted: #64748B;
+
+    /* 3. Typography Scale */
+    --vnm-font-sans: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --vnm-font-mono: 'JetBrains Mono', Consolas, Monaco, monospace;
+    --vnm-text-xs: 0.75rem;      /* 12px */
+    --vnm-text-sm: 0.8125rem;    /* 13px */
+    --vnm-text-base: 0.875rem;   /* 14px */
+    --vnm-text-md: 1rem;         /* 16px */
+    --vnm-text-lg: 1.25rem;      /* 20px */
+    --vnm-text-xl: 1.5rem;       /* 24px */
+    --vnm-text-2xl: 1.875rem;    /* 30px */
+
+    /* 4. Spacing 4/8px Grid */
+    --vnm-space-1: 0.25rem;  /* 4px */
+    --vnm-space-2: 0.5rem;   /* 8px */
+    --vnm-space-3: 0.75rem;  /* 12px */
+    --vnm-space-4: 1rem;     /* 16px */
+    --vnm-space-5: 1.25rem;  /* 20px */
+    --vnm-space-6: 1.5rem;   /* 24px */
+    --vnm-space-8: 2rem;     /* 32px */
+
+    /* 5. Border Radius & Shadows */
+    --vnm-radius-sm: 6px;
+    --vnm-radius-md: 10px;
+    --vnm-radius-lg: 14px;
+    --vnm-radius-xl: 20px;
+    --vnm-shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+    --vnm-shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+    --vnm-shadow-lg: 0 12px 28px -4px rgba(2, 19, 176, 0.14), 0 4px 10px -2px rgba(15, 23, 42, 0.06);
+
+    /* 6. Layout Dimensions */
+    --vnm-sidebar-width: 264px;
+    --vnm-sidebar-collapsed-width: 74px;
+    --vnm-topbar-height: 62px;
+
+    /* Map to Tabler / Bootstrap 5 variables */
+    --tblr-primary: #0213B0;
+    --tblr-primary-rgb: 2, 19, 176;
+    --tblr-font-sans-serif: var(--vnm-font-sans);
+    --bs-primary: #0213B0;
+    --bs-primary-rgb: 2, 19, 176;
+    --bs-body-font-family: var(--vnm-font-sans);
+    --bs-body-bg: var(--vnm-bg-body);
+    --bs-body-color: var(--vnm-text-main);
+}
+
+[data-bs-theme="dark"] {
+    --vnm-primary: #5B7FFF;
+    --vnm-primary-rgb: 91, 127, 255;
+    --vnm-primary-hover: #7A97FF;
+    --vnm-primary-dark: #1E3A8A;
+    --vnm-primary-soft: rgba(91, 127, 255, 0.16);
+    --vnm-cream: #131C31;
+
+    --vnm-success: #34D399;
+    --vnm-success-soft: rgba(52, 211, 153, 0.15);
+    --vnm-warning: #FBBF24;
+    --vnm-warning-soft: rgba(251, 191, 36, 0.15);
+    --vnm-danger: #F87171;
+    --vnm-danger-soft: rgba(248, 113, 113, 0.15);
+    --vnm-info: #38BDF8;
+    --vnm-info-soft: rgba(56, 189, 248, 0.15);
+
+    --vnm-bg-body: #0B1120;
+    --vnm-bg-surface: #151F32;
+    --vnm-bg-subtle: #1E293B;
+    --vnm-sidebar-bg: linear-gradient(180deg, #0D162B 0%, #090E1A 100%);
+    --vnm-border-color: #28354E;
+    --vnm-text-main: #F1F5F9;
+    --vnm-text-secondary: #CBD5E1;
+    --vnm-text-muted: #94A3B8;
+
+    --vnm-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+    --vnm-shadow-md: 0 6px 16px rgba(0, 0, 0, 0.45);
+    --vnm-shadow-lg: 0 14px 32px rgba(0, 0, 0, 0.6);
+
+    --tblr-primary: #5B7FFF;
+    --bs-primary: #5B7FFF;
+    --bs-body-bg: var(--vnm-bg-body);
+    --bs-body-color: var(--vnm-text-main);
+}
+
+/* ==========================================================================
+   BASE & WCAG 2.1 AA ACCESSIBILITY
+   ========================================================================== */
+body {
+    font-family: var(--vnm-font-sans);
+    font-size: var(--vnm-text-base);
+    background-color: var(--vnm-bg-body);
+    color: var(--vnm-text-main);
+    overflow-x: hidden;
+    line-height: 1.5;
+}
+
+.vnm-skip-link {
+    position: absolute;
+    top: -100px;
+    left: 1rem;
+    z-index: 9999;
+    padding: 0.6rem 1.2rem;
+    background: var(--vnm-primary);
+    color: #fff;
+    font-weight: 600;
+    border-radius: var(--vnm-radius-sm);
+    text-decoration: none;
+    transition: top 0.2s ease;
+}
+.vnm-skip-link:focus {
+    top: 0.75rem;
+    color: #fff;
+}
+
+:focus-visible {
+    outline: 2px solid var(--vnm-primary) !important;
+    outline-offset: 2px !important;
+}
+
+.vnm-num,
+.vnm-mono {
+    font-family: var(--vnm-font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   MASTER APP SHELL (SIDEBAR + TOPBAR + MAIN WRAPPER)
+   ========================================================================== */
+.vnm-app-shell {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+}
+
+.vnm-sidebar {
+    width: var(--vnm-sidebar-width);
+    background: var(--vnm-sidebar-bg);
+    color: var(--vnm-sidebar-text);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 1035;
+    transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s ease;
+    box-shadow: 4px 0 20px rgba(2, 19, 176, 0.12);
+}
+
+body.vnm-sidebar-collapsed .vnm-sidebar {
+    width: var(--vnm-sidebar-collapsed-width);
+}
+
+.vnm-sidebar-brand {
+    height: var(--vnm-topbar-height);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.15rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.vnm-brand-logo {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #0213B0;
+    font-weight: 800;
+    font-size: 0.95rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    letter-spacing: -0.5px;
+}
+
+.vnm-brand-text {
+    margin-left: 0.75rem;
+    transition: opacity 0.2s ease;
+}
+
+body.vnm-sidebar-collapsed .vnm-brand-text,
+body.vnm-sidebar-collapsed .vnm-nav-section-title,
+body.vnm-sidebar-collapsed .vnm-nav-label,
+body.vnm-sidebar-collapsed .vnm-nav-badge,
+body.vnm-sidebar-collapsed .vnm-sidebar-footer-info {
+    opacity: 0;
+    width: 0;
+    display: none;
+}
+
+.vnm-sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.75rem 0.65rem;
+}
+
+.vnm-nav-section-title {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.48);
+    padding: 0.85rem 0.75rem 0.35rem;
+}
+
+.vnm-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 2px;
+    border-radius: var(--vnm-radius-sm);
+    color: var(--vnm-sidebar-text);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: var(--vnm-text-sm);
+    transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+    white-space: nowrap;
+}
+
+.vnm-nav-link i {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    width: 24px;
+    text-align: center;
+}
+
+.vnm-nav-link:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.vnm-nav-link.active {
+    background: var(--vnm-sidebar-active-bg);
+    color: #fff;
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 #60A5FA;
+}
+
+.vnm-main-wrapper {
+    flex: 1;
+    margin-left: var(--vnm-sidebar-width);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.vnm-sidebar-collapsed .vnm-main-wrapper {
+    margin-left: var(--vnm-sidebar-collapsed-width);
+}
+
+.vnm-topbar {
+    height: var(--vnm-topbar-height);
+    background: var(--vnm-bg-surface);
+    border-bottom: 1px solid var(--vnm-border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 1025;
+    box-shadow: var(--vnm-shadow-sm);
+}
+
+.vnm-search-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    background: var(--vnm-bg-subtle);
+    border: 1px solid var(--vnm-border-color);
+    border-radius: var(--vnm-radius-md);
+    padding: 0.42rem 0.85rem;
+    color: var(--vnm-text-muted);
+    font-size: var(--vnm-text-sm);
+    min-width: 280px;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.vnm-search-trigger:hover {
+    border-color: var(--vnm-primary);
+    color: var(--vnm-text-main);
+}
+
+.vnm-kbd {
+    margin-left: auto;
+    font-size: 0.7rem;
+    font-family: var(--vnm-font-mono);
+    background: var(--vnm-bg-surface);
+    border: 1px solid var(--vnm-border-color);
+    border-radius: 4px;
+    padding: 1px 6px;
+    color: var(--vnm-text-secondary);
+}
+
+/* ==========================================================================
+   CARDS, STAT CARDS, HOVER LIFT & BUTTON RIPPLE
+   ========================================================================== */
+.vnm-card {
+    background: var(--vnm-bg-surface);
+    border: 1px solid var(--vnm-border-color);
+    border-radius: var(--vnm-radius-md);
+    box-shadow: var(--vnm-shadow-sm);
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.vnm-card-hover:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--vnm-shadow-lg);
+    border-color: rgba(var(--vnm-primary-rgb), 0.3);
+}
+
+.vnm-stat-card {
+    position: relative;
+    overflow: hidden;
+    padding: 1.25rem;
+}
+
+.vnm-stat-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.vnm-btn-primary {
+    background-color: var(--vnm-primary);
+    border-color: var(--vnm-primary);
+    color: #fff;
+    font-weight: 600;
+    border-radius: var(--vnm-radius-sm);
+    position: relative;
+    overflow: hidden;
+    transition: background-color 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
+}
+
+.vnm-btn-primary:hover,
+.vnm-btn-primary:focus {
+    background-color: var(--vnm-primary-hover);
+    border-color: var(--vnm-primary-hover);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(2, 19, 176, 0.28);
+}
+
+/* Ripple animation */
+.vnm-ripple-wave {
+    position: absolute;
+    border-radius: 50%;
+    transform: scale(0);
+    animation: vnmRippleAnim 0.55s linear;
+    background-color: rgba(255, 255, 255, 0.42);
+    pointer-events: none;
+}
+
+@keyframes vnmRippleAnim {
+    to {
+        transform: scale(3.5);
+        opacity: 0;
+    }
+}
+
+/* ==========================================================================
+   STATUS BADGES, TIMELINE, STEPPER & SKELETON SHIMMER
+   ========================================================================== */
+.vnm-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.28rem 0.68rem;
+    border-radius: 999px;
+    font-size: var(--vnm-text-xs);
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.vnm-badge-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.vnm-badge-success { background: var(--vnm-success-soft); color: var(--vnm-success); }
+.vnm-badge-success .vnm-badge-dot { background: var(--vnm-success); }
+
+.vnm-badge-warning { background: var(--vnm-warning-soft); color: var(--vnm-warning); }
+.vnm-badge-warning .vnm-badge-dot { background: var(--vnm-warning); }
+
+.vnm-badge-danger { background: var(--vnm-danger-soft); color: var(--vnm-danger); }
+.vnm-badge-danger .vnm-badge-dot { background: var(--vnm-danger); }
+
+.vnm-badge-info { background: var(--vnm-info-soft); color: var(--vnm-info); }
+.vnm-badge-info .vnm-badge-dot { background: var(--vnm-info); }
+
+.vnm-badge-primary { background: var(--vnm-primary-soft); color: var(--vnm-primary); }
+.vnm-badge-primary .vnm-badge-dot { background: var(--vnm-primary); }
+
+/* Skeleton Shimmer */
+.vnm-skeleton {
+    background: linear-gradient(90deg, var(--vnm-border-color) 25%, var(--vnm-bg-subtle) 50%, var(--vnm-border-color) 75%);
+    background-size: 200% 100%;
+    animation: vnmShimmer 1.5s infinite linear;
+    border-radius: var(--vnm-radius-sm);
+    display: block;
+}
+
+@keyframes vnmShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Stepper */
+.vnm-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    gap: 0.5rem;
+}
+
+.vnm-step-item {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 1;
+    position: relative;
+}
+
+.vnm-step-circle {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: var(--vnm-text-sm);
+    border: 2px solid var(--vnm-border-color);
+    background: var(--vnm-bg-surface);
+    color: var(--vnm-text-muted);
+    flex-shrink: 0;
+}
+
+.vnm-step-item.completed .vnm-step-circle {
+    background: var(--vnm-success);
+    border-color: var(--vnm-success);
+    color: #fff;
+}
+
+.vnm-step-item.active .vnm-step-circle {
+    background: var(--vnm-primary);
+    border-color: var(--vnm-primary);
+    color: #fff;
+    box-shadow: 0 0 0 4px var(--vnm-primary-soft);
+}
+
+/* Vertical Timeline */
+.vnm-timeline {
+    position: relative;
+    padding-left: 1.75rem;
+    margin: 0;
+    list-style: none;
+}
+
+.vnm-timeline::before {
+    content: "";
+    position: absolute;
+    top: 0.35rem;
+    bottom: 0.35rem;
+    left: 0.45rem;
+    width: 2px;
+    background: var(--vnm-border-color);
+}
+
+.vnm-timeline-item {
+    position: relative;
+    padding-bottom: 1.25rem;
+}
+
+.vnm-timeline-marker {
+    position: absolute;
+    left: -1.62rem;
+    top: 0.25rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--vnm-primary);
+    border: 2px solid var(--vnm-bg-surface);
+    box-shadow: 0 0 0 2px var(--vnm-primary);
+}
+
+/* Upload Dropzone */
+.vnm-dropzone {
+    border: 2px dashed var(--vnm-border-color);
+    border-radius: var(--vnm-radius-md);
+    background: var(--vnm-bg-subtle);
+    padding: 2rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.vnm-dropzone:hover,
+.vnm-dropzone.dragover {
+    border-color: var(--vnm-primary);
+    background: var(--vnm-primary-soft);
+}
+
+/* Kanban Board */
+.vnm-kanban-board {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.vnm-kanban-col {
+    background: var(--vnm-bg-subtle);
+    border: 1px solid var(--vnm-border-color);
+    border-radius: var(--vnm-radius-md);
+    padding: 0.85rem;
+    min-height: 240px;
+}
+
+.vnm-kanban-card {
+    background: var(--vnm-bg-surface);
+    border: 1px solid var(--vnm-border-color);
+    border-radius: var(--vnm-radius-sm);
+    padding: 0.85rem;
+    margin-bottom: 0.65rem;
+    cursor: grab;
+    box-shadow: var(--vnm-shadow-sm);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.vnm-kanban-card:active {
+    cursor: grabbing;
+}
+
+.vnm-kanban-ghost {
+    opacity: 0.45;
+    border: 2px dashed var(--vnm-primary);
+}
+
+/* ==========================================================================
+   PAGE TRANSITION, MODAL ZOOM & NPROGRESS BAR
+   ========================================================================== */
+.vnm-page-enter {
+    animation: vnmPageFadeIn 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes vnmPageFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.modal.fade .modal-dialog {
+    transform: scale(0.95);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.modal.show .modal-dialog {
+    transform: scale(1);
+}
+
+/* ==========================================================================
+   RESPONSIVE MOBILE-FIRST DATATABLE (TABLE -> CARD ON MOBILE < 768px)
+   ========================================================================== */
+.vnm-table th {
+    font-size: var(--vnm-text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+    color: var(--vnm-text-secondary);
+    background: var(--vnm-bg-subtle);
+    border-bottom-width: 1px;
+    padding: 0.75rem 1rem;
+    white-space: nowrap;
+}
+
+.vnm-table td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+    font-size: var(--vnm-text-sm);
+}
+
+@media (max-width: 991.98px) {
+    .vnm-sidebar {
+        transform: translateX(-100%);
+        width: var(--vnm-sidebar-width) !important;
+    }
+    body.vnm-sidebar-mobile-open .vnm-sidebar {
+        transform: translateX(0);
+    }
+    .vnm-main-wrapper,
+    body.vnm-sidebar-collapsed .vnm-main-wrapper {
+        margin-left: 0 !important;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .vnm-table-responsive-cards thead {
+        display: none;
+    }
+    .vnm-table-responsive-cards tbody,
+    .vnm-table-responsive-cards tr,
+    .vnm-table-responsive-cards td {
+        display: block;
+        width: 100%;
+    }
+    .vnm-table-responsive-cards tr {
+        background: var(--vnm-bg-surface);
+        border: 1px solid var(--vnm-border-color);
+        border-radius: var(--vnm-radius-md);
+        margin-bottom: 0.85rem;
+        padding: 0.5rem 0.75rem;
+        box-shadow: var(--vnm-shadow-sm);
+    }
+    .vnm-table-responsive-cards td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.45rem 0.25rem;
+        border-bottom: 1px dashed var(--vnm-border-color);
+        text-align: right;
+    }
+    .vnm-table-responsive-cards td:last-child {
+        border-bottom: 0;
+    }
+    .vnm-table-responsive-cards td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--vnm-text-secondary);
+        text-align: left;
+        margin-right: 1rem;
+    }
+}
+
+/* ==========================================================================
+   PRINT A4 LAYOUT (_LayoutPrint.cshtml)
+   ========================================================================== */
+.vnm-a4-sheet {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 1.5rem auto;
+    padding: 18mm 20mm;
+    background: #ffffff;
+    color: #000000;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 13pt;
+    line-height: 1.45;
+}
+
+@media print {
+    body {
+        background: #ffffff !important;
+        color: #000000 !important;
+    }
+    .vnm-no-print {
+        display: none !important;
+    }
+    .vnm-a4-sheet {
+        margin: 0 !important;
+        padding: 12mm 15mm !important;
+        box-shadow: none !important;
+        width: 100% !important;
+    }
+}
+
+/* ==========================================================================
+   REDUCED MOTION SUPPORT (RESPECT USER OS SETTING)
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+

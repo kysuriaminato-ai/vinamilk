@@ -1,0 +1,335 @@
+@model Vinamilk.HRM.Application.Talent.KpiOverviewDto
+@{
+    ViewData["Title"] = "Đánh giá Hiệu suất KPI / OKR, Đánh giá 360° & Liên kết Thưởng";
+    ViewData["BreadcrumbParent"] = "Phát triển Nhân tài (Phiên 8)";
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">
+            <i class="ti ti-chart-dots-3 text-primary me-2"></i>Quản trị Hiệu suất KPI / OKR & Đánh giá 360°
+        </h2>
+        <p class="text-secondary mb-0">
+            Chu kỳ đánh giá • Bộ chỉ tiêu BSC • Quy trình 3 bước: Tự đánh giá → Quản lý đánh giá → Hiệu chỉnh & 360° • Xếp loại A/B/C/D & Hệ số thưởng P3
+        </p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalCreateCycle">
+            <i class="ti ti-calendar-plus me-1"></i>Tạo Chu kỳ Mới
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCreateKpi">
+            <i class="ti ti-plus me-1"></i>Giao Chỉ tiêu & Tự đánh giá
+        </button>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-circle-check me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-primary">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Điểm KPI Bình quân Chu kỳ</div>
+            <div class="fs-2 fw-bold text-primary mt-1">@Model.AverageFinalScore.ToString("0.0") / 100</div>
+            <div class="fs-7 text-muted">Tổng phiếu: <strong>@Model.Evaluations.Count</strong></div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-success">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Xếp loại A — Xuất sắc (x150%)</div>
+            <div class="fs-2 fw-bold text-success mt-1">@Model.GradeACount NV</div>
+            <div class="fs-7 text-muted">Điểm tổng hợp &ge; 90</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-info">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Xếp loại B — Tốt (x120%)</div>
+            <div class="fs-2 fw-bold text-info mt-1">@Model.GradeBCount NV</div>
+            <div class="fs-7 text-muted">Điểm tổng hợp 75 - 89.9</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-warning">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Xếp loại C / D</div>
+            <div class="fs-2 fw-bold text-warning mt-1">@Model.GradeCDCount NV</div>
+            <div class="fs-7 text-muted">Cần kèm cặp / đào tạo bổ sung</div>
+        </div>
+    </div>
+</div>
+
+<!-- Chọn chu kỳ đánh giá -->
+<div class="vnm-card p-3 mb-3">
+    <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-5">
+            <label class="form-label fs-7 fw-semibold">Chu kỳ Đánh giá KPI / OKR</label>
+            <select name="cycleId" class="form-select form-select-sm" onchange="this.form.submit()">
+                @foreach (var c in Model.Cycles)
+                {
+                    <option value="@c.Id" selected="@(Model.SelectedCycleId == c.Id)">
+                        @c.CycleCode — @c.CycleName (@c.StartDate.ToString("dd/MM") - @c.EndDate.ToString("dd/MM/yyyy"))
+                    </option>
+                }
+            </select>
+        </div>
+    </form>
+</div>
+
+<!-- Danh sách Phiếu đánh giá KPI -->
+<div class="row g-3">
+    @foreach (var ev in Model.Evaluations)
+    {
+        <div class="col-12">
+            <div class="vnm-card p-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 pb-3 border-bottom mb-3">
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="badge bg-primary font-monospace">@ev.EmployeeCode</span>
+                            <h5 class="fw-bold mb-0">@ev.EmployeeName</h5>
+                            <span class="badge @(ev.Status == "Approved" ? "bg-success-subtle text-success" : "bg-warning-subtle text-warning-emphasis")">
+                                @ev.Status
+                            </span>
+                        </div>
+                        <div class="text-secondary fs-7">@ev.PositionName • @ev.UnitName • Người đánh giá: <strong>@ev.ReviewerName</strong></div>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center gap-3">
+                        <div class="text-end">
+                            <div class="fs-7 text-muted">Tự chấm / Quản lý / Chốt</div>
+                            <div class="fw-bold font-monospace">
+                                @ev.SelfTotalScore.ToString("0.0") / @ev.ManagerTotalScore.ToString("0.0") /
+                                <span class="text-primary fs-5">@ev.FinalScore.ToString("0.0") đ</span>
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-success-subtle text-success fs-6">@ev.GradeLabelVi</span>
+                            <div class="fs-7 text-primary fw-bold mt-1">Thưởng KPI (P3) dự kiến: @ev.LinkedPayrollBonusEstimate.ToString("N0") đ</div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-primary"
+                                onclick="openCalibrateModal(@ev.Id, '@Html.Raw(ev.EmployeeName.Replace("'", "\\'"))', @ev.SelfTotalScore, @ev.ManagerTotalScore, @ev.FinalScore)">
+                            <i class="ti ti-adjustments me-1"></i>Quản lý Chấm & Hiệu chỉnh 360°
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Bảng chỉ tiêu BSC chi tiết -->
+                <div class="table-responsive mb-2">
+                    <table class="table table-sm table-bordered align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Viễn cảnh BSC</th>
+                                <th>Mục tiêu / Chỉ tiêu KPI-OKR</th>
+                                <th class="text-center">Trọng số</th>
+                                <th class="text-center">Mục tiêu</th>
+                                <th class="text-center">Thực đạt</th>
+                                <th class="text-center">Tự chấm</th>
+                                <th class="text-center">Quản lý chấm</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in ev.Items)
+                            {
+                                <tr>
+                                    <td><span class="badge bg-info-subtle text-info-emphasis">@item.Perspective</span></td>
+                                    <td class="fw-semibold">@item.GoalTitle</td>
+                                    <td class="text-center font-monospace">@item.WeightPercent.ToString("0")%</td>
+                                    <td class="text-center font-monospace">@item.TargetValue @item.MeasureUnit</td>
+                                    <td class="text-center font-monospace fw-bold text-success">@item.ActualValue @item.MeasureUnit (@item.CompletionRatePercent.ToString("0.#")%)</td>
+                                    <td class="text-center font-monospace">@item.SelfScore.ToString("0.0")</td>
+                                    <td class="text-center font-monospace fw-bold text-primary">@item.ManagerScore.ToString("0.0")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="row g-2 fs-7 text-secondary mt-2">
+                    <div class="col-md-6"><strong>Nhân viên tự nhận xét:</strong> @(ev.EmployeeComment ?? "Chưa có")</div>
+                    <div class="col-md-6"><strong>Đánh giá Quản lý & Góp ý 360°:</strong> @(ev.ReviewerComment ?? "Chờ đánh giá hiệu chỉnh")</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Modal Tạo Chu kỳ KPI -->
+<div class="modal fade" id="modalCreateCycle" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="CreateCycle" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Tạo Chu kỳ Đánh giá KPI / OKR</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2">
+                    <div class="col-4">
+                        <label class="form-label fw-semibold">Mã Chu kỳ</label>
+                        <input type="text" name="cycleCode" class="form-control" value="KPI-2026-Q4" required />
+                    </div>
+                    <div class="col-8">
+                        <label class="form-label fw-semibold">Tên Chu kỳ</label>
+                        <input type="text" name="cycleName" class="form-control" value="Đánh giá KPI & OKR Quý 4/2026" required />
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label fw-semibold">Loại</label>
+                        <select name="cycleType" class="form-select">
+                            <option value="Quarterly">Theo Quý</option>
+                            <option value="Annual">Theo Năm</option>
+                            <option value="Monthly">Theo Tháng</option>
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label fw-semibold">Năm</label>
+                        <input type="number" name="year" class="form-control" value="2026" />
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label fw-semibold">Kỳ số</label>
+                        <input type="number" name="periodNumber" class="form-control" value="4" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Từ ngày</label>
+                        <input type="date" name="startDate" class="form-control" value="2026-10-01" />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Đến ngày</label>
+                        <input type="date" name="endDate" class="form-control" value="2026-12-31" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-primary">Tạo Chu kỳ</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Giao chỉ tiêu & Tự đánh giá -->
+<div class="modal fade" id="modalCreateKpi" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="CreateEmployeeKpi" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="evaluationCycleId" value="@Model.SelectedCycleId" />
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Giao Chỉ tiêu & Tự đánh giá KPI/OKR</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Nhân viên (*)</label>
+                        <select name="employeeId" class="form-select" required>
+                            @foreach (var e in Model.ActiveEmployees)
+                            {
+                                <option value="@e.Id">@e.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Quản lý đánh giá</label>
+                        <select name="reviewerEmployeeId" class="form-select">
+                            @foreach (var e in Model.ActiveEmployees)
+                            {
+                                <option value="@e.Id">@e.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Mục tiêu KPI / OKR chính (*)</label>
+                        <input type="text" name="goalTitle" class="form-control" placeholder="VD: Đạt 100% SLA vận hành hệ thống ERP" required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Viễn cảnh BSC</label>
+                        <select name="perspective" class="form-select">
+                            <option value="InternalProcess">Quy trình Nội bộ</option>
+                            <option value="Financial">Tài chính</option>
+                            <option value="Customer">Khách hàng / Chất lượng</option>
+                            <option value="LearningGrowth">Học tập & Phát triển</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Đơn vị đo</label>
+                        <input type="text" name="measureUnit" class="form-control" value="%" />
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label fw-semibold">Chỉ tiêu</label>
+                        <input type="number" name="targetValue" class="form-control" value="100" />
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label fw-semibold">Thực đạt</label>
+                        <input type="number" name="actualValue" class="form-control" value="95" />
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label fw-semibold">Điểm Tự chấm</label>
+                        <input type="number" name="selfScore" class="form-control" value="88" min="0" max="100" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Nhận xét tự đánh giá</label>
+                        <textarea name="employeeComment" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-primary">Lưu & Gửi Quản lý Chấm</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Quản lý chấm & Hiệu chỉnh 360° -->
+<div class="modal fade" id="modalCalibrateKpi" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="CalibrateAndApprove" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="evaluationCycleId" value="@Model.SelectedCycleId" />
+            <input type="hidden" name="evaluationId" id="calEvalId" />
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Quản lý Đánh giá & Hiệu chỉnh 360°: <span id="calEmpName" class="text-primary"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border fs-7 mb-3">
+                    Điểm Tự đánh giá hiện tại: <strong id="calSelfScore"></strong> / 100.
+                    Hệ thống tự động quy đổi xếp loại <strong>A (&ge;90: 150%)</strong>, <strong>B (&ge;75: 120%)</strong>, <strong>C (&ge;60: 100%)</strong>, <strong>D (&lt;60: 50%)</strong>.
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Điểm Quản lý đánh giá (0-100)</label>
+                        <input type="number" step="0.1" name="managerScore" id="calMgrScore" class="form-control" required />
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-semibold">Điểm Hiệu chỉnh Chốt (Calibration)</label>
+                        <input type="number" step="0.1" name="calibratedFinalScore" id="calFinalScore" class="form-control" />
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Nhận xét Quản lý & Tổng hợp Góp ý 360°</label>
+                    <textarea name="reviewerAnd360Comment" class="form-control" rows="3" placeholder="Tổng hợp đánh giá từ Quản lý trực tiếp, Đồng nghiệp & Bộ phận liên quan..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button>
+                <button type="submit" class="btn btn-success">Chốt Điểm & Xếp loại Thưởng KPI</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openCalibrateModal(evalId, empName, selfScore, mgrScore, finalScore) {
+            document.getElementById('calEvalId').value = evalId;
+            document.getElementById('calEmpName').textContent = empName;
+            document.getElementById('calSelfScore').textContent = selfScore;
+            document.getElementById('calMgrScore').value = mgrScore > 0 ? mgrScore : selfScore;
+            document.getElementById('calFinalScore').value = finalScore;
+            new bootstrap.Modal(document.getElementById('modalCalibrateKpi')).show();
+        }
+    </script>
+}
+

@@ -1,0 +1,187 @@
+@model Vinamilk.HRM.Application.Payroll.PayrollManagementOverviewDto
+@{
+    ViewData["Title"] = "Bảng tính lương 3P, BHXH & Thuế TNCN";
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Payroll" class="btn vnm-btn-primary">
+            <i class="ti ti-cash me-1"></i>1. Bảng lương & Kỳ tính lương
+        </a>
+        <a href="/Payroll/Parameters" class="btn btn-outline-primary">
+            <i class="ti ti-adjustments-horizontal me-1"></i>2. Tham số Luật 2026 & Biểu thuế TNCN
+        </a>
+    </div>
+    <span class="vnm-badge vnm-badge-info">
+        <span class="vnm-badge-dot"></span>Áp dụng tham số theo NGÀY CUỐI KỲ LƯƠNG & Vùng BHTN nhân viên
+    </span>
+</div>
+
+@if (TempData["PayrollSuccess"] != null)
+{
+    <div class="alert alert-success border-0 shadow-sm d-flex align-items-center gap-2 mb-3">
+        <i class="ti ti-circle-check fs-4"></i>
+        <div class="fw-medium">@TempData["PayrollSuccess"]</div>
+    </div>
+}
+@if (TempData["PayrollError"] != null)
+{
+    <div class="alert alert-danger border-0 shadow-sm d-flex align-items-center gap-2 mb-3">
+        <i class="ti ti-alert-triangle fs-4"></i>
+        <div class="fw-medium">@TempData["PayrollError"]</div>
+    </div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-12 col-lg-5">
+        <div class="vnm-card p-3 h-100">
+            <h5 class="fw-bold mb-3"><i class="ti ti-calendar-plus text-primary me-2"></i>Tạo / Mở Kỳ lương Mới</h5>
+            <form asp-controller="Payroll" asp-action="CreatePeriod" method="post" class="row g-2 align-items-end">
+                @Html.AntiForgeryToken()
+                <div class="col-4">
+                    <label class="form-label fs-7 fw-semibold">Tháng</label>
+                    <input type="number" name="month" min="1" max="12" value="@DateTime.Today.Month" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-4">
+                    <label class="form-label fs-7 fw-semibold">Năm</label>
+                    <input type="number" name="year" min="2024" max="2035" value="@DateTime.Today.Year" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-4">
+                    <label class="form-label fs-7 fw-semibold">Công chuẩn</label>
+                    <input type="number" name="standardWorkdays" step="0.5" value="26" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-12 mt-2">
+                    <button type="submit" class="btn btn-sm vnm-btn-primary w-100">
+                        <i class="ti ti-plus me-1"></i>Tạo / Mở Kỳ lương
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+        <div class="vnm-card p-3 h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <h5 class="fw-bold mb-0"><i class="ti ti-list-details text-primary me-2"></i>Danh sách Kỳ lương (@Model.Periods.Count)</h5>
+                @if (Model.SelectedPeriod is not null)
+                {
+                    <div class="d-flex gap-2">
+                        @if (!Model.SelectedPeriod.IsLocked)
+                        {
+                            <form asp-controller="Payroll" asp-action="Calculate" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="payrollPeriodId" value="@Model.SelectedPeriod.Id" />
+                                <button type="submit" class="btn btn-sm btn-primary">
+                                    <i class="ti ti-calculator me-1"></i>Tính lương Kỳ @Model.SelectedPeriod.PeriodCode
+                                </button>
+                            </form>
+                            <form asp-controller="Payroll" asp-action="Lock" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="payrollPeriodId" value="@Model.SelectedPeriod.Id" />
+                                <button type="submit" class="btn btn-sm btn-danger">
+                                    <i class="ti ti-lock me-1"></i>Khóa kỳ
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <span class="badge bg-danger-subtle text-danger px-3 py-2">
+                                <i class="ti ti-lock me-1"></i>Kỳ @Model.SelectedPeriod.PeriodCode ĐÃ KHÓA
+                            </span>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mã kỳ</th>
+                            <th>Ngày cuối kỳ</th>
+                            <th>Số NV</th>
+                            <th class="text-end">Tổng Gross</th>
+                            <th class="text-end">Thuế TNCN</th>
+                            <th class="text-end">Thực nhận</th>
+                            <th>Trạng thái</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in Model.Periods)
+                        {
+                            var active = Model.SelectedPeriod?.Id == p.Id;
+                            <tr class="@(active ? "table-primary" : "")">
+                                <td>
+                                    <a href="/Payroll?periodId=@p.Id" class="fw-bold text-decoration-none">@p.PeriodCode</a>
+                                </td>
+                                <td>@p.EndDate.ToString("dd/MM/yyyy")</td>
+                                <td>@p.EmployeeCount</td>
+                                <td class="text-end">@p.TotalGrossIncome.ToString("N0")</td>
+                                <td class="text-end">@p.TotalPersonalIncomeTax.ToString("N0")</td>
+                                <td class="text-end fw-semibold">@p.TotalNetSalary.ToString("N0")</td>
+                                <td>
+                                    @if (p.IsLocked)
+                                    {
+                                        <span class="badge bg-danger">Locked</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-info text-dark">@p.Status</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Model.SelectedPeriod is not null)
+{
+    <div class="vnm-card p-3">
+        <h5 class="fw-bold mb-3">
+            <i class="ti ti-table text-primary me-2"></i>Chi tiết Bảng lương Kỳ @Model.SelectedPeriod.PeriodCode (Ngày chốt hiệu lực: @Model.SelectedPeriod.EndDate.ToString("dd/MM/yyyy"))
+        </h5>
+        <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Mã NV</th>
+                        <th>Họ và tên</th>
+                        <th>Đơn vị</th>
+                        <th class="text-center">Vùng BHTN</th>
+                        <th class="text-end">Công</th>
+                        <th class="text-end">Thu nhập Gross</th>
+                        <th class="text-end">Tổng BH NLĐ</th>
+                        <th class="text-end">GT Bản thân</th>
+                        <th class="text-end">GT NPT</th>
+                        <th class="text-end">TN Tính thuế</th>
+                        <th class="text-end">Thuế TNCN</th>
+                        <th class="text-end">Thực nhận (Net)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Model.Records)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@r.EmployeeCode</td>
+                            <td>@r.FullName</td>
+                            <td>@r.UnitName</td>
+                            <td class="text-center"><span class="badge bg-secondary-subtle text-dark">Vùng @r.WageRegion</span></td>
+                            <td class="text-end">@r.PayableWorkdays.ToString("0.#")/@r.StandardWorkdays.ToString("0.#")</td>
+                            <td class="text-end">@r.GrossIncome.ToString("N0")</td>
+                            <td class="text-end text-danger">-@r.TotalEmployeeInsurance.ToString("N0")</td>
+                            <td class="text-end">@r.SelfDeductionAmount.ToString("N0")</td>
+                            <td class="text-end">@r.DependentDeductionAmount.ToString("N0")</td>
+                            <td class="text-end">@r.AssessableIncome.ToString("N0")</td>
+                            <td class="text-end text-danger">-@r.PersonalIncomeTax.ToString("N0")</td>
+                            <td class="text-end fw-bold text-primary">@r.NetSalary.ToString("N0")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+

@@ -1,0 +1,248 @@
+@model Vinamilk.HRM.Application.CoreHR.ContractsAndTransfers.ContractsOverviewDto
+@{
+    ViewData["Title"] = "Hợp đồng Lao động, Phụ lục Gia hạn & Cảnh báo Hết hạn 30 Ngày";
+}
+
+<!-- CORE HR NAVIGATION BAR -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Organization" class="btn btn-outline-primary">
+            <i class="ti ti-sitemap me-1"></i>1. Cơ cấu Tổ chức & Ngạch lương
+        </a>
+        <a href="/Employees" class="btn btn-outline-primary">
+            <i class="ti ti-users me-1"></i>2. Danh sách & Hồ sơ 360°
+        </a>
+        <a href="/Contracts" class="btn vnm-btn-primary">
+            <i class="ti ti-file-certificate me-1"></i>3. Hợp đồng & Cảnh báo (@Model.AllContracts.Count HĐ)
+        </a>
+        <a href="/Transfers" class="btn btn-outline-primary">
+            <i class="ti ti-arrows-transfer-up me-1"></i>4. Điều chuyển, Thử việc & Nghỉ hưu
+        </a>
+    </div>
+
+    <div class="d-flex gap-2">
+        <form asp-controller="Contracts" asp-action="RunExpiryAlertJob" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-warning fw-semibold text-dark">
+                <i class="ti ti-bell-ringing me-1"></i>Chạy Hangfire Job Quét Cảnh báo 30 Ngày
+            </button>
+        </form>
+        <button type="button" class="btn vnm-btn-primary" data-bs-toggle="modal" data-bs-target="#addendumModal">
+            <i class="ti ti-file-plus me-1"></i>Lập Phụ lục / Gia hạn HĐLĐ
+        </button>
+    </div>
+</div>
+
+@if (TempData["CoreHrSuccess"] != null)
+{
+    <div class="alert alert-success border-0 shadow-sm d-flex align-items-center gap-2 mb-4">
+        <i class="ti ti-circle-check fs-4"></i>
+        <div class="fw-medium">@TempData["CoreHrSuccess"]</div>
+    </div>
+}
+
+<!-- EXPIRING WITHIN 30 DAYS WARNING PANEL -->
+<div class="vnm-card p-4 mb-4 border-start border-4 border-warning">
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+        <div>
+            <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                <i class="ti ti-alert-triangle text-warning me-2"></i>Cảnh báo Hợp đồng Có thời hạn Cần Đánh giá Tái ký / Gia hạn (@Model.ExpiringWithin30Days.Count HĐ)
+            </h2>
+            <p class="text-secondary fs-6 mb-0">
+                Tự động quét hằng ngày qua <code>ContractExpirationAlertJob</code> (Hangfire) để gửi thông báo trước 30 ngày cho Khối Nhân sự & Quản lý trực tiếp.
+            </p>
+        </div>
+        <span class="vnm-badge vnm-badge-warning"><span class="vnm-badge-dot"></span>SLA: Xử lý trước 30 ngày</span>
+    </div>
+
+    <div class="vnm-table-wrapper">
+        <table class="vnm-table">
+            <thead>
+                <tr>
+                    <th>Số Hợp đồng</th>
+                    <th>Nhân viên</th>
+                    <th>Đơn vị</th>
+                    <th>Loại HĐ</th>
+                    <th>Ngày hết hạn</th>
+                    <th>Mức lương hiện tại</th>
+                    <th class="text-end">Thao tác Nhanh</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var exp in Model.ExpiringWithin30Days)
+                {
+                    <tr>
+                        <td class="font-monospace fw-bold text-primary">@exp.ContractNumber</td>
+                        <td>
+                            <a href="/Employees/Details/@exp.EmployeeId" class="fw-bold text-body text-decoration-none">
+                                @exp.Employee.EmployeeCode — @exp.Employee.FullName
+                            </a>
+                        </td>
+                        <td>@(exp.Employee.OrganizationUnit?.UnitName ?? "Vinamilk")</td>
+                        <td><span class="badge bg-warning-subtle text-warning">@exp.ContractType</span></td>
+                        <td class="font-monospace fw-bold text-danger">@(exp.EndDate?.ToString("dd/MM/yyyy") ?? "-")</td>
+                        <td class="font-monospace fw-bold">@exp.BaseSalary.ToString("N0") ₫</td>
+                        <td class="text-end">
+                            <button type="button"
+                                    class="btn btn-sm vnm-btn-primary"
+                                    onclick="openAddendumForContract(@exp.Id, '@exp.ContractNumber', @exp.BaseSalary)">
+                                <i class="ti ti-calendar-plus me-1"></i>Gia hạn / Ký Phụ lục
+                            </button>
+                            <a href="/Contracts/Print/@exp.Id" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                <i class="ti ti-printer"></i>
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ALL LABOR CONTRACTS TABLE -->
+<div class="vnm-card p-4">
+    <h2 class="fw-bold mb-3" style="font-size: var(--vnm-fs-lg);">
+        <i class="ti ti-files text-primary me-2"></i>Danh sách Toàn bộ Hợp đồng Lao động & Phụ lục (@Model.AllContracts.Count HĐ)
+    </h2>
+
+    <div class="vnm-table-wrapper">
+        <table class="vnm-table vnm-table-mobile-cards">
+            <thead>
+                <tr>
+                    <th>Số Hợp đồng</th>
+                    <th>Mã & Họ tên NV</th>
+                    <th>Loại HĐLĐ</th>
+                    <th>Hiệu lực từ</th>
+                    <th>Đến ngày</th>
+                    <th>Lương HĐ (VNĐ)</th>
+                    <th>Phụ lục</th>
+                    <th>Trạng thái</th>
+                    <th class="text-end">In HĐ & Phụ lục</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in Model.AllContracts)
+                {
+                    <tr>
+                        <td data-label="Số HĐ" class="font-monospace fw-bold text-primary">@c.ContractNumber</td>
+                        <td data-label="Nhân viên">
+                            <a href="/Employees/Details/@c.EmployeeId" class="fw-bold text-decoration-none text-body">
+                                @c.Employee.EmployeeCode — @c.Employee.FullName
+                            </a>
+                            <div class="text-muted fs-7">@(c.Employee.OrganizationUnit?.UnitName)</div>
+                        </td>
+                        <td data-label="Loại HĐ">
+                            <span class="badge bg-primary-subtle text-primary font-monospace">@c.ContractType</span>
+                        </td>
+                        <td data-label="Từ ngày" class="font-monospace">@c.StartDate.ToString("dd/MM/yyyy")</td>
+                        <td data-label="Đến ngày" class="font-monospace">@(c.EndDate?.ToString("dd/MM/yyyy") ?? "Không xác định TH")</td>
+                        <td data-label="Lương HĐ" class="font-monospace fw-bold">@c.BaseSalary.ToString("N0") ₫</td>
+                        <td data-label="Phụ lục">
+                            <span class="badge bg-info-subtle text-info">@c.Addendums.Count PL</span>
+                        </td>
+                        <td data-label="Trạng thái">
+                            <vnm-status-badge status="@(c.Status == "Active" ? "success" : "danger")" text="@c.Status" />
+                        </td>
+                        <td data-label="Thao tác" class="text-end">
+                            <div class="btn-group btn-group-sm">
+                                <button type="button"
+                                        class="btn btn-outline-primary"
+                                        onclick="openAddendumForContract(@c.Id, '@c.ContractNumber', @c.BaseSalary)"
+                                        title="Thêm Phụ lục / Gia hạn">
+                                    <i class="ti ti-file-plus"></i> Phụ lục
+                                </button>
+                                <a href="/Contracts/Print/@c.Id" target="_blank" class="btn vnm-btn-primary" title="In Hợp đồng A4">
+                                    <i class="ti ti-printer me-1"></i>In HĐ
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL LẬP PHỤ LỤC / GIA HẠN HỢP ĐỒNG -->
+<div class="modal fade" id="addendumModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: var(--vnm-radius-lg);">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold">
+                    <i class="ti ti-file-certificate text-primary me-2"></i>Ký Phụ lục Điều chỉnh Lương & Gia hạn HĐLĐ
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Contracts" asp-action="CreateAddendum" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Chọn Hợp đồng gốc</label>
+                        <select name="laborContractId" id="addendumContractSelect" class="form-select">
+                            @foreach (var c in Model.AllContracts.Take(30))
+                            {
+                                <option value="@c.Id">@c.ContractNumber — @c.Employee.FullName (@c.BaseSalary.ToString("N0") ₫)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Số Phụ lục <span class="text-danger">*</span></label>
+                            <input type="text" name="addendumNumber" id="addendumNumInput" class="form-control font-monospace" value="PL01-2026/HĐLĐ-VNM" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Loại Phụ lục</label>
+                            <select name="changeType" class="form-select">
+                                <option value="ExtensionAndSalary">Gia hạn HĐ & Điều chỉnh Lương</option>
+                                <option value="SalaryAdjustment">Điều chỉnh Mức lương 3P</option>
+                                <option value="TermExtension">Gia hạn Thời hạn HĐLĐ</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Ngày có hiệu lực</label>
+                            <input type="date" name="effectiveDate" class="form-control font-monospace" value="2026-12-01" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Gia hạn đến ngày mới</label>
+                            <input type="date" name="extendedEndDate" class="form-control font-monospace" value="2028-12-01" />
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Mức lương cơ bản mới (VNĐ)</label>
+                            <input type="number" name="newBaseSalary" id="addendumSalaryInput" class="form-control font-monospace fw-bold text-primary" value="32000000" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Phụ cấp chức vụ mới (VNĐ)</label>
+                            <input type="number" name="newAllowance" class="form-control font-monospace" value="5000000" />
+                        </div>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label fw-semibold">Tóm tắt nội dung thỏa thuận</label>
+                        <textarea name="contentSummary" class="form-control" rows="2">Gia hạn thời hạn hợp đồng thêm 24 tháng và điều chỉnh bậc lương định kỳ năm 2026.</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn vnm-btn-primary">
+                        <i class="ti ti-check me-1"></i>Ký Phụ lục & Đồng bộ Lương
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openAddendumForContract(contractId, contractNum, currentSalary) {
+            document.getElementById('addendumContractSelect').value = contractId;
+            document.getElementById('addendumNumInput').value = 'PL01-' + contractNum;
+            document.getElementById('addendumSalaryInput').value = Math.round(currentSalary * 1.1);
+            new bootstrap.Modal(document.getElementById('addendumModal')).show();
+        }
+    </script>
+}
+

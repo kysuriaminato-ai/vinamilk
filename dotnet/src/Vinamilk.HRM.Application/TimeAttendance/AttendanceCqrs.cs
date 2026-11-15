@@ -1,0 +1,1086 @@
+using System.Security.Cryptography;
+using System.Text;
+using FluentValidation;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using Vinamilk.HRM.Application.Common.Interfaces;
+using Vinamilk.HRM.Application.Workflows;
+using Vinamilk.HRM.Domain.Entities.Time;
+
+namespace Vinamilk.HRM.Application.TimeAttendance;
+
+// ============================================================================
+// 1. DTOs & GEOFENCING CALCULATOR CHO CHẤM CÔNG, OT & GIẢI TRÌNH CÔNG
+// ============================================================================
+
+public record GeofenceLocationSpec(
+    string Code,
+    string Name,
+    string Address,
+    double Latitude,
+    double Longitude,
+    double AllowedRadiusMeters);
+
+public static class VinamilkGeofenceCalculator
+{
+    public static readonly IReadOnlyList<GeofenceLocationSpec> StandardLocations = new List<GeofenceLocationSpec>
+    {
+        new("HQ_SG", "Trụ sở chính Vinamilk Tower (Q.7, TP.HCM)", "Số 10 Tân Trào, Phường Tân Phú, Quận 7, TP.HCM", 10.7296, 106.7218, 300),
+        new("NM_BD", "Nhà máy Sữa Việt Nam - Mega Factory (Bình Dương)", "KCN Mỹ Phước 2, Bến Cát, Bình Dương", 11.1154, 106.6122, 500),
+        new("NM_TS", "Nhà máy Sữa Tiên Sơn (Bắc Ninh)", "KCN Tiên Sơn, Tiên Du, Bắc Ninh", 21.1189, 105.9864, 500),
+        new("CN_HN", "Chi nhánh Vinamilk Hà Nội (Cầu Giấy)", "Tháp Thành Công, Dịch Vọng Hậu, Cầu Giấy, Hà Nội", 21.0285, 105.7892, 300),
+        new("TT_TN", "Trang trại Bò sữa Tây Ninh (Resort Bò sữa)", "Xã Long Khánh, Huyện Bến Cầu, Tây Ninh", 11.1245, 106.1520, 800)
+    };
+
+    public static double CalculateHaversineMeters(double lat1, double lon1, double lat2, double lon2)
+    {
+        const double EarthRadiusMeters = 6371000.0;
+        double dLat = DegreesToRadians(lat2 - lat1);
+        double dLon = DegreesToRadians(lon2 - lon1);
+
+        double a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                   Math.Cos(DegreesToRadians(lat1)) * Math.Cos(DegreesToRadians(lat2)) *
+                   Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+
+        double c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return Math.Round(EarthRadiusMeters * c, 1);
+    }
+
+    public static (GeofenceLocationSpec Nearest, double DistanceMeters, bool IsWithinGeofence) EvaluateGps(double lat, double lon)
+    {
+        var best = StandardLocations
+            .Select(loc => (Loc: loc, Dist: CalculateHaversineMeters(lat, lon, loc.Latitude, loc.Longitude)))
+            .OrderBy(x => x.Dist)
+            .First();
+
+        return (best.Loc, best.Dist, best.Dist <= best.Loc.AllowedRadiusMeters);
+    }
+
+    public static string GenerateDynamicQrToken(DateTime utcNow)
+    {
+        // Mã QR động thay đổi mỗi 5 phút
+        var windowSlot = utcNow.Ticks / TimeSpan.FromMinutes(5).Ticks;
+        var raw = $"VNM_QR_CHECKIN::{windowSlot}::VinamilkEnterprise2026";
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
+        return "VNM-QR-" + Convert.ToHexString(hash)[..10];
+    }
+
+    private static double DegreesToRadians(double deg) => deg * (Math.PI / 180.0);
+}
+
+public record DailyCellSummaryDto(
+    long? DailyId,
+    int Day,
+    DateOnly Date,
+    string Symbol,
+    string? CheckInText,
+    string? CheckOutText,
+    int LateMinutes,
+    int EarlyLeaveMinutes,
+    decimal OvertimeHours,
+    bool IsManualEdited,
+    string? EditReason,
+    string CssClass);
+
+public record MonthlyAttendanceEmployeeRowDto(
+    int SummaryId,
+    int EmployeeId,
+    string EmployeeCode,
+    string FullName,
+    string UnitName,
+    string PositionName,
+    decimal StandardWorkdays,
+    decimal ActualWorkdays,
+    decimal PaidLeaveDays,
+    decimal HolidayDays,
+    decimal UnpaidLeaveDays,
+    int TotalLateCount,
+    int TotalLateMinutes,
+    decimal TotalOtHours150,
+    decimal TotalOtHours200,
+    decimal TotalOtHours300,
+    decimal TotalNightHours,
+    decimal TotalPayableWorkdays,
+    bool IsLocked,
+    IReadOnlyList<DailyCellSummaryDto> Days);
+
+public record OvertimeRequestItemDto(
+    int Id,
+    int EmployeeId,
+    string EmployeeCode,
+    string FullName,
+    string UnitName,
+    DateOnly OvertimeDate,
+    TimeOnly StartTime,
+    TimeOnly EndTime,
+    decimal RequestedHours,
+    decimal ApprovedHours,
+    string OvertimeRateType,
+    string? Reason,
+    string Status,
+    int? WorkflowInstanceId,
+    decimal EmployeeMonthlyOtTotal,
+    decimal EmployeeYearlyOtTotal);
+
+public record AttendanceLogItemDto(
+    long Id,
+    int EmployeeId,
+    string EmployeeCode,
+    string FullName,
+    DateTime PunchTime,
+    string PunchType,
+    string SourceType,
+    string? DeviceId,
+    decimal? Latitude,
+    decimal? Longitude,
+    string? LocationAddress);
+
+public record AttendanceExplanationItemDto(
+    long DailyAttendanceId,
+    int EmployeeId,
+    string EmployeeCode,
+    string FullName,
+    string UnitName,
+    DateOnly AttendanceDate,
+    string CurrentSymbol,
+    int LateMinutes,
+    int EarlyLeaveMinutes,
+    string? EditReason,
+    bool IsApproved,
+    int? WorkflowInstanceId,
+    string WorkflowStatus);
+
+public record MonthlyAttendanceBoardDto(
+    int Month,
+    int Year,
+    int DaysInMonth,
+    decimal StandardWorkdaysInMonth,
+    bool IsMonthLocked,
+    string? LockedBy,
+    DateTime? LockedAt,
+    int? SelectedUnitId,
+    string? SearchKeyword,
+    string CurrentDynamicQrToken,
+    IReadOnlyList<GeofenceLocationSpec> GeofenceLocations,
+    IReadOnlyList<SimpleLookupDto> Units,
+    IReadOnlyList<SimpleLookupDto> ActiveEmployees,
+    IReadOnlyList<MonthlyAttendanceEmployeeRowDto> MatrixRows,
+    IReadOnlyList<OvertimeRequestItemDto> OvertimeRequests,
+    IReadOnlyList<AttendanceExplanationItemDto> Explanations,
+    IReadOnlyList<AttendanceLogItemDto> RecentLogs,
+    int TotalPresentToday,
+    int TotalLateCasesInMonth,
+    decimal TotalOtHoursInMonth,
+    int TotalBusinessTripDays);
+
+// ============================================================================
+// 2. AUTO-SEED DỮ LIỆU CHẤM CÔNG THÁNG & TỔNG HỢP BẢNG CÔNG
+// ============================================================================
+
+public static class AttendanceBoardSeeder
+{
+    public static decimal CalculateStandardWorkdays(int year, int month)
+    {
+        int days = DateTime.DaysInMonth(year, month);
+        decimal count = 0m;
+        for (int d = 1; d <= days; d++)
+        {
+            var dow = new DateOnly(year, month, d).DayOfWeek;
+            if (dow != DayOfWeek.Sunday)
+                count += 1m;
+        }
+        return count;
+    }
+
+    public static async Task EnsureMonthAttendanceSeededAsync(
+        IApplicationDbContext context,
+        int month,
+        int year,
+        CancellationToken cancellationToken)
+    {
+        var monthStart = new DateOnly(year, month, 1);
+        var monthEnd = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
+
+        if (!await context.DailyAttendances.AnyAsync(d => d.AttendanceDate >= monthStart && d.AttendanceDate <= monthEnd, cancellationToken))
+        {
+            var employees = await context.Employees
+                .AsNoTracking()
+                .Where(e => e.WorkStatus == "Official" || e.WorkStatus == "Probation")
+                .OrderBy(e => e.EmployeeCode)
+                .Take(25)
+                .ToListAsync(cancellationToken);
+
+            var hcShift = await context.WorkShifts.AsNoTracking().FirstOrDefaultAsync(s => s.ShiftCode == "HC", cancellationToken);
+            var holidays = await context.Holidays
+                .AsNoTracking()
+                .Where(h => h.HolidayDate >= monthStart && h.HolidayDate <= monthEnd)
+                .ToDictionaryAsync(h => h.HolidayDate, cancellationToken);
+
+            var dailyList = new List<DailyAttendance>();
+            var logsList = new List<AttendanceLog>();
+            int empIdx = 0;
+
+            foreach (var emp in employees)
+            {
+                for (var dt = monthStart; dt <= monthEnd; dt = dt.AddDays(1))
+                {
+                    if (dt.DayOfWeek == DayOfWeek.Sunday)
+                    {
+                        dailyList.Add(new DailyAttendance
+                        {
+                            EmployeeId = emp.Id,
+                            AttendanceDate = dt,
+                            WorkShiftId = hcShift?.Id,
+                            AttendanceSymbol = "OFF",
+                            WorkingHours = 0m,
+                            WorkdayCount = 0m
+                        });
+                        continue;
+                    }
+
+                    if (holidays.TryGetValue(dt, out var hol))
+                    {
+                        dailyList.Add(new DailyAttendance
+                        {
+                            EmployeeId = emp.Id,
+                            AttendanceDate = dt,
+                            WorkShiftId = hcShift?.Id,
+                            AttendanceSymbol = "L",
+                            WorkingHours = 8m,
+                            WorkdayCount = 1m,
+                            EditReason = hol.HolidayName
+                        });
+                        continue;
+                    }
+
+                    int dayNum = dt.Day;
+                    string symbol = "X";
+                    int lateMins = 0;
+                    int earlyMins = 0;
+                    decimal ot150 = 0m;
+                    decimal workdays = 1.0m;
+                    string? reason = null;
+
+                    if ((empIdx + dayNum) % 29 == 0)
+                    {
+                        symbol = "CT";
+                        reason = "Đi công tác làm việc với nhà phân phối khu vực";
+                    }
+                    else if ((empIdx + dayNum) % 23 == 0)
+                    {
+                        symbol = "P";
+                        reason = "Nghỉ phép năm có kế hoạch";
+                    }
+                    else if ((empIdx + dayNum) % 19 == 0)
+                    {
+                        lateMins = 18;
+                        reason = "Kẹt xe đường Nguyễn Văn Linh (Chờ giải trình)";
+                    }
+                    else if ((empIdx + dayNum) % 17 == 0)
+                    {
+                        ot150 = 2.0m;
+                    }
+
+                    var checkIn = dt.ToDateTime(new TimeOnly(8, 0).AddMinutes(lateMins));
+                    var checkOut = dt.ToDateTime(new TimeOnly(17, 0).AddHours((double)ot150));
+
+                    dailyList.Add(new DailyAttendance
+                    {
+                        EmployeeId = emp.Id,
+                        AttendanceDate = dt,
+                        WorkShiftId = hcShift?.Id,
+                        CheckInTime = symbol == "X" ? checkIn : null,
+                        CheckOutTime = symbol == "X" ? checkOut : null,
+                        AttendanceSymbol = symbol,
+                        WorkingHours = symbol == "X" ? 8.0m : 0m,
+                        WorkdayCount = workdays,
+                        LateMinutes = lateMins,
+                        EarlyLeaveMinutes = earlyMins,
+                        OvertimeHours150 = ot150,
+                        EditReason = reason
+                    });
+
+                    if (dt == monthStart.AddDays(Math.Min(14, DateTime.DaysInMonth(year, month) - 1)) && empIdx < 8)
+                    {
+                        var loc = VinamilkGeofenceCalculator.StandardLocations[empIdx % VinamilkGeofenceCalculator.StandardLocations.Count];
+                        logsList.Add(new AttendanceLog
+                        {
+                            EmployeeId = emp.Id,
+                            PunchTime = checkIn,
+                            PunchType = "CheckIn",
+                            SourceType = empIdx % 2 == 0 ? "MobileGps" : "BiometricDevice",
+                            DeviceId = empIdx % 2 == 0 ? "WEB-GPS-PORTAL" : "ZKTECO-F22-GATE1",
+                            Latitude = (decimal)loc.Latitude,
+                            Longitude = (decimal)loc.Longitude,
+                            LocationAddress = loc.Name
+                        });
+                    }
+                }
+                empIdx++;
+            }
+
+            await context.DailyAttendances.AddRangeAsync(dailyList, cancellationToken);
+            if (logsList.Count > 0)
+                await context.AttendanceLogs.AddRangeAsync(logsList, cancellationToken);
+
+            await context.SaveChangesAsync(cancellationToken);
+
+            // Tổng hợp lên MonthlyAttendanceSummaries
+            await RecalculateSummariesInternalAsync(context, month, year, cancellationToken);
+        }
+
+        // Seed một số đơn OT mẫu nếu chưa có
+        if (!await context.OvertimeRequests.AnyAsync(cancellationToken))
+        {
+            var sampleEmps = await context.Employees.AsNoTracking().OrderBy(e => e.EmployeeCode).Take(4).ToListAsync(cancellationToken);
+            if (sampleEmps.Count >= 2)
+            {
+                await context.OvertimeRequests.AddRangeAsync(new List<OvertimeRequest>
+                {
+                    new()
+                    {
+                        EmployeeId = sampleEmps[0].Id,
+                        OvertimeDate = new DateOnly(year, month, Math.Min(10, DateTime.DaysInMonth(year, month))),
+                        StartTime = new TimeOnly(17, 30),
+                        EndTime = new TimeOnly(20, 30),
+                        RequestedHours = 3.0m,
+                        ApprovedHours = 3.0m,
+                        OvertimeRateType = "OT150",
+                        Reason = "Vận hành dây chuyền tiệt trùng UHT ca cao điểm",
+                        Status = "Approved"
+                    },
+                    new()
+                    {
+                        EmployeeId = sampleEmps[1].Id,
+                        OvertimeDate = new DateOnly(year, month, Math.Min(15, DateTime.DaysInMonth(year, month))),
+                        StartTime = new TimeOnly(8, 0),
+                        EndTime = new TimeOnly(16, 0),
+                        RequestedHours = 8.0m,
+                        ApprovedHours = 0m,
+                        OvertimeRateType = "OT200",
+                        Reason = "Kiểm kê kho nguyên liệu sữa bột định kỳ cuối tuần",
+                        Status = "Pending"
+                    }
+                }, cancellationToken);
+                await context.SaveChangesAsync(cancellationToken);
+            }
+        }
+    }
+
+    public static async Task RecalculateSummariesInternalAsync(
+        IApplicationDbContext context,
+        int month,
+        int year,
+        CancellationToken cancellationToken)
+    {
+        var monthStart = new DateOnly(year, month, 1);
+        var monthEnd = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
+        var standardDays = CalculateStandardWorkdays(year, month);
+
+        var dailies = await context.DailyAttendances
+            .AsNoTracking()
+            .Where(d => d.AttendanceDate >= monthStart && d.AttendanceDate <= monthEnd)
+            .ToListAsync(cancellationToken);
+
+        var existingSummaries = await context.MonthlyAttendanceSummaries
+            .Where(m => m.Month == month && m.Year == year)
+            .ToDictionaryAsync(m => m.EmployeeId, cancellationToken);
+
+        foreach (var group in dailies.GroupBy(d => d.EmployeeId))
+        {
+            var empId = group.Key;
+            if (existingSummaries.TryGetValue(empId, out var existing) && existing.IsLocked)
+                continue;
+
+            decimal actualDays = group.Where(x => x.AttendanceSymbol is "X" or "X/2" or "CT").Sum(x => x.WorkdayCount);
+            decimal paidLeave = group.Where(x => x.AttendanceSymbol is "P" or "P/2").Sum(x => x.WorkdayCount);
+            decimal holidayDays = group.Where(x => x.AttendanceSymbol == "L").Sum(x => x.WorkdayCount);
+            decimal siLeave = group.Where(x => x.AttendanceSymbol is "Om" or "TS").Count();
+            decimal unpaidLeave = group.Where(x => x.AttendanceSymbol is "KL" or "V").Count();
+            int lateCount = group.Count(x => x.LateMinutes > 0);
+            int lateMinutes = group.Sum(x => x.LateMinutes);
+            decimal ot150 = group.Sum(x => x.OvertimeHours150);
+            decimal ot200 = group.Sum(x => x.OvertimeHours200);
+            decimal ot300 = group.Sum(x => x.OvertimeHours300);
+            decimal nightHours = group.Sum(x => x.NightShiftHours);
+            decimal payable = actualDays + paidLeave + holidayDays;
+
+            if (existing != null)
+            {
+                existing.StandardWorkdays = standardDays;
+                existing.ActualWorkdays = actualDays;
+                existing.PaidLeaveDays = paidLeave;
+                existing.HolidayDays = holidayDays;
+                existing.SocialInsuranceLeaveDays = siLeave;
+                existing.UnpaidLeaveDays = unpaidLeave;
+                existing.TotalLateCount = lateCount;
+                existing.TotalLateMinutes = lateMinutes;
+                existing.TotalOtHours150 = ot150;
+                existing.TotalOtHours200 = ot200;
+                existing.TotalOtHours300 = ot300;
+                existing.TotalNightHours = nightHours;
+                existing.TotalPayableWorkdays = payable;
+            }
+            else
+            {
+                await context.MonthlyAttendanceSummaries.AddAsync(new MonthlyAttendanceSummary
+                {
+                    EmployeeId = empId,
+                    Month = month,
+                    Year = year,
+                    StandardWorkdays = standardDays,
+                    ActualWorkdays = actualDays,
+                    PaidLeaveDays = paidLeave,
+                    HolidayDays = holidayDays,
+                    SocialInsuranceLeaveDays = siLeave,
+                    UnpaidLeaveDays = unpaidLeave,
+                    TotalLateCount = lateCount,
+                    TotalLateMinutes = lateMinutes,
+                    TotalOtHours150 = ot150,
+                    TotalOtHours200 = ot200,
+                    TotalOtHours300 = ot300,
+                    TotalNightHours = nightHours,
+                    TotalPayableWorkdays = payable,
+                    IsLocked = false
+                }, cancellationToken);
+            }
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    public static string GetSymbolCssClass(string symbol, int lateMinutes)
+    {
+        if (lateMinutes > 0) return "bg-danger-subtle text-danger fw-bold border-danger-subtle";
+        return symbol switch
+        {
+            "X" => "bg-success-subtle text-success fw-semibold",
+            "X/2" => "bg-warning-subtle text-warning-emphasis fw-semibold",
+            "CT" => "bg-info-subtle text-info-emphasis fw-bold",
+            "P" or "P/2" => "bg-primary-subtle text-primary fw-bold",
+            "L" => "bg-danger text-white fw-bold",
+            "Om" or "TS" => "bg-warning text-dark fw-semibold",
+            "KL" or "V" => "bg-dark-subtle text-dark fw-bold",
+            "OFF" => "bg-light text-muted",
+            _ => "bg-light text-secondary"
+        };
+    }
+}
+
+// ============================================================================
+// 3. QUERY: LẤY BẢNG CÔNG THÁNG, CHẤM CÔNG GPS/QR, OT & GIẢI TRÌNH CÔNG
+// ============================================================================
+
+public record GetMonthlyAttendanceBoardQuery(
+    int? Month = null,
+    int? Year = null,
+    int? UnitId = null,
+    string? SearchKeyword = null) : IRequest<MonthlyAttendanceBoardDto>;
+
+public class GetMonthlyAttendanceBoardQueryHandler : IRequestHandler<GetMonthlyAttendanceBoardQuery, MonthlyAttendanceBoardDto>
+{
+    private readonly IApplicationDbContext _context;
+
+    public GetMonthlyAttendanceBoardQueryHandler(IApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<MonthlyAttendanceBoardDto> Handle(GetMonthlyAttendanceBoardQuery request, CancellationToken cancellationToken)
+    {
+        int month = request.Month ?? DateTime.Today.Month;
+        int year = request.Year ?? DateTime.Today.Year;
+        int daysInMonth = DateTime.DaysInMonth(year, month);
+        var monthStart = new DateOnly(year, month, 1);
+        var monthEnd = new DateOnly(year, month, daysInMonth);
+
+        await AttendanceBoardSeeder.EnsureMonthAttendanceSeededAsync(_context, month, year, cancellationToken);
+
+        var units = await _context.OrganizationUnits
+            .AsNoTracking()
+            .OrderBy(u => u.SortOrder)
+            .Select(u => new SimpleLookupDto(u.Id, u.UnitCode, u.UnitName))
+            .ToListAsync(cancellationToken);
+
+        var activeEmps = await _context.Employees
+            .AsNoTracking()
+            .Where(e => e.WorkStatus == "Official" || e.WorkStatus == "Probation")
+            .OrderBy(e => e.EmployeeCode)
+            .Select(e => new SimpleLookupDto(e.Id, e.EmployeeCode, $"{e.EmployeeCode} - {e.FullName}"))
+            .ToListAsync(cancellationToken);
+
+        var summariesQuery = _context.MonthlyAttendanceSummaries
+            .AsNoTracking()
+            .Include(m => m.Employee)
+                .ThenInclude(e => e.OrganizationUnit)
+            .Include(m => m.Employee)
+                .ThenInclude(e => e.Position)
+            .Where(m => m.Month == month && m.Year == year);
+
+        if (request.UnitId.HasValue && request.UnitId.Value > 0)
+        {
+            var unit = await _context.OrganizationUnits.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UnitId.Value, cancellationToken);
+            if (unit != null && !string.IsNullOrEmpty(unit.TreePath))
+                summariesQuery = summariesQuery.Where(m => m.Employee.OrganizationUnit.TreePath!.StartsWith(unit.TreePath));
+            else
+                summariesQuery = summariesQuery.Where(m => m.Employee.OrganizationUnitId == request.UnitId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.SearchKeyword))
+        {
+            var kw = request.SearchKeyword.Trim().ToLower();
+            summariesQuery = summariesQuery.Where(m =>
+                m.Employee.EmployeeCode.ToLower().Contains(kw) ||
+                m.Employee.FullName.ToLower().Contains(kw));
+        }
+
+        var summaries = await summariesQuery
+            .OrderBy(m => m.Employee.EmployeeCode)
+            .Take(30)
+            .ToListAsync(cancellationToken);
+
+        var empIds = summaries.Select(s => s.EmployeeId).ToList();
+        var dailies = await _context.DailyAttendances
+            .AsNoTracking()
+            .Where(d => empIds.Contains(d.EmployeeId) && d.AttendanceDate >= monthStart && d.AttendanceDate <= monthEnd)
+            .ToListAsync(cancellationToken);
+
+        var dailyMap = dailies
+            .GroupBy(d => (d.EmployeeId, d.AttendanceDate.Day))
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var matrixRows = new List<MonthlyAttendanceEmployeeRowDto>();
+        int totalBusinessTripDays = 0;
+
+        foreach (var sum in summaries)
+        {
+            var dayCells = new List<DailyCellSummaryDto>();
+            for (int day = 1; day <= daysInMonth; day++)
+            {
+                var date = new DateOnly(year, month, day);
+                if (dailyMap.TryGetValue((sum.EmployeeId, day), out var d))
+                {
+                    if (d.AttendanceSymbol == "CT")
+                        totalBusinessTripDays++;
+
+                    var totalOt = d.OvertimeHours150 + d.OvertimeHours200 + d.OvertimeHours300;
+                    dayCells.Add(new DailyCellSummaryDto(
+                        d.Id,
+                        day,
+                        date,
+                        d.AttendanceSymbol,
+                        d.CheckInTime?.ToString("HH:mm"),
+                        d.CheckOutTime?.ToString("HH:mm"),
+                        d.LateMinutes,
+                        d.EarlyLeaveMinutes,
+                        totalOt,
+                        d.IsManualEdited,
+                        d.EditReason,
+                        AttendanceBoardSeeder.GetSymbolCssClass(d.AttendanceSymbol, d.LateMinutes)));
+                }
+                else
+                {
+                    var isSun = date.DayOfWeek == DayOfWeek.Sunday;
+                    var sym = isSun ? "OFF" : "-";
+                    dayCells.Add(new DailyCellSummaryDto(
+                        null,
+                        day,
+                        date,
+                        sym,
+                        null,
+                        null,
+                        0,
+                        0,
+                        0m,
+                        false,
+                        null,
+                        AttendanceBoardSeeder.GetSymbolCssClass(sym, 0)));
+                }
+            }
+
+            matrixRows.Add(new MonthlyAttendanceEmployeeRowDto(
+                sum.Id,
+                sum.EmployeeId,
+                sum.Employee.EmployeeCode,
+                sum.Employee.FullName,
+                sum.Employee.OrganizationUnit.UnitName,
+                sum.Employee.Position.PositionName,
+                sum.StandardWorkdays,
+                sum.ActualWorkdays,
+                sum.PaidLeaveDays,
+                sum.HolidayDays,
+                sum.UnpaidLeaveDays,
+                sum.TotalLateCount,
+                sum.TotalLateMinutes,
+                sum.TotalOtHours150,
+                sum.TotalOtHours200,
+                sum.TotalOtHours300,
+                sum.TotalNightHours,
+                sum.TotalPayableWorkdays,
+                sum.IsLocked,
+                dayCells));
+        }
+
+        // Lấy danh sách đơn OT kèm tính tổng trần OT tháng/năm
+        var otListRaw = await _context.OvertimeRequests
+            .AsNoTracking()
+            .Include(o => o.Employee)
+                .ThenInclude(e => e.OrganizationUnit)
+            .OrderByDescending(o => o.OvertimeDate)
+            .Take(50)
+            .ToListAsync(cancellationToken);
+
+        var otDtos = otListRaw.Select(o =>
+        {
+            var monthlyTotal = otListRaw
+                .Where(x => x.EmployeeId == o.EmployeeId && x.OvertimeDate.Month == o.OvertimeDate.Month && x.OvertimeDate.Year == o.OvertimeDate.Year && x.Status != "Rejected")
+                .Sum(x => x.RequestedHours);
+            var yearlyTotal = otListRaw
+                .Where(x => x.EmployeeId == o.EmployeeId && x.OvertimeDate.Year == o.OvertimeDate.Year && x.Status != "Rejected")
+                .Sum(x => x.RequestedHours);
+
+            return new OvertimeRequestItemDto(
+                o.Id,
+                o.EmployeeId,
+                o.Employee.EmployeeCode,
+                o.Employee.FullName,
+                o.Employee.OrganizationUnit.UnitName,
+                o.OvertimeDate,
+                o.StartTime,
+                o.EndTime,
+                o.RequestedHours,
+                o.ApprovedHours,
+                o.OvertimeRateType,
+                o.Reason,
+                o.Status,
+                o.WorkflowInstanceId,
+                monthlyTotal,
+                yearlyTotal);
+        }).ToList();
+
+        // Lấy danh sách Giải trình chấm công
+        var explainWfMap = await _context.WorkflowInstances
+            .AsNoTracking()
+            .Where(w => w.EntityType == "AttendanceExplanation")
+            .ToDictionaryAsync(w => w.EntityId, cancellationToken);
+
+        var explanationsRaw = await _context.DailyAttendances
+            .AsNoTracking()
+            .Include(d => d.Employee)
+                .ThenInclude(e => e.OrganizationUnit)
+            .Where(d => d.AttendanceDate >= monthStart && d.AttendanceDate <= monthEnd &&
+                        (d.LateMinutes > 0 || d.IsManualEdited || !string.IsNullOrEmpty(d.EditReason)))
+            .OrderByDescending(d => d.AttendanceDate)
+            .Take(40)
+            .ToListAsync(cancellationToken);
+
+        var explanations = explanationsRaw.Select(d =>
+        {
+            explainWfMap.TryGetValue((int)d.Id, out var wf);
+            return new AttendanceExplanationItemDto(
+                d.Id,
+                d.EmployeeId,
+                d.Employee.EmployeeCode,
+                d.Employee.FullName,
+                d.Employee.OrganizationUnit.UnitName,
+                d.AttendanceDate,
+                d.AttendanceSymbol,
+                d.LateMinutes,
+                d.EarlyLeaveMinutes,
+                d.EditReason,
+                d.IsManualEdited,
+                wf?.Id,
+                wf?.Status ?? (d.IsManualEdited ? "Approved" : "NotSubmitted"));
+        }).ToList();
+
+        // Lấy nhật ký chấm công GPS / QR / Máy vân tay gần nhất
+        var recentLogs = await _context.AttendanceLogs
+            .AsNoTracking()
+            .Include(l => l.Employee)
+            .OrderByDescending(l => l.PunchTime)
+            .Take(25)
+            .Select(l => new AttendanceLogItemDto(
+                l.Id,
+                l.EmployeeId,
+                l.Employee.EmployeeCode,
+                l.Employee.FullName,
+                l.PunchTime,
+                l.PunchType,
+                l.SourceType,
+                l.DeviceId,
+                l.Latitude,
+                l.Longitude,
+                l.LocationAddress))
+            .ToListAsync(cancellationToken);
+
+        var firstLocked = summaries.FirstOrDefault(s => s.IsLocked);
+
+        return new MonthlyAttendanceBoardDto(
+            month,
+            year,
+            daysInMonth,
+            AttendanceBoardSeeder.CalculateStandardWorkdays(year, month),
+            firstLocked != null,
+            firstLocked?.LockedBy,
+            firstLocked?.LockedAt,
+            request.UnitId,
+            request.SearchKeyword,
+            VinamilkGeofenceCalculator.GenerateDynamicQrToken(DateTime.UtcNow),
+            VinamilkGeofenceCalculator.StandardLocations,
+            units,
+            activeEmps,
+            matrixRows,
+            otDtos,
+            explanations,
+            recentLogs,
+            summaries.Count(s => s.ActualWorkdays > 0),
+            summaries.Sum(s => s.TotalLateCount),
+            summaries.Sum(s => s.TotalOtHours150 + s.TotalOtHours200 + s.TotalOtHours300),
+            totalBusinessTripDays);
+    }
+}
+
+// ============================================================================
+// 4. COMMAND: CHẤM CÔNG WEB CÓ ĐỊNH VỊ GPS GEOFENCING & QUÉT MÃ QR ĐỘNG
+// ============================================================================
+
+public record WebCheckInCommand(
+    int EmployeeId,
+    string PunchType, // CheckIn, CheckOut
+    string SourceType, // MobileGps, WebQr
+    double Latitude,
+    double Longitude,
+    string? QrToken = null) : IRequest<string>;
+
+public class WebCheckInCommandHandler : IRequestHandler<WebCheckInCommand, string>
+{
+    private readonly IApplicationDbContext _context;
+
+    public WebCheckInCommandHandler(IApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<string> Handle(WebCheckInCommand request, CancellationToken cancellationToken)
+    {
+        var emp = await _context.Employees
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == request.EmployeeId, cancellationToken)
+            ?? throw new KeyNotFoundException("Không tìm thấy nhân viên chấm công.");
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+
+        // Kiểm tra bảng công tháng đã khóa chưa
+        var isLocked = await _context.MonthlyAttendanceSummaries
+            .AsNoTracking()
+            .AnyAsync(m => m.Month == today.Month && m.Year == today.Year && m.IsLocked, cancellationToken);
+
+        if (isLocked)
+            throw new InvalidOperationException($"Bảng chấm công tháng {today.Month:D2}/{today.Year} đã khóa, không thể chấm công bổ sung.");
+
+        // Đánh giá tọa độ GPS Haversine
+        var (nearestLoc, distMeters, isWithinGeofence) = VinamilkGeofenceCalculator.EvaluateGps(request.Latitude, request.Longitude);
+
+        // Kiểm tra mã QR động nếu chọn phương thức WebQr
+        if (request.SourceType == "WebQr" && !string.IsNullOrWhiteSpace(request.QrToken))
+        {
+            var expectedQr = VinamilkGeofenceCalculator.GenerateDynamicQrToken(DateTime.UtcNow);
+            if (!request.QrToken.Trim().Equals(expectedQr, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Mã QR động '{request.QrToken}' không hợp lệ hoặc đã hết hạn 5 phút (Mã hiện hành: {expectedQr}).");
+        }
+
+        var nowLocal = DateTime.Now;
+        var addressNote = $"{nearestLoc.Name} (Khoảng cách GPS: {distMeters:0.#}m - {(isWithinGeofence ? "Hợp lệ trong bán kính" : "Ngoài bán kính chuẩn")})";
+
+        await _context.AttendanceLogs.AddAsync(new AttendanceLog
+        {
+            EmployeeId = emp.Id,
+            PunchTime = nowLocal,
+            PunchType = request.PunchType,
+            SourceType = request.SourceType,
+            DeviceId = request.SourceType == "WebQr" ? "VINAMILK-QR-KIOSK" : "VINAMILK-WEB-GPS",
+            Latitude = (decimal)request.Latitude,
+            Longitude = (decimal)request.Longitude,
+            LocationAddress = addressNote
+        }, cancellationToken);
+
+        var shift = await _context.WorkShifts
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.ShiftCode == "HC", cancellationToken);
+
+        var daily = await _context.DailyAttendances
+            .FirstOrDefaultAsync(d => d.EmployeeId == emp.Id && d.AttendanceDate == today, cancellationToken);
+
+        var shiftStart = shift?.StartTime ?? new TimeOnly(8, 0);
+        var graceMins = shift?.GraceLateMinutes ?? 5;
+        int lateMins = 0;
+
+        if (request.PunchType == "CheckIn")
+        {
+            var punchTimeOnly = TimeOnly.FromDateTime(nowLocal);
+            var threshold = shiftStart.AddMinutes(graceMins);
+            if (punchTimeOnly > threshold)
+                lateMins = (int)(punchTimeOnly - shiftStart).TotalMinutes;
+        }
+
+        if (daily == null)
+        {
+            daily = new DailyAttendance
+            {
+                EmployeeId = emp.Id,
+                AttendanceDate = today,
+                WorkShiftId = shift?.Id,
+                CheckInTime = request.PunchType == "CheckIn" ? nowLocal : null,
+                CheckOutTime = request.PunchType == "CheckOut" ? nowLocal : null,
+                AttendanceSymbol = "X",
+                WorkingHours = 8.0m,
+                WorkdayCount = 1.0m,
+                LateMinutes = lateMins,
+                EditReason = addressNote
+            };
+            await _context.DailyAttendances.AddAsync(daily, cancellationToken);
+        }
+        else
+        {
+            if (request.PunchType == "CheckIn")
+            {
+                daily.CheckInTime = nowLocal;
+                daily.LateMinutes = lateMins;
+            }
+            else
+            {
+                daily.CheckOutTime = nowLocal;
+            }
+            daily.AttendanceSymbol = "X";
+            daily.WorkdayCount = 1.0m;
+            daily.EditReason = addressNote;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        await AttendanceBoardSeeder.RecalculateSummariesInternalAsync(_context, today.Month, today.Year, cancellationToken);
+
+        return $"Chấm công {request.PunchType} thành công cho {emp.FullName} lúc {nowLocal:HH:mm:ss} tại {addressNote}.";
+    }
+}
+
+// ============================================================================
+// 5. COMMAND: ĐĂNG KÝ LÀM THÊM GIỜ (OVERTIME) QUA WORKFLOW & KIỂM TRA TRẦN OT
+// ============================================================================
+
+public record SubmitOvertimeRequestCommand(
+    int EmployeeId,
+    DateOnly OvertimeDate,
+    TimeOnly StartTime,
+    TimeOnly EndTime,
+    string OvertimeRateType, // OT150, OT200, OT300
+    string Reason) : IRequest<int>;
+
+public class SubmitOvertimeRequestCommandHandler : IRequestHandler<SubmitOvertimeRequestCommand, int>
+{
+    private readonly IApplicationDbContext _context;
+    private readonly ISender _sender;
+
+    public SubmitOvertimeRequestCommandHandler(IApplicationDbContext context, ISender sender)
+    {
+        _context = context;
+        _sender = sender;
+    }
+
+    public async Task<int> Handle(SubmitOvertimeRequestCommand request, CancellationToken cancellationToken)
+    {
+        double hours = (request.EndTime - request.StartTime).TotalHours;
+        if (hours <= 0) hours += 24.0; // Ca qua đêm
+        decimal requestedHours = Math.Round((decimal)hours, 1);
+
+        if (requestedHours <= 0 || requestedHours > 12)
+            throw new InvalidOperationException("Số giờ đăng ký OT trong ngày phải từ 0.5 đến 12 giờ.");
+
+        // Kiểm tra trần OT 40 giờ/tháng và 200 giờ/năm theo Điều 107 BLLĐ 2019
+        var monthOt = await _context.OvertimeRequests
+            .AsNoTracking()
+            .Where(o => o.EmployeeId == request.EmployeeId &&
+                        o.OvertimeDate.Month == request.OvertimeDate.Month &&
+                        o.OvertimeDate.Year == request.OvertimeDate.Year &&
+                        o.Status != "Rejected" && o.Status != "Cancelled")
+            .SumAsync(o => o.RequestedHours, cancellationToken);
+
+        if (monthOt + requestedHours > 40m)
+            throw new InvalidOperationException($"Vượt trần làm thêm giờ tháng! Tổng OT tháng hiện tại ({monthOt:0.#}h) + đơn mới ({requestedHours:0.#}h) vượt giới hạn 40 giờ/tháng theo Điều 107 BLLĐ 2019.");
+
+        var yearOt = await _context.OvertimeRequests
+            .AsNoTracking()
+            .Where(o => o.EmployeeId == request.EmployeeId &&
+                        o.OvertimeDate.Year == request.OvertimeDate.Year &&
+                        o.Status != "Rejected" && o.Status != "Cancelled")
+            .SumAsync(o => o.RequestedHours, cancellationToken);
+
+        if (yearOt + requestedHours > 200m)
+            throw new InvalidOperationException($"Vượt trần làm thêm giờ năm ({yearOt + requestedHours:0.#}/200 giờ) theo quy định Bộ luật Lao động 2019.");
+
+        var otEntity = new OvertimeRequest
+        {
+            EmployeeId = request.EmployeeId,
+            OvertimeDate = request.OvertimeDate,
+            StartTime = request.StartTime,
+            EndTime = request.EndTime,
+            RequestedHours = requestedHours,
+            ApprovedHours = 0m,
+            OvertimeRateType = request.OvertimeRateType,
+            Reason = request.Reason.Trim(),
+            Status = "Pending"
+        };
+
+        await _context.OvertimeRequests.AddAsync(otEntity, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        // Khởi tạo luồng phê duyệt Workflow Engine dùng chung
+        var wfInstanceId = await _sender.Send(new StartWorkflowInstanceCommand(
+            "OvertimeRequest",
+            otEntity.Id,
+            request.EmployeeId,
+            $"Đăng ký OT {request.OvertimeRateType} ({requestedHours:0.#}h ngày {request.OvertimeDate:dd/MM/yyyy})",
+            requestedHours,
+            "/Attendance?tab=overtime"), cancellationToken);
+
+        otEntity.WorkflowInstanceId = wfInstanceId;
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return otEntity.Id;
+    }
+}
+
+// ============================================================================
+// 6. COMMAND: GỬI GIẢI TRÌNH CHẤM CÔNG / BỔ SUNG CÔNG QUA WORKFLOW
+// ============================================================================
+
+public record SubmitAttendanceExplanationCommand(
+    int EmployeeId,
+    DateOnly AttendanceDate,
+    TimeOnly ProposedCheckIn,
+    TimeOnly ProposedCheckOut,
+    string Reason) : IRequest<int>;
+
+public class SubmitAttendanceExplanationCommandHandler : IRequestHandler<SubmitAttendanceExplanationCommand, int>
+{
+    private readonly IApplicationDbContext _context;
+    private readonly ISender _sender;
+
+    public SubmitAttendanceExplanationCommandHandler(IApplicationDbContext context, ISender sender)
+    {
+        _context = context;
+        _sender = sender;
+    }
+
+    public async Task<int> Handle(SubmitAttendanceExplanationCommand request, CancellationToken cancellationToken)
+    {
+        var isLocked = await _context.MonthlyAttendanceSummaries
+            .AsNoTracking()
+            .AnyAsync(m => m.Month == request.AttendanceDate.Month && m.Year == request.AttendanceDate.Year && m.IsLocked, cancellationToken);
+
+        if (isLocked)
+            throw new InvalidOperationException($"Bảng công tháng {request.AttendanceDate.Month:D2}/{request.AttendanceDate.Year} đã khóa, không thể gửi giải trình.");
+
+        var daily = await _context.DailyAttendances
+            .FirstOrDefaultAsync(d => d.EmployeeId == request.EmployeeId && d.AttendanceDate == request.AttendanceDate, cancellationToken);
+
+        var explainDetail = $"Đề xuất giờ: {request.ProposedCheckIn:HH\\:mm}-{request.ProposedCheckOut:HH\\:mm} | Lý do: {request.Reason.Trim()}";
+
+        if (daily == null)
+        {
+            daily = new DailyAttendance
+            {
+                EmployeeId = request.EmployeeId,
+                AttendanceDate = request.AttendanceDate,
+                CheckInTime = request.AttendanceDate.ToDateTime(request.ProposedCheckIn),
+                CheckOutTime = request.AttendanceDate.ToDateTime(request.ProposedCheckOut),
+                AttendanceSymbol = "M",
+                WorkingHours = 8m,
+                WorkdayCount = 1m,
+                IsManualEdited = false,
+                EditReason = explainDetail
+            };
+            await _context.DailyAttendances.AddAsync(daily, cancellationToken);
+        }
+        else
+        {
+            daily.EditReason = explainDetail;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        var wfId = await _sender.Send(new StartWorkflowInstanceCommand(
+            "AttendanceExplanation",
+            (int)daily.Id,
+            request.EmployeeId,
+            $"Giải trình công ngày {request.AttendanceDate:dd/MM/yyyy} ({request.ProposedCheckIn:HH\\:mm}-{request.ProposedCheckOut:HH\\:mm})",
+            1m,
+            "/Attendance?tab=explanations"), cancellationToken);
+
+        return wfId;
+    }
+}
+
+// ============================================================================
+// 7. COMMAND: TÍNH LẠI & KHÓA / MỞ KHÓA BẢNG CÔNG THÁNG
+// ============================================================================
+
+public record RecalculateMonthlyAttendanceCommand(int Month, int Year) : IRequest<int>;
+
+public class RecalculateMonthlyAttendanceCommandHandler : IRequestHandler<RecalculateMonthlyAttendanceCommand, int>
+{
+    private readonly IApplicationDbContext _context;
+
+    public RecalculateMonthlyAttendanceCommandHandler(IApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<int> Handle(RecalculateMonthlyAttendanceCommand request, CancellationToken cancellationToken)
+    {
+        await AttendanceBoardSeeder.RecalculateSummariesInternalAsync(_context, request.Month, request.Year, cancellationToken);
+        return await _context.MonthlyAttendanceSummaries
+            .AsNoTracking()
+            .CountAsync(m => m.Month == request.Month && m.Year == request.Year, cancellationToken);
+    }
+}
+
+public record ToggleLockMonthlyAttendanceCommand(
+    int Month,
+    int Year,
+    bool LockState) : IRequest<string>;
+
+public class ToggleLockMonthlyAttendanceCommandHandler : IRequestHandler<ToggleLockMonthlyAttendanceCommand, string>
+{
+    private readonly IApplicationDbContext _context;
+    private readonly ICurrentUserService _currentUser;
+
+    public ToggleLockMonthlyAttendanceCommandHandler(
+        IApplicationDbContext context,
+        ICurrentUserService currentUser)
+    {
+        _context = context;
+        _currentUser = currentUser;
+    }
+
+    public async Task<string> Handle(ToggleLockMonthlyAttendanceCommand request, CancellationToken cancellationToken)
+    {
+        var summaries = await _context.MonthlyAttendanceSummaries
+            .Where(m => m.Month == request.Month && m.Year == request.Year)
+            .ToListAsync(cancellationToken);
+
+        var actor = _currentUser.Username ?? "huyen.ntt (CHRO)";
+        foreach (var s in summaries)
+        {
+            s.IsLocked = request.LockState;
+            s.LockedAt = request.LockState ? DateTime.UtcNow : null;
+            s.LockedBy = request.LockState ? actor : null;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return request.LockState
+            ? $"Đã KHÓA bảng chấm công tháng {request.Month:D2}/{request.Year} ({summaries.Count} nhân viên) để chuyển sang tính lương."
+            : $"Đã MỞ KHÓA bảng chấm công tháng {request.Month:D2}/{request.Year} để điều chỉnh.";
+    }
+}
+

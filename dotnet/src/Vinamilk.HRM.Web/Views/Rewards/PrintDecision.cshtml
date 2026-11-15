@@ -1,0 +1,67 @@
+@model Vinamilk.HRM.Application.Talent.RewardDisciplineItemDto
+@{
+    Layout = "_LayoutPrint";
+    ViewData["Title"] = $"Quyết định {Model.DecisionNumber}";
+    bool isReward = Model.Type == "Reward";
+}
+
+<div class="p-4">
+    <div class="row mb-4">
+        <div class="col-6 text-center">
+            <div class="fw-bold text-uppercase">CÔNG TY CỔ PHẦN SỮA VIỆT NAM</div>
+            <div class="fw-bold text-decoration-underline">VINAMILK</div>
+            <div class="mt-2 font-monospace">Số: @Model.DecisionNumber</div>
+        </div>
+        <div class="col-6 text-center">
+            <div class="fw-bold text-uppercase">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+            <div class="fw-bold text-decoration-underline">Độc lập - Tự do - Hạnh phúc</div>
+            <div class="fst-italic mt-2">TP. Hồ Chí Minh, ngày @Model.DecisionDate.Day tháng @Model.DecisionDate.Month năm @Model.DecisionDate.Year</div>
+        </div>
+    </div>
+
+    <div class="text-center my-4">
+        <h3 class="fw-bold text-uppercase mb-1">QUYẾT ĐỊNH</h3>
+        <div class="fw-semibold fs-5">V/v: @(isReward ? "Khen thưởng Cá nhân có Thành tích Xuất sắc" : "Thi hành Kỷ luật Lao động")</div>
+    </div>
+
+    <div class="mb-3">
+        <p class="mb-1 fst-italic">- Căn cứ Bộ luật Lao động nước CHXHCN Việt Nam năm 2019;</p>
+        <p class="mb-1 fst-italic">- Căn cứ Điều lệ Tổ chức & Hoạt động và Nội quy Lao động của Công ty Cổ phần Sữa Việt Nam (Vinamilk);</p>
+        <p class="mb-1 fst-italic">- Xét đề nghị của Hội đồng Thi đua Khen thưởng / Kỷ luật và Giám đốc Nhân sự;</p>
+    </div>
+
+    <div class="text-center fw-bold fs-5 my-3">QUYẾT ĐỊNH:</div>
+
+    <p><strong>Điều 1.</strong> @(isReward ? "Khen thưởng" : "Áp dụng hình thức kỷ luật lao động") đối với Ông/Bà có tên sau:</p>
+    <table class="table table-bordered my-3">
+        <tbody>
+            <tr><th style="width: 35%;">Họ và tên nhân sự</th><td class="fw-bold">@Model.EmployeeName (<span class="font-monospace">@Model.EmployeeCode</span>)</td></tr>
+            <tr><th>Chức danh & Đơn vị công tác</th><td>@Model.PositionName — @Model.UnitName</td></tr>
+            <tr><th>Hình thức @(isReward ? "Khen thưởng" : "Kỷ luật")</th><td class="fw-bold @(isReward ? "text-success" : "text-danger")">@Model.CategoryName</td></tr>
+            <tr><th>Mức tiền @(isReward ? "Thưởng" : "Khấu trừ / Bồi hoàn")</th><td class="font-monospace fw-bold">@Model.Amount.ToString("N0") VNĐ</td></tr>
+            <tr><th>Lý do cụ thể</th><td>@Model.Reason</td></tr>
+        </tbody>
+    </table>
+
+    <p><strong>Điều 2.</strong> Quyết định này có hiệu lực thi hành kể từ ngày <strong>@Model.EffectiveDate.ToString("dd/MM/yyyy")</strong>.</p>
+    <p><strong>Điều 3.</strong> Giám đốc Nhân sự, Trưởng phòng Tài chính - Kế toán, Trưởng đơn vị @Model.UnitName và Ông/Bà @Model.EmployeeName chịu trách nhiệm thi hành Quyết định này.</p>
+
+    <div class="row mt-5 pt-3">
+        <div class="col-6">
+            <div class="fw-bold fs-7">Nơi nhận:</div>
+            <ul class="fs-7 ps-3 mb-0">
+                <li>Như Điều 3 (để thực hiện);</li>
+                <li>Phòng Nhân sự & C&B (lưu hồ sơ, tính lương);</li>
+                <li>Lưu: Văn thư Vinamilk.</li>
+            </ul>
+        </div>
+        <div class="col-6 text-center">
+            <div class="fw-bold text-uppercase">TUQ. TỔNG GIÁM ĐỐC</div>
+            <div class="fw-bold text-uppercase">GIÁM ĐỐC NHÂN SỰ (CHRO)</div>
+            <div class="fs-7 text-muted fst-italic">(Ký tên, đóng dấu)</div>
+            <div style="height: 80px;"></div>
+            <div class="fw-bold">Nguyễn Thị Thanh Huyền</div>
+        </div>
+    </div>
+</div>
+

@@ -1,0 +1,132 @@
+@model Vinamilk.HRM.Application.Talent.JobPostingItemDto
+@{
+    Layout = "_LayoutAuth";
+    ViewData["Title"] = $"{Model.Title} — Tuyển dụng Vinamilk Careers";
+}
+
+@section Styles {
+    <meta name="description" content="Ứng tuyển vị trí @Model.Title tại @Model.UnitName (@Model.WorkLocation). Mức lương: @Model.SalaryRangeText." />
+    <meta property="og:title" content="@Model.Title — Vinamilk Careers" />
+    <script type="application/ld+json">
+    {
+      "@@context": "https://schema.org/",
+      "@@type": "JobPosting",
+      "title": "@Model.Title",
+      "description": "@Model.JobDescription",
+      "datePosted": "@Model.PublishDate.ToString("yyyy-MM-dd")",
+      "validThrough": "@Model.ClosingDate.ToString("yyyy-MM-dd")",
+      "hiringOrganization": {
+        "@@type": "Organization",
+        "name": "Công ty Cổ phần Sữa Việt Nam (Vinamilk)"
+      },
+      "jobLocation": {
+        "@@type": "Place",
+        "address": "@Model.WorkLocation"
+      }
+    }
+    </script>
+}
+
+<div class="container py-5" style="max-width: 1080px;">
+    <div class="mb-3">
+        <a href="/Careers" class="text-decoration-none fw-semibold"><i class="ti ti-arrow-left me-1"></i>Quay lại danh sách việc làm Vinamilk Careers</a>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success border-0 shadow-sm mb-4">
+            <i class="ti ti-circle-check me-2"></i>@TempData["SuccessMessage"]
+        </div>
+    }
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger border-0 shadow-sm mb-4">
+            <i class="ti ti-alert-triangle me-2"></i>@TempData["ErrorMessage"]
+        </div>
+    }
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="vnm-card p-4 shadow-sm">
+                <span class="badge bg-primary-subtle text-primary font-monospace mb-2">@Model.PostingCode</span>
+                <h2 class="fw-bold mb-2">@Model.Title</h2>
+                <div class="d-flex flex-wrap gap-3 text-secondary fs-7 mb-4 pb-3 border-bottom">
+                    <span><i class="ti ti-building me-1 text-primary"></i>@Model.UnitName</span>
+                    <span><i class="ti ti-map-pin me-1 text-primary"></i>@Model.WorkLocation</span>
+                    <span><i class="ti ti-cash me-1 text-success"></i><strong>@Model.SalaryRangeText</strong></span>
+                    <span><i class="ti ti-calendar me-1 text-danger"></i>Hạn nộp: @Model.ClosingDate.ToString("dd/MM/yyyy")</span>
+                </div>
+
+                <h5 class="fw-bold text-primary">1. Mô tả công việc</h5>
+                <p class="mb-4">@Model.JobDescription</p>
+
+                <h5 class="fw-bold text-primary">2. Yêu cầu ứng viên</h5>
+                <p class="mb-4">@Model.JobRequirements</p>
+
+                <h5 class="fw-bold text-primary">3. Quyền lợi & Phúc lợi Vinamilk</h5>
+                <p class="mb-0">@Model.Benefits</p>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="vnm-card p-4 shadow-sm border-top border-4 border-primary">
+                <h4 class="fw-bold mb-2"><i class="ti ti-send text-primary me-2"></i>Nộp Hồ sơ Ứng tuyển Online</h4>
+                <p class="text-secondary fs-7 mb-3">Hồ sơ của bạn sẽ được chuyển trực tiếp vào Pipeline Tuyển dụng (ATS) của Bộ phận Nhân sự Vinamilk.</p>
+
+                <form asp-action="Apply" method="post" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="jobPostingId" value="@Model.Id" />
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Họ và tên (*)</label>
+                        <input type="text" name="fullName" class="form-control" required />
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Ngày sinh</label>
+                            <input type="date" name="dateOfBirth" class="form-control" value="1997-05-15" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Giới tính</label>
+                            <select name="gender" class="form-select">
+                                <option value="Nam">Nam</option>
+                                <option value="Nữ">Nữ</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Số điện thoại (*)</label>
+                            <input type="text" name="phoneNumber" class="form-control" required />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Email (*)</label>
+                            <input type="email" name="email" class="form-control" required />
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Chuyên ngành đào tạo</label>
+                        <input type="text" name="major" class="form-control" placeholder="VD: Kỹ thuật Phần mềm / Công nghệ Thực phẩm" />
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Số năm kinh nghiệm</label>
+                            <input type="number" step="0.5" name="yearsOfExperience" class="form-control" value="3.0" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Mức lương mong muốn (VNĐ)</label>
+                            <input type="number" step="1000000" name="expectedSalary" class="form-control" value="30000000" />
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Đính kèm CV (.pdf, .docx)</label>
+                        <input type="file" name="cvFile" accept=".pdf,.doc,.docx" class="form-control" />
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">
+                        <i class="ti ti-upload me-1"></i>Gửi Hồ sơ Ứng tuyển
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+

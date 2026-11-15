@@ -1,0 +1,247 @@
+@model Vinamilk.HRM.Web.Controllers.RbacMatrixViewModel
+@{
+    ViewData["Title"] = "Ma trận Phân quyền RBAC (Role × Permission) & Data Scope";
+    var groupedPermissions = Model.Permissions
+        .GroupBy(p => p.ModuleName)
+        .ToList();
+}
+
+<!-- TOP NAVIGATION TABS FOR SECURITY SUITE -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="/Security/RbacMatrix" class="btn vnm-btn-primary">
+            <i class="ti ti-shield-lock me-1"></i>1. Ma trận RBAC & Data Scope
+        </a>
+        <a href="/Security/Sessions" class="btn btn-outline-primary">
+            <i class="ti ti-devices me-1"></i>2. Quản lý Phiên & Mã hóa PII
+        </a>
+        <a href="/Security/AuditLogs" class="btn btn-outline-primary">
+            <i class="ti ti-history me-1"></i>3. Nhật ký Kiểm toán (AuditLog JSON Diff)
+        </a>
+        <a href="/Auth/Setup2FA" class="btn btn-outline-secondary">
+            <i class="ti ti-device-mobile-lock me-1"></i>4. Cấu hình 2FA TOTP
+        </a>
+    </div>
+    <span class="vnm-badge vnm-badge-success">
+        <span class="vnm-badge-dot"></span>Policy-Based Authorization • @Model.Roles.Count Roles × @Model.Permissions.Count Permissions
+    </span>
+</div>
+
+@if (TempData["SecuritySuccess"] != null)
+{
+    <div class="alert alert-success border-0 shadow-sm d-flex align-items-center gap-2 mb-4">
+        <i class="ti ti-circle-check fs-4"></i>
+        <div class="fw-medium">@TempData["SecuritySuccess"]</div>
+    </div>
+}
+
+<!-- SECTION 1: ROLE × PERMISSION CHECKBOX MATRIX -->
+<div class="vnm-card p-4 mb-4">
+    <form asp-controller="Security" asp-action="SaveRbacMatrix" method="post">
+        @Html.AntiForgeryToken()
+
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <div>
+                <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+                    <i class="ti ti-table-options text-primary me-2"></i>1. Ma trận Phân quyền Chi tiết (Role × Permission Matrix)
+                </h2>
+                <p class="text-secondary fs-6 mb-0">
+                    Đánh dấu checkbox để cấp/thu hồi quyền theo từng Vai trò. Thay đổi được áp dụng cho <code>PermissionAuthorizationHandler</code> và ghi vào <code>system.AuditLogs</code>.
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAllCheckboxes(true)">
+                    <i class="ti ti-checkbox me-1"></i>Chọn tất cả
+                </button>
+                <button type="submit" class="btn vnm-btn-primary">
+                    <i class="ti ti-device-floppy me-1"></i>Lưu Ma trận Phân quyền
+                </button>
+            </div>
+        </div>
+
+        <div class="vnm-table-wrapper" style="max-height: 560px; overflow-y: auto;">
+            <table class="vnm-table align-middle">
+                <thead class="sticky-top">
+                    <tr>
+                        <th style="min-width: 240px;">Module / Quyền (`PermissionCode`)</th>
+                        @foreach (var role in Model.Roles)
+                        {
+                            <th class="text-center" style="min-width: 125px;">
+                                <div class="fw-bold text-primary">@role.RoleName</div>
+                                <div class="font-monospace text-muted" style="font-size: 0.68rem;">Scope: @role.DefaultDataScope</div>
+                            </th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var moduleGroup in groupedPermissions)
+                    {
+                        <tr style="background: var(--vnm-primary-soft);">
+                            <td colspan="@(Model.Roles.Count + 1)" class="fw-extrabold text-primary py-2 px-3">
+                                <i class="ti ti-folder-bolt me-1"></i>MODULE: @moduleGroup.Key.ToUpperInvariant() (@moduleGroup.Count() quyền)
+                            </td>
+                        </tr>
+                        @foreach (var perm in moduleGroup)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="fw-semibold">@perm.DisplayName</div>
+                                    <code class="fs-7 text-muted font-monospace">@perm.PermissionCode</code>
+                                </td>
+                                @foreach (var role in Model.Roles)
+                                {
+                                    var pairKey = $"{role.Id}_{perm.Id}";
+                                    var isChecked = role.RoleCode == "SUPER_ADMIN" || Model.GrantedPairs.Contains(pairKey);
+                                    var isSuperAdmin = role.RoleCode == "SUPER_ADMIN";
+                                    <td class="text-center">
+                                        <input type="checkbox"
+                                               class="form-check-input rbac-checkbox"
+                                               name="grantedPairs"
+                                               value="@pairKey"
+                                               style="width: 1.15rem; height: 1.15rem; cursor: pointer;"
+                                               @(isChecked ? "checked" : "")
+                                               @(isSuperAdmin ? "disabled" : "")
+                                               aria-label="@role.RoleName - @perm.PermissionCode" />
+                                        @if (isSuperAdmin)
+                                        {
+                                            <input type="hidden" name="grantedPairs" value="@pairKey" />
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </form>
+</div>
+
+<!-- SECTION 2: GÁN VAI TRÒ, DATA SCOPE & CHÍNH SÁCH BẢO MẬT CHO TÀI KHOẢN -->
+<div class="vnm-card p-4">
+    <div class="mb-3">
+        <h2 class="fw-bold mb-1" style="font-size: var(--vnm-fs-lg);">
+            <i class="ti ti-user-shield text-primary me-2"></i>2. Gán Vai trò (Role), Phạm vi Dữ liệu (Data Scope) & Mở khóa Tài khoản
+        </h2>
+        <p class="text-secondary fs-6 mb-0">
+            Cấu hình liên kết <code>User ↔ Employee</code>, phạm vi dữ liệu (<strong>All: Toàn công ty</strong>, <strong>UnitTree: Khối/Nhà máy & cấp dưới</strong>, <strong>Department: Phòng ban</strong>, <strong>SelfOnly: Bản thân</strong>) và cờ bắt buộc đổi mật khẩu lần đầu.
+        </p>
+    </div>
+
+    <div class="vnm-table-wrapper">
+        <table class="vnm-table vnm-table-mobile-cards">
+            <thead>
+                <tr>
+                    <th>Tài khoản</th>
+                    <th>Nhân sự Liên kết</th>
+                    <th>Vai trò (Role)</th>
+                    <th>Phạm vi Dữ liệu (Data Scope)</th>
+                    <th>Đơn vị Phụ trách</th>
+                    <th>Bảo mật / Khóa</th>
+                    <th class="text-end">Cập nhật</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in Model.Users)
+                {
+                    var currentRole = u.UserRoles.Select(ur => ur.Role).FirstOrDefault() ?? Model.Roles.Last();
+                    var currentScope = currentRole.DefaultDataScope;
+                    var currentScopedUnitId = u.DataScopes.Select(ds => (int?)ds.OrganizationUnitId).FirstOrDefault()
+                                              ?? u.Employee?.OrganizationUnitId;
+                    var isLocked = u.LockoutEnd.HasValue && u.LockoutEnd.Value > DateTime.UtcNow;
+
+                    <tr>
+                        <td data-label="Tài khoản">
+                            <div class="fw-bold font-monospace text-primary">@u.Username</div>
+                            <div class="text-muted fs-7">@u.Email</div>
+                        </td>
+                        <td data-label="Nhân sự">
+                            @if (u.Employee != null)
+                            {
+                                <span class="badge bg-primary-subtle text-primary font-monospace">@u.Employee.EmployeeCode</span>
+                                <div class="fw-semibold mt-1">@u.Employee.FullName</div>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary-subtle text-secondary">Tài khoản Hệ thống</span>
+                            }
+                        </td>
+                        <td colspan="5" class="p-2">
+                            <form asp-controller="Security" asp-action="UpdateUserAccess" method="post" class="row g-2 align-items-center">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="userId" value="@u.Id" />
+
+                                <div class="col-md-3">
+                                    <select name="roleId" class="form-select form-select-sm fw-semibold" aria-label="Chọn vai trò">
+                                        @foreach (var r in Model.Roles)
+                                        {
+                                            <option value="@r.Id" selected="@(r.Id == currentRole.Id)">@r.RoleName (@r.RoleCode)</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <select name="defaultDataScope" class="form-select form-select-sm" aria-label="Chọn phạm vi dữ liệu">
+                                        <option value="All" selected="@(currentScope == "All")">All — Toàn công ty (32 ĐV)</option>
+                                        <option value="UnitTree" selected="@(currentScope == "UnitTree")">UnitTree — Khối/Đơn vị & cấp dưới</option>
+                                        <option value="Department" selected="@(currentScope == "Department")">Department — Phòng ban trực tiếp</option>
+                                        <option value="SelfOnly" selected="@(currentScope == "SelfOnly")">SelfOnly — Chỉ hồ sơ bản thân</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <select name="scopedUnitId" class="form-select form-select-sm" aria-label="Đơn vị áp dụng">
+                                        <option value="">-- Mặc định theo Hồ sơ NV --</option>
+                                        @foreach (var unit in Model.Units)
+                                        {
+                                            <option value="@unit.Id" selected="@(currentScopedUnitId == unit.Id)">@unit.UnitCode - @unit.UnitName</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="col-md-2">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input"
+                                               type="checkbox"
+                                               name="mustChangePassword"
+                                               value="true"
+                                               id="mcp_@u.Id"
+                                               @(u.MustChangePassword ? "checked" : "") />
+                                        <label class="form-check-label fs-7" for="mcp_@u.Id">Đổi MK lần đầu</label>
+                                    </div>
+                                    @if (isLocked || u.AccessFailedCount > 0)
+                                    {
+                                        <div class="form-check mt-1">
+                                            <input class="form-check-input" type="checkbox" name="unlockAccount" value="true" id="unl_@u.Id" checked />
+                                            <label class="form-check-label fs-7 text-danger fw-bold" for="unl_@u.Id">
+                                                Mở khóa (Sai @u.AccessFailedCount/5)
+                                            </label>
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="col-md-1 text-end">
+                                    <button type="submit" class="btn btn-sm vnm-btn-primary" title="Lưu cấu hình phân quyền User">
+                                        <i class="ti ti-check"></i> Lưu
+                                    </button>
+                                </div>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function toggleAllCheckboxes(state) {
+            document.querySelectorAll('.rbac-checkbox:not(:disabled)').forEach(cb => {
+                cb.checked = state;
+            });
+            VnmUI.toast('Đã chọn toàn bộ quyền trên ma trận. Nhấn "Lưu Ma trận Phân quyền" để ghi vào SQL Server.', 'info');
+        }
+    </script>
+}
+

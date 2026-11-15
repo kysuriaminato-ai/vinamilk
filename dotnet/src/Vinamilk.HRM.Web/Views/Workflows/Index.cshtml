@@ -1,0 +1,576 @@
+@model Vinamilk.HRM.Application.Workflows.WorkflowCenterOverviewDto
+@{
+    ViewData["Title"] = "Workflow Engine Đa Bước & Trung tâm Phê duyệt";
+    ViewData["BreadcrumbParent"] = "Chấm công & Nghỉ phép (Phiên 6)";
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">
+            <i class="ti ti-git-branch text-primary me-2"></i>Workflow Engine Dùng Chung & Trung tâm Phê duyệt Điện tử
+        </h2>
+        <p class="text-secondary mb-0">
+            Định nghĩa quy trình nhiều bước (Quản lý trực tiếp / Trưởng đơn vị / Role / Người cụ thể), Duyệt • Từ chối • Ủy quyền, Lịch sử duyệt & Thông báo Realtime SignalR + Email
+        </p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <form asp-action="TestRealtimeBroadcast" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-outline-success">
+                <i class="ti ti-broadcast me-1"></i>Phát thử Thông báo SignalR Realtime
+            </button>
+        </form>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalSaveWorkflowDef">
+            <i class="ti ti-plus me-1"></i>Thiết lập Quy trình mới
+        </button>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3" role="alert">
+        <i class="ti ti-circle-check me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-3" role="alert">
+        <i class="ti ti-alert-triangle me-2"></i>@TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-primary">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-secondary fs-7 text-uppercase fw-semibold">Đơn đang chờ phê duyệt</div>
+                    <div class="fs-2 fw-bold text-primary mt-1">@Model.TotalInProgressCount</div>
+                    <div class="fs-7 text-muted">Của tôi cần duyệt: <strong>@Model.MyPendingCount</strong></div>
+                </div>
+                <div class="rounded-circle p-3 bg-primary-subtle text-primary">
+                    <i class="ti ti-hourglass-high fs-3"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-success">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-secondary fs-7 text-uppercase fw-semibold">Đã phê duyệt hoàn tất</div>
+                    <div class="fs-2 fw-bold text-success mt-1">@Model.TotalApprovedCount</div>
+                    <div class="fs-7 text-muted">Tự động đồng bộ Bảng công & Quỹ phép</div>
+                </div>
+                <div class="rounded-circle p-3 bg-success-subtle text-success">
+                    <i class="ti ti-circle-check fs-3"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-warning">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-secondary fs-7 text-uppercase fw-semibold">Lượt Ủy quyền Phê duyệt</div>
+                    <div class="fs-2 fw-bold text-warning mt-1">@Model.TotalDelegatedCount</div>
+                    <div class="fs-7 text-muted">Chuyển quyền duyệt khi đi công tác</div>
+                </div>
+                <div class="rounded-circle p-3 bg-warning-subtle text-warning-emphasis">
+                    <i class="ti ti-user-share fs-3"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-info">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-secondary fs-7 text-uppercase fw-semibold">Quy trình Động & Email Outbox</div>
+                    <div class="fs-2 fw-bold text-info mt-1">@Model.Definitions.Count / @Model.RecentEmails.Count</div>
+                    <div class="fs-7 text-muted">Quy trình hoạt động / Email đã gửi</div>
+                </div>
+                <div class="rounded-circle p-3 bg-info-subtle text-info-emphasis">
+                    <i class="ti ti-mail-forward fs-3"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Navigation Tabs -->
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-instances" type="button" role="tab">
+            <i class="ti ti-list-check me-1"></i>Danh sách Đơn & Luồng phê duyệt (@Model.Instances.Count)
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-definitions" type="button" role="tab">
+            <i class="ti ti-sitemap me-1"></i>Định nghĩa Quy trình nhiều bước (@Model.Definitions.Count)
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-emails" type="button" role="tab">
+            <i class="ti ti-mail-bolt me-1"></i>Nhật ký Email & SignalR Realtime (@Model.RecentEmails.Count)
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- TAB 1: DANH SÁCH ĐƠN & XỬ LÝ DUYỆT / TỪ CHỐI / ỦY QUYỀN -->
+    <div class="tab-pane fade show active" id="tab-instances" role="tabpanel">
+        <div class="vnm-card p-3 mb-3">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label fs-7 fw-semibold">Lọc theo loại đơn áp dụng</label>
+                    <select name="entityType" class="form-select form-select-sm">
+                        <option value="">-- Tất cả loại đơn (Nghỉ phép, OT, Giải trình công, Điều chuyển) --</option>
+                        <option value="LeaveRequest" selected="@(ViewBag.EntityTypeFilter == "LeaveRequest")">Đơn Nghỉ phép / Công tác (LeaveRequest)</option>
+                        <option value="OvertimeRequest" selected="@(ViewBag.EntityTypeFilter == "OvertimeRequest")">Đơn Làm thêm giờ - OT (OvertimeRequest)</option>
+                        <option value="AttendanceExplanation" selected="@(ViewBag.EntityTypeFilter == "AttendanceExplanation")">Giải trình Chấm công (AttendanceExplanation)</option>
+                        <option value="PersonnelTransfer" selected="@(ViewBag.EntityTypeFilter == "PersonnelTransfer")">Tờ trình Điều chuyển / Bổ nhiệm (PersonnelTransfer)</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fs-7 fw-semibold">Trạng thái phê duyệt</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">-- Tất cả trạng thái --</option>
+                        <option value="InProgress" selected="@(ViewBag.StatusFilter == "InProgress")">Đang chờ phê duyệt (InProgress)</option>
+                        <option value="Approved" selected="@(ViewBag.StatusFilter == "Approved")">Đã phê duyệt (Approved)</option>
+                        <option value="Rejected" selected="@(ViewBag.StatusFilter == "Rejected")">Từ chối (Rejected)</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-sm btn-primary me-1">
+                        <i class="ti ti-filter me-1"></i>Lọc luồng duyệt
+                    </button>
+                    <a href="/Workflows" class="btn btn-sm btn-outline-secondary">Xóa lọc</a>
+                </div>
+            </form>
+        </div>
+
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mã Luồng</th>
+                            <th>Loại Đơn & Nội dung</th>
+                            <th>Người đề xuất</th>
+                            <th>Tiến độ Bước hiện tại</th>
+                            <th>Người duyệt hiện tại</th>
+                            <th>Trạng thái & SLA</th>
+                            <th class="text-end">Thao tác Duyệt / Ủy quyền</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Instances.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="7" class="text-center py-4 text-muted">
+                                    Chưa có đơn nào trong luồng phê duyệt. Hãy tạo Đơn nghỉ phép (/Leaves) hoặc Đăng ký OT / Giải trình công (/Attendance) để khởi chạy Workflow!
+                                </td>
+                            </tr>
+                        }
+                        @foreach (var item in Model.Instances)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold text-primary">#WF-@item.Id.ToString("D4")</td>
+                                <td>
+                                    <span class="badge bg-primary-subtle text-primary mb-1">@item.EntityTypeLabel</span>
+                                    <div class="fw-semibold">@item.DocumentTitle</div>
+                                    <div class="text-secondary fs-7">@item.DocumentSummary</div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold">@item.InitiatorName</div>
+                                    <div class="text-muted fs-7">@item.InitiatorCode • @item.InitiatorUnitName</div>
+                                    <div class="text-muted fs-7">Gửi: @item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <span class="badge bg-dark">Bước @item.CurrentStepOrder/@item.TotalStepsCount</span>
+                                        <span class="fs-7 fw-semibold">@item.CurrentStepName</span>
+                                    </div>
+                                    <div class="progress" style="height: 6px; width: 160px;">
+                                        @{
+                                            var pct = item.Status == "Approved"
+                                                ? 100
+                                                : (int)Math.Round((double)item.CurrentStepOrder / item.TotalStepsCount * 75);
+                                        }
+                                        <div class="progress-bar @(item.Status == "Approved" ? "bg-success" : item.Status == "Rejected" ? "bg-danger" : "bg-primary")"
+                                             style="width: @pct%"></div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold"><i class="ti ti-user-check me-1 text-primary"></i>@item.CurrentApproverName</div>
+                                    <div class="text-muted fs-7">SLA: @item.SlaHours giờ</div>
+                                </td>
+                                <td>
+                                    @if (item.Status == "Approved")
+                                    {
+                                        <span class="badge bg-success-subtle text-success"><i class="ti ti-check me-1"></i>Đã phê duyệt</span>
+                                    }
+                                    else if (item.Status == "Rejected")
+                                    {
+                                        <span class="badge bg-danger-subtle text-danger"><i class="ti ti-x me-1"></i>Đã từ chối</span>
+                                    }
+                                    else if (item.Status == "Cancelled")
+                                    {
+                                        <span class="badge bg-secondary-subtle text-secondary">Đã hủy</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning-subtle text-warning-emphasis"><i class="ti ti-clock me-1"></i>Chờ phê duyệt</span>
+                                        @if (item.IsOverdueSla)
+                                        {
+                                            <div class="badge bg-danger mt-1">Quá hạn SLA</div>
+                                        }
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <div class="d-flex justify-content-end gap-1">
+                                        @if (item.Status == "InProgress")
+                                        {
+                                            <button type="button"
+                                                    class="btn btn-sm btn-success"
+                                                    onclick="openWorkflowActionModal(@item.Id, 'Approved', '@Html.Raw(item.DocumentTitle.Replace("'", "\\'"))')">
+                                                <i class="ti ti-check me-1"></i>Duyệt
+                                            </button>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-danger"
+                                                    onclick="openWorkflowActionModal(@item.Id, 'Rejected', '@Html.Raw(item.DocumentTitle.Replace("'", "\\'"))')">
+                                                <i class="ti ti-x me-1"></i>Từ chối
+                                            </button>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-warning"
+                                                    title="Ủy quyền cho người khác duyệt"
+                                                    onclick="openWorkflowActionModal(@item.Id, 'Delegated', '@Html.Raw(item.DocumentTitle.Replace("'", "\\'"))')">
+                                                <i class="ti ti-user-share"></i>
+                                            </button>
+                                        }
+                                        <button type="button"
+                                                class="btn btn-sm btn-light border"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#modalLogs_@item.Id"
+                                                title="Xem lịch sử duyệt từng bước">
+                                            <i class="ti ti-history"></i> (@item.Logs.Count)
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: ĐỊNH NGHĨA QUY TRÌNH ĐA BƯỚC -->
+    <div class="tab-pane fade" id="tab-definitions" role="tabpanel">
+        <div class="row g-3">
+            @foreach (var def in Model.Definitions)
+            {
+                <div class="col-lg-6">
+                    <div class="vnm-card p-3 h-100">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <span class="badge bg-primary font-monospace me-1">@def.WorkflowCode</span>
+                                <span class="badge bg-info-subtle text-info-emphasis">Áp dụng: @def.EntityType</span>
+                                <h5 class="fw-bold mt-2 mb-1">@def.WorkflowName</h5>
+                                <p class="text-secondary fs-7 mb-2">@def.Description</p>
+                            </div>
+                            <span class="badge bg-success-subtle text-success">@def.TotalInstancesCount đơn đã chạy</span>
+                        </div>
+
+                        <div class="border-top pt-2 mt-2">
+                            <div class="fw-semibold fs-7 text-uppercase text-muted mb-2">Cấu trúc các bước phê duyệt tuần tự:</div>
+                            @foreach (var step in def.Steps)
+                            {
+                                <div class="d-flex align-items-center justify-content-between p-2 rounded mb-2" style="background: var(--vnm-bg-subtle);">
+                                    <div>
+                                        <span class="badge bg-dark me-2">Bước @step.StepOrder</span>
+                                        <strong>@step.StepName</strong>
+                                        <div class="text-muted fs-7 mt-1">
+                                            Cơ chế định tuyến: <span class="fw-semibold text-primary">@step.ApproverType</span>
+                                            @if (!string.IsNullOrEmpty(step.ApproverRoleName))
+                                            {
+                                                <span> • Role: @step.ApproverRoleName</span>
+                                            }
+                                            @if (!string.IsNullOrEmpty(step.ApproverUserName))
+                                            {
+                                                <span> • Người duyệt: @step.ApproverUserName</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge bg-secondary-subtle text-secondary">Điều kiện: @(step.ConditionExpression ?? "Always")</span>
+                                        <div class="fs-7 text-muted mt-1">SLA: @step.SlaHours giờ</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- TAB 3: NHẬT KÝ EMAIL & SIGNALR -->
+    <div class="tab-pane fade" id="tab-emails" role="tabpanel">
+        <div class="vnm-card overflow-hidden">
+            <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+                <div class="fw-bold">
+                    <i class="ti ti-mail-check text-primary me-1"></i>Lịch sử Email Tự động & Sự kiện SignalR khi có Đơn cần duyệt / Chuyển bước
+                </div>
+                <span class="badge bg-success-subtle text-success">Hub: /hubs/notifications (Connected)</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Thời gian gửi</th>
+                            <th>Người nhận & Email</th>
+                            <th>Tiêu đề Email</th>
+                            <th>Chứng từ / Đơn</th>
+                            <th>Trạng thái luồng</th>
+                            <th>Trạng thái gửi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var mail in Model.RecentEmails)
+                        {
+                            <tr>
+                                <td class="font-monospace fs-7">@mail.SentAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                <td>
+                                    <div class="fw-semibold">@mail.RecipientName</div>
+                                    <div class="text-muted fs-7 font-monospace">@mail.ToEmail</div>
+                                </td>
+                                <td class="fw-semibold text-primary">@mail.Subject</td>
+                                <td>@mail.DocumentTitle</td>
+                                <td><span class="badge bg-info-subtle text-info-emphasis">@mail.StatusBadge</span></td>
+                                <td>
+                                    <span class="badge bg-success-subtle text-success"><i class="ti ti-check me-1"></i>Đã chuyển phát</span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals Lịch sử phê duyệt từng đơn -->
+@foreach (var item in Model.Instances)
+{
+    <div class="modal fade" id="modalLogs_@item.Id" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">
+                        <i class="ti ti-history text-primary me-2"></i>Lịch sử Phê duyệt & Ủy quyền — Luồng #WF-@item.Id.ToString("D4")
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="p-3 rounded mb-3" style="background: var(--vnm-bg-subtle);">
+                        <div class="fw-bold">@item.DocumentTitle</div>
+                        <div class="text-secondary fs-7">@item.DocumentSummary</div>
+                        <div class="text-muted fs-7 mt-1">Người đề xuất: <strong>@item.InitiatorName (@item.InitiatorCode)</strong> — @item.InitiatorUnitName</div>
+                    </div>
+                    <div class="list-group list-group-flush">
+                        @foreach (var log in item.Logs)
+                        {
+                            <div class="list-group-item px-0 py-2 d-flex justify-content-between align-items-start">
+                                <div>
+                                    <span class="badge @(log.Action == "Approved" ? "bg-success" : log.Action == "Rejected" ? "bg-danger" : log.Action == "Delegated" ? "bg-warning text-dark" : "bg-primary") me-2">
+                                        @log.Action
+                                    </span>
+                                    <strong>@log.StepName</strong>
+                                    <div class="text-secondary fs-7 mt-1">
+                                        Người thực hiện: <strong>@log.ApproverFullName</strong> • Ghi chú: @(log.Comment ?? "Không có")
+                                    </div>
+                                </div>
+                                <div class="text-muted fs-7 font-monospace">
+                                    @log.ActionAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal Xử lý Phê duyệt / Từ chối / Ủy quyền -->
+<div class="modal fade" id="modalWorkflowAction" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="ProcessAction" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="workflowInstanceId" id="wfActionInstanceId" />
+            <input type="hidden" name="actionType" id="wfActionType" />
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="wfActionModalTitle">Xử lý Luồng Phê duyệt</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border mb-3">
+                    <div class="fs-7 text-muted">Chứng từ xử lý:</div>
+                    <div class="fw-bold text-primary" id="wfActionDocTitle"></div>
+                </div>
+
+                <div class="mb-3 d-none" id="wfDelegateSelectGroup">
+                    <label class="form-label fw-semibold">Chọn người nhận Ủy quyền phê duyệt (*)</label>
+                    <select name="delegateToUserId" class="form-select">
+                        <option value="">-- Chọn cán bộ nhận ủy quyền --</option>
+                        @foreach (var u in Model.Users)
+                        {
+                            <option value="@u.Id">@u.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Ý kiến phê duyệt / Lý do từ chối hoặc ủy quyền</label>
+                    <textarea name="comment" class="form-control" rows="3" placeholder="Nhập ý kiến phê duyệt..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button>
+                <button type="submit" class="btn btn-primary" id="wfActionSubmitBtn">Xác nhận thực hiện</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Thiết lập Quy trình nhiều bước -->
+<div class="modal fade" id="modalSaveWorkflowDef" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <form asp-action="SaveDefinition" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="ti ti-sitemap text-primary me-2"></i>Cấu hình Quy trình Phê duyệt Đa bước</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Mã Quy trình (*)</label>
+                        <input type="text" name="workflowCode" class="form-control" placeholder="VD: WF_BUSINESS_TRIP" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Tên Quy trình (*)</label>
+                        <input type="text" name="workflowName" class="form-control" placeholder="Quy trình duyệt Công tác phí" required />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Loại đơn áp dụng (*)</label>
+                        <select name="entityType" class="form-select" required>
+                            <option value="LeaveRequest">LeaveRequest (Đơn nghỉ phép / Công tác)</option>
+                            <option value="OvertimeRequest">OvertimeRequest (Làm thêm giờ OT)</option>
+                            <option value="AttendanceExplanation">AttendanceExplanation (Giải trình công)</option>
+                            <option value="PersonnelTransfer">PersonnelTransfer (Điều chuyển / Bổ nhiệm)</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">Mô tả quy trình</label>
+                        <input type="text" name="description" class="form-control" placeholder="Mô tả điều kiện rẽ nhánh và SLA..." />
+                    </div>
+
+                    <div class="col-12"><hr class="my-1" /><h6 class="fw-bold text-primary mb-0">Cấu hình Bước 1 (Bắt buộc)</h6></div>
+                    <div class="col-md-4">
+                        <label class="form-label fs-7">Tên Bước 1</label>
+                        <input type="text" name="step1Name" class="form-control form-control-sm" value="Bước 1: Quản lý trực tiếp phê duyệt" required />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fs-7">Loại người duyệt</label>
+                        <select name="step1ApproverType" class="form-select form-select-sm">
+                            <option value="DirectManager">Quản lý trực tiếp</option>
+                            <option value="UnitHead">Trưởng đơn vị</option>
+                            <option value="SpecificRole">Theo Role</option>
+                            <option value="SpecificUser">Người cụ thể</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fs-7">Người duyệt mặc định</label>
+                        <select name="step1UserId" class="form-select form-select-sm">
+                            @foreach (var u in Model.Users)
+                            {
+                                <option value="@u.Id">@u.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fs-7">SLA (Giờ)</label>
+                        <input type="number" name="step1SlaHours" class="form-control form-control-sm" value="12" />
+                    </div>
+
+                    <div class="col-12"><hr class="my-1" /><h6 class="fw-bold text-primary mb-0">Cấu hình Bước 2 (Tùy chọn / Có điều kiện)</h6></div>
+                    <div class="col-md-4">
+                        <label class="form-label fs-7">Tên Bước 2</label>
+                        <input type="text" name="step2Name" class="form-control form-control-sm" value="Bước 2: Giám đốc Nhân sự / C&B phê duyệt" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fs-7">Vai trò duyệt (Role)</label>
+                        <select name="step2RoleId" class="form-select form-select-sm">
+                            @foreach (var r in Model.Roles)
+                            {
+                                <option value="@r.Id">@r.Name (@r.Code)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fs-7">Điều kiện kích hoạt</label>
+                        <input type="text" name="step2Condition" class="form-control form-control-sm" value="TotalDays >= 3" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fs-7">SLA (Giờ)</label>
+                        <input type="number" name="step2SlaHours" class="form-control form-control-sm" value="24" />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-primary"><i class="ti ti-device-floppy me-1"></i>Lưu Quy trình</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openWorkflowActionModal(instanceId, actionType, docTitle) {
+            document.getElementById('wfActionInstanceId').value = instanceId;
+            document.getElementById('wfActionType').value = actionType;
+            document.getElementById('wfActionDocTitle').textContent = docTitle;
+
+            const delegateGroup = document.getElementById('wfDelegateSelectGroup');
+            const titleEl = document.getElementById('wfActionModalTitle');
+            const btnEl = document.getElementById('wfActionSubmitBtn');
+
+            if (actionType === 'Delegated') {
+                delegateGroup.classList.remove('d-none');
+                titleEl.textContent = 'Ủy quyền Phê duyệt cho Cán bộ khác';
+                btnEl.className = 'btn btn-warning';
+                btnEl.textContent = 'Xác nhận Ủy quyền';
+            } else if (actionType === 'Rejected') {
+                delegateGroup.classList.add('d-none');
+                titleEl.textContent = 'Từ chối Phê duyệt Đơn';
+                btnEl.className = 'btn btn-danger';
+                btnEl.textContent = 'Xác nhận Từ chối';
+            } else {
+                delegateGroup.classList.add('d-none');
+                titleEl.textContent = 'Phê duyệt Đơn & Chuyển bước tiếp theo';
+                btnEl.className = 'btn btn-success';
+                btnEl.textContent = 'Đồng ý Phê duyệt';
+            }
+
+            new bootstrap.Modal(document.getElementById('modalWorkflowAction')).show();
+        }
+    </script>
+}
+

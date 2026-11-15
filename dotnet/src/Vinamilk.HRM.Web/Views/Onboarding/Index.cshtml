@@ -1,0 +1,346 @@
+@model Vinamilk.HRM.Application.Talent.OnboardingAndAssetOverviewDto
+@{
+    ViewData["Title"] = "Onboarding / Offboarding Checklist & Bàn giao Tài sản";
+    ViewData["BreadcrumbParent"] = "Phát triển Nhân tài (Phiên 8)";
+    string activeTab = ViewBag.ActiveTab as string ?? "tasks";
+}
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">
+            <i class="ti ti-checklist text-primary me-2"></i>Onboarding / Offboarding Checklist & Quản lý Bàn giao Tài sản
+        </h2>
+        <p class="text-secondary mb-0">
+            Sinh Checklist tự động theo mẫu chuẩn (HR / IT / Admin / C&B) • Giao việc bộ phận • Cấp phát & Thu hồi Tài sản (Laptop, Thẻ, Bảo hộ)
+        </p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAssignAsset">
+            <i class="ti ti-device-laptop me-1"></i>Bàn giao Tài sản
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalGenerateChecklist">
+            <i class="ti ti-plus me-1"></i>Giao Checklist Onboarding/Offboarding
+        </button>
+    </div>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-circle-check me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-3">
+        <i class="ti ti-alert-triangle me-2"></i>@TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-primary">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Tổng Đầu việc Checklist</div>
+            <div class="fs-2 fw-bold text-primary mt-1">@Model.TotalOnboardingTasks việc</div>
+            <div class="fs-7 text-muted">Đã hoàn tất: <strong>@Model.CompletedTasksCount</strong></div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-success">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Tài sản Đang cấp phát</div>
+            <div class="fs-2 fw-bold text-success mt-1">@Model.AssignedAssetsCount tài sản</div>
+            <div class="fs-7 text-muted">Sẵn sàng trong kho: <strong>@Model.AvailableAssetsCount</strong></div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-info">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Mẫu Checklist Chuẩn</div>
+            <div class="fs-2 fw-bold text-info mt-1">@Model.Templates.Count mẫu</div>
+            <div class="fs-7 text-muted">Phân bổ HR, IT, Admin, C&B</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="vnm-card p-3 h-100 border-start border-4 border-warning">
+            <div class="text-secondary fs-7 text-uppercase fw-semibold">Tỷ lệ Hoàn thành</div>
+            @{
+                var pct = Model.TotalOnboardingTasks > 0 ? (int)Math.Round((double)Model.CompletedTasksCount / Model.TotalOnboardingTasks * 100) : 0;
+            }
+            <div class="fs-2 fw-bold text-warning mt-1">@pct%</div>
+            <div class="fs-7 text-muted">Theo dõi SLA tiếp nhận/nghỉ việc</div>
+        </div>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "tasks" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-tasks" type="button">
+            <i class="ti ti-list-check me-1"></i>Đầu việc Giao Bộ phận (@Model.Tasks.Count)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "assets" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-assets" type="button">
+            <i class="ti ti-devices-pc me-1"></i>Kho Tài sản & Bàn giao / Thu hồi (@Model.Assets.Count)
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "templates" ? "active" : "") fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-templates" type="button">
+            <i class="ti ti-template me-1"></i>Bộ Mẫu Checklist Chuẩn (@Model.Templates.Count)
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- TAB 1: TASKS -->
+    <div class="tab-pane fade @(activeTab == "tasks" ? "show active" : "")" id="tab-tasks">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Quy trình</th>
+                            <th>Nhân viên</th>
+                            <th>Đầu việc cần thực hiện</th>
+                            <th>Người / Bộ phận phụ trách</th>
+                            <th>Hạn hoàn thành</th>
+                            <th>Trạng thái</th>
+                            <th class="text-end">Cập nhật</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in Model.Tasks)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="badge @(t.ProcessType == "Onboarding" ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger")">
+                                        @t.ProcessType
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="fw-bold">@t.EmployeeName</div>
+                                    <div class="text-muted fs-7">@t.EmployeeCode • @t.UnitName</div>
+                                </td>
+                                <td class="fw-semibold @(t.IsCompleted ? "text-decoration-line-through text-muted" : "")">@t.TaskName</td>
+                                <td class="fs-7">
+                                    <div>@t.PicName</div>
+                                    <div class="text-muted">@t.Notes</div>
+                                </td>
+                                <td class="font-monospace">@t.DueDate.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    @if (t.IsCompleted)
+                                    {
+                                        <span class="badge bg-success-subtle text-success"><i class="ti ti-check me-1"></i>Hoàn tất</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning-subtle text-warning-emphasis">Đang thực hiện</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <form asp-action="ToggleTask" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="taskId" value="@t.Id" />
+                                        <button type="submit" class="btn btn-sm @(t.IsCompleted ? "btn-outline-secondary" : "btn-success")">
+                                            @(t.IsCompleted ? "Mở lại" : "Đánh dấu Xong")
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: ASSETS -->
+    <div class="tab-pane fade @(activeTab == "assets" ? "show active" : "")" id="tab-assets">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mã Tài sản</th>
+                            <th>Tên Thiết bị / Tài sản & Serial</th>
+                            <th>Loại</th>
+                            <th>Giá trị</th>
+                            <th>Người đang giữ</th>
+                            <th>Trạng thái</th>
+                            <th class="text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in Model.Assets)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold text-primary">@a.AssetCode</td>
+                                <td>
+                                    <div class="fw-bold">@a.AssetName</div>
+                                    <div class="text-muted fs-7 font-monospace">S/N: @a.SerialNumber</div>
+                                </td>
+                                <td><span class="badge bg-light text-dark border">@a.AssetCategory</span></td>
+                                <td class="font-monospace">@a.PurchaseValue.ToString("N0") đ</td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(a.AssignedToEmployeeName))
+                                    {
+                                        <div class="fw-semibold">@a.AssignedToEmployeeName</div>
+                                        <div class="text-muted fs-7">Từ: @a.AssignedDate?.ToString("dd/MM/yyyy")</div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-- Kho Hành chính --</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (a.Status == "Available")
+                                    {
+                                        <span class="badge bg-success-subtle text-success">Sẵn sàng cấp phát</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-primary-subtle text-primary">Đang bàn giao</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    @if (a.Status == "Assigned")
+                                    {
+                                        <form asp-action="ReturnAsset" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="assetId" value="@a.Id" />
+                                            <button type="submit" class="btn btn-sm btn-outline-warning">
+                                                <i class="ti ti-arrow-back-up me-1"></i>Thu hồi về kho
+                                            </button>
+                                        </form>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: TEMPLATES -->
+    <div class="tab-pane fade @(activeTab == "templates" ? "show active" : "")" id="tab-templates">
+        <div class="vnm-card overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mã Mẫu</th>
+                            <th>Quy trình</th>
+                            <th>Nội dung Đầu việc Chuẩn</th>
+                            <th>Bộ phận Phụ trách</th>
+                            <th>SLA (Số ngày)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var tpl in Model.Templates)
+                        {
+                            <tr>
+                                <td class="font-monospace fw-bold">@tpl.TemplateCode</td>
+                                <td>
+                                    <span class="badge @(tpl.ProcessType == "Onboarding" ? "bg-success-subtle text-success" : "bg-danger-subtle text-danger")">
+                                        @tpl.ProcessType
+                                    </span>
+                                </td>
+                                <td class="fw-semibold">@tpl.TaskName</td>
+                                <td><span class="badge bg-primary-subtle text-primary">@tpl.AssignedDepartmentRole</span></td>
+                                <td>+@tpl.DueDaysOffset ngày</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Sinh Checklist -->
+<div class="modal fade" id="modalGenerateChecklist" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="GenerateChecklist" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Sinh Checklist Onboarding / Offboarding theo Mẫu</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Nhân viên áp dụng (*)</label>
+                    <select name="employeeId" class="form-select" required>
+                        @foreach (var e in Model.ActiveEmployees)
+                        {
+                            <option value="@e.Id">@e.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Loại quy trình</label>
+                    <select name="processType" class="form-select">
+                        <option value="Onboarding">Onboarding (Hội nhập Nhân viên mới)</option>
+                        <option value="Offboarding">Offboarding (Bàn giao & Nghỉ việc)</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Cán bộ Điều phối / Phụ trách chính</label>
+                    <select name="picEmployeeId" class="form-select">
+                        <option value="">-- Giao theo Bộ phận mặc định --</option>
+                        @foreach (var e in Model.ActiveEmployees)
+                        {
+                            <option value="@e.Id">@e.Name</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-primary">Khởi tạo Checklist</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Bàn giao Tài sản -->
+<div class="modal fade" id="modalAssignAsset" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-action="AssignAsset" method="post" class="modal-content border-0 shadow">
+            @Html.AntiForgeryToken()
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">Bàn giao Tài sản cho Nhân viên</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Chọn Tài sản sẵn sàng trong kho (*)</label>
+                    <select name="assetId" class="form-select" required>
+                        @foreach (var a in Model.Assets.Where(x => x.Status == "Available"))
+                        {
+                            <option value="@a.Id">@a.AssetCode — @a.AssetName (@a.SerialNumber)</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Nhân viên tiếp nhận (*)</label>
+                    <select name="employeeId" class="form-select" required>
+                        @foreach (var e in Model.ActiveEmployees)
+                        {
+                            <option value="@e.Id">@e.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label fw-semibold">Tình trạng khi bàn giao</label>
+                    <input type="text" name="conditionOnAssign" class="form-control" value="Mới 100%, đầy đủ phụ kiện" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Hủy</button>
+                <button type="submit" class="btn btn-primary">Xác nhận Bàn giao</button>
+            </div>
+        </form>
+    </div>
+</div>
+
